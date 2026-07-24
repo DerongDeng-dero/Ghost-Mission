@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Generated builds and legacy build snapshots
+dist/
+dist_backup/
+
+# Tooling output
+*.log
+coverage/
+.vite/
+
+# Local-only configuration
+.env.local
+.env.*.local
+
+# OS metadata
+.DS_Store
+Thumbs.db

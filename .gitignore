@@ -1,0 +1,32 @@
+# Dependencies
+app/node_modules/
+
+# Generated builds and legacy build snapshots
+app/dist/
+app/dist_backup/
+
+# Tooling and runtime output
+app/coverage/
+app/.vite/
+*.log
+
+# Local-only configuration
+app/.env.local
+app/.env.*.local
+
+# Codex workspace metadata
+.agents/
+.codex/
+
+# Imported source snapshot (absorbed into app/)
+new/
+Kimi_Agent_*.zip
+
+# Imported data copies and internal working notes
+/all_levels.json
+/*plan*.md
+/使用说明书.md
+
+# OS metadata
+.DS_Store
+Thumbs.db

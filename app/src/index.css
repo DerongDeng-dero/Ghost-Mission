@@ -1,0 +1,211 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Base Colors (Dark Terminal Foundation) */
+    --bg-primary: #0A0E14;
+    --bg-secondary: #0F1419;
+    --bg-tertiary: #131B23;
+    --bg-terminal: #0C1117;
+    --bg-input: #1A2332;
+    --bg-hover: #1E2A3A;
+    --border-subtle: #1E2D3D;
+    --border-active: #2A4365;
+
+    /* Neon Accent Colors */
+    --neon-green: #00FF88;
+    --neon-cyan: #00E5FF;
+    --neon-blue: #4488FF;
+    --neon-green-dim: rgba(0, 255, 136, 0.12);
+    --neon-cyan-dim: rgba(0, 229, 255, 0.12);
+    --neon-blue-dim: rgba(68, 136, 255, 0.12);
+
+    /* Text Colors */
+    --text-primary: #E8EDF2;
+    --text-secondary: #8B9EB0;
+    --text-muted: #4A6072;
+    --text-terminal: #E6DCCF;
+    --text-terminal-dim: #5C7A8C;
+    --text-green: #00FF88;
+    --text-cyan: #00E5FF;
+    --text-yellow: #FFD166;
+    --text-red: #FF4757;
+
+    /* Status & Feedback Colors */
+    --status-success: #00FF88;
+    --status-warning: #FFD166;
+    --status-danger: #FF4757;
+    --status-info: #00E5FF;
+    --status-purple: #C77DFF;
+    --status-orange: #FF6B35;
+
+    /* Risk Level Colors */
+    --risk-green: #00FF88;
+    --risk-green-dim: rgba(0, 255, 136, 0.15);
+    --risk-blue: #00E5FF;
+    --risk-blue-dim: rgba(0, 229, 255, 0.15);
+    --risk-yellow: #FFD166;
+    --risk-yellow-dim: rgba(255, 209, 102, 0.15);
+    --risk-red: #FF4757;
+    --risk-red-dim: rgba(255, 71, 87, 0.15);
+    --risk-purple: #C77DFF;
+    --risk-purple-dim: rgba(199, 125, 255, 0.15);
+    --risk-black: #FF6B35;
+    --risk-black-dim: rgba(255, 107, 53, 0.15);
+
+    /* Skill Domain Colors */
+    --skill-filesystem: #00FF88;
+    --skill-git: #FF6B35;
+    --skill-vim: #C77DFF;
+    --skill-network: #00E5FF;
+    --skill-process: #FFD166;
+    --skill-security: #FF4757;
+    --skill-docker: #2496ED;
+    --skill-shell: #E8EDF2;
+
+    /* Achievement Tier Colors */
+    --tier-bronze: #CD7F32;
+    --tier-silver: #C0C0C0;
+    --tier-gold: #FFD700;
+    --tier-platinum: #00E5FF;
+
+    /* Shadows & Glow Effects */
+    --green-glow: 0 0 20px rgba(0, 255, 136, 0.08);
+    --cyan-glow: 0 0 16px rgba(0, 229, 255, 0.08);
+    --red-warning-glow: 0 0 24px rgba(255, 71, 87, 0.12);
+    --panel-depth: 0 4px 24px rgba(0, 0, 0, 0.4);
+    --panel-hover: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --terminal-inset: inset 0 0 40px rgba(0, 0, 0, 0.3);
+
+    /* Animation Timing */
+    --duration-instant: 80ms;
+    --duration-fast: 150ms;
+    --duration-normal: 300ms;
+    --duration-slow: 500ms;
+    --duration-cinematic: 800ms;
+
+    /* Easing */
+    --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-terminal: cubic-bezier(0.25, 0.1, 0.25, 1);
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+    /* Spacing */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+    --space-20: 80px;
+
+    /* Border Radius */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-full: 9999px;
+
+    /* Z-Index */
+    --z-bg: -1;
+    --z-content: 0;
+    --z-elevated: 10;
+    --z-floating: 20;
+    --z-overlay: 30;
+    --z-toast: 40;
+    --z-critical: 50;
+
+    /* shadcn defaults */
+    --background: 220 20% 4%;
+    --foreground: 210 20% 93%;
+    --card: 220 18% 6%;
+    --card-foreground: 210 20% 93%;
+    --popover: 220 18% 6%;
+    --popover-foreground: 210 20% 93%;
+    --primary: 155 100% 50%;
+    --primary-foreground: 220 20% 4%;
+    --secondary: 210 18% 8%;
+    --secondary-foreground: 210 20% 93%;
+    --muted: 210 18% 12%;
+    --muted-foreground: 210 15% 42%;
+    --accent: 190 100% 50%;
+    --accent-foreground: 220 20% 4%;
+    --destructive: 354 100% 64%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 210 25% 18%;
+    --input: 210 25% 18%;
+    --ring: 155 100% 50%;
+    --radius: 0.5rem;
+  }
+
+  /* High Contrast Mode */
+  [data-theme="high-contrast"] {
+    --bg-primary: #000000;
+    --bg-secondary: #000000;
+    --bg-tertiary: #000000;
+    --bg-terminal: #000000;
+    --bg-input: #111111;
+    --bg-hover: #1A1A1A;
+    --border-subtle: #FFFFFF;
+    --border-active: #FFFFFF;
+    --neon-green: #00FF00;
+    --neon-cyan: #00FFFF;
+    --neon-blue: #4488FF;
+    --text-primary: #FFFFFF;
+    --text-secondary: #CCCCCC;
+    --text-muted: #999999;
+    --text-terminal: #FFFFFF;
+    --text-terminal-dim: #AAAAAA;
+  }
+
+  /* Eye Care / Warm Mode */
+  [data-theme="warm"] {
+    --bg-primary: #12100E;
+    --bg-secondary: #1A1714;
+    --bg-tertiary: #1E1B17;
+    --bg-terminal: #141210;
+    --bg-input: #252018;
+    --bg-hover: #2A251E;
+    --text-terminal: #D4C5A9;
+    --neon-green: #3DCC91;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    font-family: "JetBrains Mono", monospace;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-subtle);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--neon-cyan);
+  }
+
+  /* Focus ring for accessibility */
+  *:focus-visible {
+    outline: 2px solid var(--neon-cyan);
+    outline-offset: 2px;
+  }
+}
