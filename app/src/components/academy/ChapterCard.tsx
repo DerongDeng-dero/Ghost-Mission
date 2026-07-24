@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { Lock } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { Chapter } from '@/data/academy'
 
 interface ChapterCardProps {
@@ -9,16 +10,25 @@ interface ChapterCardProps {
 }
 
 export default function ChapterCard({ chapter, isActive, onClick }: ChapterCardProps) {
+  const { t } = useTranslation()
   const progress = chapter.totalDrills > 0 ? (chapter.completedDrills / chapter.totalDrills) * 100 : 0
   const isCompleted = chapter.completedDrills === chapter.totalDrills
   const isLocked = chapter.completedDrills === 0 && !isActive
 
   return (
     <motion.button
+      type="button"
       onClick={onClick}
+      aria-pressed={isActive}
+      aria-label={t('academy.chapterProgressLabel', {
+        number: chapter.number,
+        title: chapter.subtitle,
+        completed: chapter.completedDrills,
+        total: chapter.totalDrills,
+      })}
       whileHover={{ y: -1 }}
       whileTap={{ scale: 0.98 }}
-      className="relative flex flex-col items-center gap-1 px-2 py-2 rounded-radius-sm min-w-[72px] transition-colors duration-fast"
+      className="relative flex min-h-11 min-w-[72px] flex-col items-center gap-1 rounded-radius-sm px-2 py-2 transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
       style={{
         backgroundColor: isActive ? '#0F1419' : '#1A2332',
         borderBottom: isActive ? '2px solid #00E5FF' : '2px solid transparent',
@@ -27,7 +37,7 @@ export default function ChapterCard({ chapter, isActive, onClick }: ChapterCardP
       {/* Completed indicator */}
       {isCompleted && (
         <div className="absolute -top-0.5 -right-0.5">
-          <div className="w-2 h-2 rounded-full bg-[#00FF88]" />
+          <div className="w-2 h-2 rounded-full bg-[#00FF88]" aria-hidden="true" />
         </div>
       )}
 
@@ -48,7 +58,13 @@ export default function ChapterCard({ chapter, isActive, onClick }: ChapterCardP
       </span>
 
       {/* Progress bar */}
-      <div className="w-full h-0.5 bg-[#1A2332] rounded-full mt-0.5 overflow-hidden">
+      <div
+        className="w-full h-0.5 bg-[#1A2332] rounded-full mt-0.5 overflow-hidden"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(progress)}
+      >
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${progress}%` }}
@@ -60,7 +76,7 @@ export default function ChapterCard({ chapter, isActive, onClick }: ChapterCardP
 
       {/* Lock indicator */}
       {isLocked && !isActive && (
-        <Lock size={8} className="absolute bottom-0.5 right-0.5 text-[#4A6072]" />
+        <Lock size={8} aria-hidden="true" className="absolute bottom-0.5 right-0.5 text-[#4A6072]" />
       )}
     </motion.button>
   )

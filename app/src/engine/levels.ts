@@ -248,11 +248,36 @@ function buildLevels(data: RawLevel[]): Record<string, MissionLevel> {
       getLabel(lang: string) { return resolve(this.label_en, this.label_zh, lang) },
     }))
 
-    const checks: LevelCheck[] = (raw.c ?? raw.checks ?? []).map(c => ({
-      type: c.t ?? c.type ?? 'command_used',
-      pattern: c.p ?? c.pattern ?? '',
-      objectiveId: c.o ?? c.objectiveId ?? undefined,
-    }))
+    const legacySkillObjectives = objectives.filter(objective => /^obj-\d+$/.test(objective.id))
+    let progressCheckIndex = 0
+    const checks: LevelCheck[] = (raw.c ?? raw.checks ?? []).map(c => {
+      const type = c.t ?? c.type ?? 'command_used'
+      let pattern = c.p ?? c.pattern ?? ''
+      const objective = type === 'no_red_command_used'
+        ? undefined
+        : legacySkillObjectives[progressCheckIndex++]
+
+      // Older catalog rows reduced commands such as `git status` and
+      // `tmux new-window` to their first token. Recover the precise command
+      // already declared by the paired objective so distinct skills cannot
+      // complete from one generic invocation.
+      if (type === 'command_used' && objective) {
+        const expected = objective.label_en.match(/^Master the use of (.+)$/i)?.[1]?.trim()
+        if (
+          expected
+          && pattern
+          && expected.toLocaleLowerCase().startsWith(`${pattern.toLocaleLowerCase()} `)
+        ) {
+          pattern = expected
+        }
+      }
+
+      return {
+        type,
+        pattern,
+        objectiveId: c.o ?? c.objectiveId ?? undefined,
+      }
+    })
 
     const hints: Hint[] = (raw.h ?? raw.hints ?? []).map(h => ({
       level: h.l ?? h.level ?? 1,

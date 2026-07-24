@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { Crosshair, Terminal, Flame } from 'lucide-react';
 
 interface StatsPanelProps {
@@ -12,15 +13,22 @@ interface StatsPanelProps {
 }
 
 function AnimatedNumber({ value, duration = 800 }: { value: number; duration?: number }) {
+  const reduceMotion = useReducedMotion() ?? false;
   const [display, setDisplay] = useState(0);
   const ref = useRef<HTMLSpanElement>(null);
   const started = useRef(false);
 
   useEffect(() => {
+    let frameId = 0;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting && !started.current) {
           started.current = true;
+          if (reduceMotion) {
+            setDisplay(value);
+            observer.disconnect();
+            return;
+          }
           const start = performance.now();
           const animate = (now: number) => {
             const elapsed = now - start;
@@ -28,16 +36,19 @@ function AnimatedNumber({ value, duration = 800 }: { value: number; duration?: n
             // ease-out-expo
             const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
             setDisplay(Math.round(eased * value));
-            if (progress < 1) requestAnimationFrame(animate);
+            if (progress < 1) frameId = requestAnimationFrame(animate);
           };
-          requestAnimationFrame(animate);
+          frameId = requestAnimationFrame(animate);
         }
       },
       { threshold: 0.5 }
     );
     if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, [value, duration]);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frameId);
+    };
+  }, [value, duration, reduceMotion]);
 
   return <span ref={ref}>{display.toLocaleString()}</span>;
 }
@@ -50,23 +61,24 @@ export default function StatsPanel({
   level = 12,
   xpToNextLevel = 5000,
 }: StatsPanelProps) {
+  const { t } = useTranslation();
   const xpProgress = Math.min((totalXP / xpToNextLevel) * 100, 100);
 
   const stats = [
     {
-      label: 'Missions Cleared',
+      label: t('profile.missionsCleared'),
       value: missionsCompleted,
       icon: Crosshair,
       color: '#00FF88',
     },
     {
-      label: 'Commands Learned',
+      label: t('profile.commandsLearned'),
       value: commandsLearned,
       icon: Terminal,
       color: '#00E5FF',
     },
     {
-      label: 'Day Streak',
+      label: t('profile.dayStreak'),
       value: currentStreak,
       icon: Flame,
       color: '#FFD166',
@@ -79,7 +91,7 @@ export default function StatsPanel({
       <div className="w-full max-w-[400px]">
         <div className="flex items-center justify-between mb-1.5">
           <span className="font-jetbrains text-body-sm text-[#8B9EB0]">
-            Level {level}
+            {t('profile.levelNumber', { level })}
           </span>
           <span className="font-jetbrains text-body-sm text-[#00FF88]">
             <AnimatedNumber value={totalXP} /> / {xpToNextLevel.toLocaleString()} XP
@@ -88,6 +100,11 @@ export default function StatsPanel({
         <div
           className="w-full h-2 rounded-full overflow-hidden"
           style={{ backgroundColor: '#1A2332' }}
+          role="progressbar"
+          aria-label={t('profile.xpProgress')}
+          aria-valuemin={0}
+          aria-valuemax={xpToNextLevel}
+          aria-valuenow={Math.min(totalXP, xpToNextLevel)}
         >
           <motion.div
             className="h-full rounded-full"

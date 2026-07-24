@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Target,
   Keyboard,
@@ -61,6 +62,7 @@ const iconMap: Record<string, React.ReactNode> = {
 
 export default function TrainingCard({ drill, index }: TrainingCardProps) {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const isLocked = drill.status === 'locked'
   const isCompleted = drill.status === 'completed'
   const isInProgress = drill.status === 'in-progress'
@@ -85,17 +87,12 @@ export default function TrainingCard({ drill, index }: TrainingCardProps) {
   }
 
   return (
-    <motion.div
+    <motion.article
       variants={cardVariants}
       initial="hidden"
       animate="visible"
       whileHover={!isLocked ? { y: -2, transition: { duration: 0.15 } } : {}}
-      onClick={() => {
-        if (!isLocked) {
-          navigate(`/terminal/${drill.id}`)
-        }
-      }}
-      className={`relative flex flex-col rounded-radius-md border overflow-hidden ${isBoss ? 'sm:col-span-2' : ''} ${!isLocked ? 'cursor-pointer' : 'cursor-default'}`}
+      className={`relative flex flex-col rounded-radius-md border overflow-hidden ${isBoss ? 'sm:col-span-2' : ''}`}
       style={{
         backgroundColor: '#0F1419',
         borderColor: isBoss ? `${typeColor}30` : isNightmare ? 'rgba(255,71,87,0.3)' : '#1E2D3D',
@@ -118,7 +115,7 @@ export default function TrainingCard({ drill, index }: TrainingCardProps) {
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0A0E14]/50">
           <div className="flex flex-col items-center gap-space-2">
             <Lock size={24} className="text-[#4A6072]" />
-            <span className="font-jetbrains text-body-sm text-[#4A6072]">Complete previous drills</span>
+            <span className="font-jetbrains text-body-sm text-[#4A6072]">{t('academy.completePreviousDrills')}</span>
           </div>
         </div>
       )}
@@ -126,7 +123,7 @@ export default function TrainingCard({ drill, index }: TrainingCardProps) {
       <div className="relative flex flex-col p-space-4 gap-space-2">
         {/* Header Row */}
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-space-2">
+          <div className="flex min-w-0 items-center gap-space-2">
             {/* Type Icon */}
             <div
               className="flex items-center justify-center w-7 h-7 rounded-radius-sm"
@@ -135,11 +132,11 @@ export default function TrainingCard({ drill, index }: TrainingCardProps) {
               {typeIcon}
             </div>
             {/* Number + Title */}
-            <div className="flex items-center gap-space-1.5">
+            <div className="flex min-w-0 items-center gap-space-1.5">
               <span className="font-fira text-code-sm text-[#4A6072]">{drill.number}.</span>
-              <h4 className="font-jetbrains text-h4 text-[#E8EDF2]" style={{ fontSize: '0.9375rem' }}>
+              <h4 className="min-w-0 break-words font-jetbrains text-h4 text-[#E8EDF2]" style={{ fontSize: '0.9375rem' }}>
                 {isBoss && (
-                  <span className="text-badge uppercase mr-2" style={{ color: '#C77DFF' }}>Boss</span>
+                  <span className="text-badge uppercase mr-2" style={{ color: '#C77DFF' }}>{t('academy.boss')}</span>
                 )}
                 {drill.title}
               </h4>
@@ -159,7 +156,7 @@ export default function TrainingCard({ drill, index }: TrainingCardProps) {
         </p>
 
         {/* Tags + CTA Row */}
-        <div className="flex items-center justify-between pt-1">
+        <div className="flex flex-col items-start justify-between gap-3 pt-1 sm:flex-row sm:items-center">
           {/* Skill Tags + Risk */}
           <div className="flex flex-wrap gap-1.5">
             {drill.skills.map((skill) => (
@@ -182,14 +179,17 @@ export default function TrainingCard({ drill, index }: TrainingCardProps) {
                 backgroundColor: `${riskColorMap[drill.riskLevel] || '#8B9EB0'}15`,
               }}
             >
-              {drill.riskLevel}
+              {t('academy.riskLevel', { level: drill.riskLevel })}
             </span>
           </div>
 
           {/* CTA */}
           {!isLocked && (
             <button
-              className="flex items-center gap-1 font-jetbrains text-code-sm px-3 py-1.5 rounded-radius-sm transition-all duration-fast flex-shrink-0 ml-2 pointer-events-none"
+              type="button"
+              onClick={() => navigate(`/terminal/${drill.id}`)}
+              aria-label={`${isCompleted ? t('academy.replay') : t('academy.start')}: ${drill.title}`}
+              className="flex min-h-11 flex-shrink-0 items-center gap-1 rounded-radius-sm px-3 font-jetbrains text-code-sm transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF] sm:ml-2"
               style={{
                 backgroundColor: isCompleted ? 'rgba(0,255,136,0.1)' : 'rgba(0,255,136,0.15)',
                 color: isBoss ? '#C77DFF' : '#00FF88',
@@ -197,9 +197,9 @@ export default function TrainingCard({ drill, index }: TrainingCardProps) {
               }}
             >
               {isCompleted ? (
-                <><RotateCcw size={12} /> 重玩</>
+                <><RotateCcw size={12} aria-hidden="true" /> {t('academy.replay')}</>
               ) : (
-                <><Play size={12} /> 开始</>
+                <><Play size={12} aria-hidden="true" /> {t('academy.start')}</>
               )}
             </button>
           )}
@@ -209,10 +209,10 @@ export default function TrainingCard({ drill, index }: TrainingCardProps) {
         {isCompleted && drill.score !== undefined && (
           <div className="flex items-center gap-1.5 pt-0.5">
             <CheckCircle size={12} className="text-[#00FF88]" />
-            <span className="font-jetbrains text-code-sm text-[#00FF88]">{drill.score}% complete</span>
+            <span className="font-jetbrains text-code-sm text-[#00FF88]">{t('academy.scoreComplete', { score: drill.score })}</span>
           </div>
         )}
       </div>
-    </motion.div>
+    </motion.article>
   )
 }

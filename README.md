@@ -15,7 +15,7 @@
   <img alt="Browser sandbox" src="https://img.shields.io/badge/runtime-browser%20sandbox-00E5FF?style=flat-square" />
 </p>
 
-![Terminal Ghost Ops 首页总览](./app/docs/images/home-dashboard.png)
+![Terminal Ghost Ops 首页总览](./app/docs/images/home-dashboard.jpg)
 
 <sub>截图来自当前本地运行版本，不是概念稿。界面会检测浏览器语言，也可手动切换中文 / English。</sub>
 
@@ -40,6 +40,7 @@
 | 内容 | 数量 | 说明 |
 | --- | ---: | --- |
 | 任务定义 | **221** | 17 章 × 每章 13 个训练场景 |
+| 严格可执行闭环 | **162 / 221** | 73.3%；其余 59 个任务由能力报告逐项列出阻塞 pattern |
 | 学习章节 | **17** | 从帮助系统、文件操作到 Git、网络、容器与综合演练 |
 | 任务模式 | **4** | 170 Academy / 17 Operation / 17 Boss / 17 Nightmare |
 | 目标 | **610** | 551 个必做目标，59 个可选目标 |
@@ -47,34 +48,34 @@
 | 命令图谱 | **87** | 覆盖 12 个技能领域，包含风险、参数、示例与反模式 |
 | 成就 | **20** | 覆盖任务、连胜、技能、速度与隐藏挑战 |
 
-这里刻意使用“任务定义”而不是“221 关全部完成验收”：首关和主交互链路已经真实验证，但部分高级交互型任务仍在迁移到统一事件模型，详见[当前边界](#当前边界与已知问题)。
+这里刻意区分“任务定义”和“可执行闭环”：能力报告以未知能力默认不支持的严格口径审计全部 221 关，目前 162 关可由现有 Shell、交互模式和语法模型完整判定；基础命令、交互编辑器、REPL、Git 与主页面链路也经过真实浏览器验证。剩余边界详见[当前边界](#当前边界与已知问题)。
 
 ## 产品一览
 
 <table>
   <tr>
     <td width="50%">
-      <img src="./app/docs/images/mission-board.png" alt="任务板" />
+      <img src="./app/docs/images/mission-board.jpg" alt="任务板" />
       <br /><sub><b>任务板</b> · 221 个任务定义、模式/状态/难度筛选与推荐入口</sub>
     </td>
     <td width="50%">
-      <img src="./app/docs/images/terminal-cockpit.png" alt="终端驾驶舱" />
+      <img src="./app/docs/images/terminal-cockpit.jpg" alt="终端驾驶舱" />
       <br /><sub><b>终端驾驶舱</b> · 真实输入 <code>whoami</code> 后目标即时完成</sub>
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <img src="./app/docs/images/mission-complete.png" alt="任务完成" />
+      <img src="./app/docs/images/mission-complete.jpg" alt="任务完成" />
       <br /><sub><b>任务闭环</b> · 必做目标完成后给出用时、得分和复盘入口</sub>
     </td>
     <td width="50%">
-      <img src="./app/docs/images/command-atlas.png" alt="命令图谱" />
+      <img src="./app/docs/images/command-atlas.jpg" alt="命令图谱" />
       <br /><sub><b>命令图谱</b> · 87 条命令、12 个领域和六级风险过滤</sub>
     </td>
   </tr>
   <tr>
     <td colspan="2">
-      <img src="./app/docs/images/academy.png" alt="幽灵学院" />
+      <img src="./app/docs/images/academy.jpg" alt="幽灵学院" />
       <br /><sub><b>幽灵学院</b> · 17 章 × 13 个训练节点；每章由基础训练逐步进入 Operation、Boss 与 Nightmare</sub>
     </td>
   </tr>
@@ -83,7 +84,7 @@
 <details>
 <summary><b>查看移动端适配</b></summary>
 <p align="center">
-  <img src="./app/docs/images/mobile-home.png" width="390" alt="Terminal Ghost Ops 移动端首页" />
+  <img src="./app/docs/images/mobile-home.jpg" width="390" alt="Terminal Ghost Ops 移动端首页" />
 </p>
 <p align="center"><sub>390 × 844 视口实测，无横向溢出。</sub></p>
 </details>
@@ -170,10 +171,13 @@ flowchart LR
   U["玩家输入"] --> X["xterm.js 终端界面"]
   X --> S["ShellEngine 命令模拟"]
   S --> V["VFS 内存文件系统"]
-  X --> E["命令历史 / 交互状态"]
+  S --> K["Git 状态机"]
+  X --> E["TerminalAction：命令 / 交互 + exitCode"]
   D["all_levels.json 任务目录"] --> L["关卡加载与双语字段"]
   L --> T["TerminalCockpit"]
   E --> C["Validator 目标判定"]
+  V --> C
+  K --> C
   L --> C
   C --> P["Objectives / Score / Debrief"]
   A["87 条命令关系"] --> G["D3 力导向图"]
@@ -201,7 +205,9 @@ ghost/
 │  ├─ public/                      # 剧情图片、段位图与背景视频
 │  ├─ docs/images/                 # 当前版本的真实运行截图
 │  ├─ scripts/
-│  │  └─ validate-content.mjs      # 关卡目录完整性检查
+│  │  ├─ validate-content.mjs      # 关卡目录与目标契约检查
+│  │  ├─ validate-engine.mjs       # VFS / Shell / Git / Validator 回归
+│  │  └─ validate-*.mjs            # 资产、依赖、README 与构建预算门禁
 │  ├─ src/
 │  │  ├─ components/               # 导航、任务、学院、终端、档案与 UI 组件
 │  │  │  ├─ atlas/CommandGraph3D   # D3 力导向命令关系图
@@ -226,17 +232,23 @@ ghost/
 | --- | --- | --- |
 | `npm run dev` | 启动 Vite 开发服务器 | 已验证，`127.0.0.1:3000` |
 | `npm run validate:content` | 校验关卡 ID、目标/check 数量和五级提示 | 已通过 |
+| `npm run validate:engine` | 回归 VFS、Shell、Git 与 Validator 状态不变量 | 已通过，84 项 |
+| `npm run report:capabilities` | 严格盘点 221 关的命令、交互与语法支持情况 | 162/221 可执行；59 关逐项列出阻塞项 |
+| `npm run validate:assets` | 校验 README 图片、公开资产引用与体积 | 已通过 |
+| `npm run validate:dependencies` | 校验直接依赖使用情况与锁文件来源 | 已通过 |
+| `npm run validate:readme` | 用源码统计反向校验本文数字、版本与图片 | 已通过 |
 | `npm run typecheck` | TypeScript 项目检查 | 已通过 |
-| `npm run check` | 内容校验 + TypeScript 检查 | 已通过 |
-| `npm run build` | 生成生产构建到 `dist/` | 已通过 |
+| `npm run check` | 汇总内容、引擎、资产、依赖、README 与类型检查 | 已通过 |
+| `npm run build` | 生成 `dist/` 并校验分包和体积预算 | 已通过 |
+| `npm run verify` | `check` + ESLint + 生产构建的一站式门禁 | 已通过 |
+| `npm run audit:prod` / `audit:all` | npm 生产/完整依赖安全审计 | 均为 0 vulnerabilities |
 | `npm run preview` | 在 `127.0.0.1:4173` 预览生产构建 | 可用 |
 | `npm run lint` | ESLint 全量检查 | 已通过，0 error / 0 warning |
 
 生产构建：
 
 ```bash
-npm run check
-npm run build
+npm run verify
 npm run preview
 ```
 
@@ -275,42 +287,48 @@ npm run preview
 
 ```bash
 npm run validate:content
+npm run validate:engine
 npm run typecheck
 ```
 
-当前旧目录没有显式 `objectiveId`。Validator 会把必做的 `obj-N` 依次绑定到进度检查，并用所有进度检查汇总唯一的任务总目标；标记为 optional 的目标不会被错误算作通关条件。命令 pattern 按字面量/Token 边界匹配，不会再把 `*`、`?`、`|` 当作正则表达式。
+当前旧目录没有显式 `objectiveId`。Validator 会把必做的 `obj-N` 依次绑定到进度检查，并用所有进度检查汇总唯一的任务总目标；标记为 optional 的目标不会被错误算作通关条件。加载器还会根据目标契约把旧数据中的通用 pattern（例如两个连续的 `git`）细化为 `git status`、`git add`。正向目标只读取 `exitCode === 0` 的动作，失败尝试仍会进入安全审计；pattern 按字面量/Token 边界匹配，不会再把 `*`、`?`、`|` 当作正则表达式。
 
 ## 本次真实验收
 
 | 检查 | 结果 |
 | --- | --- |
 | 开发服务器首页 | HTTP 200，标题 `Terminal Ghost Ops` |
-| 桌面视口 | 首页、任务板、命令图谱正常渲染 |
+| 桌面视口 | 首页、任务板、学院、图谱、档案、设置、终端、复盘与 404 均正常渲染 |
 | 幽灵学院 | 17 章可浏览；首章训练编号为 1–13 |
-| D3 图谱 | 87 nodes / 95 links，可切换、拖拽与缩放 |
-| 连续路由 | 首页 → 任务板 → 学院 → 命令图谱 → 终端，无透明页卡死 |
-| 移动视口 | 390 × 844，无横向溢出 |
-| 首关输入 `whoami` | 仅对应目标完成，显示 1/4 |
+| D3 图谱 | 87 nodes / 95 links；列表/图谱切换、可聚焦节点与详情面板可用 |
+| 连续路由 | 首页 → 任务板 → 学院 → 命令图谱 → 终端，无透明页或错误路由卡死 |
+| 移动视口 | 390 × 844；导航、简报、终端、档案和设置页无页面级横向溢出 |
+| 首关输入 `whoami` | 只完成对应目标，显示 1/3 |
 | 再输入 `id` | Required Objectives 完成 3/3，Mission Complete，100/100；`type` 明确标记 Optional |
-| 应用 Console | 最终主路径无 error / warning |
-| `npm run check` | 通过 |
-| `npm run lint` | 通过，0 error / 0 warning |
-| `npm run build` | 通过 |
+| Git 任务错误命令 | `git nope` 返回非零状态，目标保持 0/3 |
+| Git 任务正确路径 | 预初始化教学仓库；`git status` → 1/3，`git add README.md` → 3/3 |
+| 必要风险动作 | 对缺失文件执行 `chmod` 不计目标；创建文件后执行 `chmod u+x` → 2/2、100/100，任务要求的风险命令不会自我否决 |
+| 交互任务 | `less` 的 `/`、`?`、`q`，Vim `:q`，Python `exit()` / `Ctrl-D` 与 Nano 保存/退出进入动作模型 |
+| Replay | 不刷新页面即可重建 VFS、Shell、Git、计时器和任务进度 |
+| 应用 Console | 主路径无应用 error；系统启用减动时仅有 Framer Motion 的开发提示 |
+| `npm run validate:engine` | 84 项回归通过 |
+| `npm run report:capabilities` | 162/221 关具备严格可执行闭环；69 个未支持 pattern 影响 59 关、74 条检查 |
+| `npm run verify` | 内容、引擎、资产、依赖、README、类型、Lint 与生产构建全部通过 |
+| `npm run audit:prod` / `audit:all` | 均为 0 vulnerabilities |
+| 生产构建 | 首载 4 个 JS 块，1,107 KiB raw / 330 KiB gzip；10 个动态边界 |
 
 ## 当前边界与已知问题
 
 这是当前实现状态，不隐藏工程债务：
 
-- **高级交互事件尚未统一**：35 个目标依赖 `Ctrl-C`、`q`、`:q`、`Esc` 等按键/模式事件，而当前 Validator 主要消费回车提交的命令历史。
-- **部分任务 pattern 重复**：13 个任务的两个技能目标共享同一个基础命令 pattern，仍需要更细粒度的参数/结果判定。
-- **成功状态未进入事件模型**：当前目标判定尚未把命令 `exitCode` 作为完成条件；后续应升级为包含 raw command、tokens、exit code 和 mode 的 ActionEvent。
-- **Git 引擎未接入终端**：`engine/git.ts` 已实现大量 Git 行为，但 TerminalCockpit 目前没有把它接到 Shell 的 `git` 分支。
+- **162/221 关具备严格可执行闭环**：能力报告使用显式 allowlist，未知能力默认判为不支持；当前 69 个未支持 pattern 影响 59 关、74 条检查，主要包括 `git bisect`、循环/条件语法、进程后台控制和少数系统工具。模拟器不会用“未知命令也返回成功”掩盖缺口。
+- **动作模型仍可继续细化**：当前 `TerminalAction` 已区分命令/交互并携带 `exitCode`，Validator 也区分成功动作与失败尝试；完整复盘若要重放每一步，还需要 tokens、时间戳和前后 mode/state 快照。
+- **旧关卡数据仍需源头治理**：运行时会修复可从目标文案确定的通用 pattern，但部分提示和中英文案仍带批量生成痕迹。长期方案是给每个 check 写入显式 `objectiveId` 和结构化参数，而不是永远依赖兼容层推断。
 - **复盘与成长数据含演示内容**：Debrief、档案、热力图和部分进度使用静态/内存数据；刷新页面不会持久化完整成长状态。
 - **排行榜未实现**：首页入口当前禁用。
 - **多语言仍在完善**：内置 English / 中文切换和双语关卡字段，但部分深层任务文案仍固定显示英文。
-- **依赖审计尚未清零**：2026-07-24 的 `npm audit --omit=dev` 报告 4 项（1 high、3 moderate，来自 `lodash` / `recharts` / `react-router*`），当前数据库没有给出自动修复；完整开发依赖树为 129 项。需要逐项升级和回归，不能直接用 `--force` 覆盖。
-- **首屏包仍偏大**：生产构建中的主入口约 1.01 MB（gzip 约 289 KB），关卡数据约 755 KB；Three.js、图谱和大目录还需要进一步拆包与按需加载。
-- **资源待正式化**：现有剧情人物图属于占位资产，公开发布前应完成版权确认、去水印替换与压缩。
+- **包体仍偏大**：当前首载 4 个 JS 块共 1,107 KiB raw / 330 KiB gzip，总 JS 为 599 KiB gzip；其中 Three.js vendor 为 507.64 KiB raw / 127.41 KiB gzip，关卡数据为 755.49 KiB raw / 47.09 KiB gzip，仍适合继续按页面和能力拆分。
+- **资源待正式化**：`public/` 仍有 14.1 MiB，并包含两个未使用 Logo；现有剧情人物图属于占位资产，公开发布前应完成权属确认、替换与压缩。
 
 ## 安全与隐私模型
 
@@ -334,13 +352,16 @@ npm run build
 
 ## 路线图
 
-- [ ] 用统一 `ActionEvent` 替代纯字符串命令历史，并记录 exit code / mode / key event。
-- [ ] 把 GitEngine 正式接入 TerminalCockpit。
-- [ ] 为 Validator、Shell、VFS 和 221 个任务目录加入自动化测试。
+- [x] 用 `TerminalAction` 统一普通命令与交互动作，并让 `exitCode` 参与目标判定。
+- [x] 把 Git 状态机接入 Shell、TerminalCockpit、HUD 与 Validator。
+- [x] 为 Validator、Shell、Git 和 VFS 建立无浏览器回归套件。
+- [x] 为 221 个任务建立结构化能力清单和严格逐关可完成性报告（当前 162/221）。
+- [ ] 为余下 59 关补齐长尾命令与复合 Shell 语义，并增加逐关执行测试。
+- [ ] 为动作补充 tokens、时间戳和 mode/state 快照，支持确定性复盘。
 - [ ] 把成长、成就和复盘从演示状态迁移到可版本化的本地存档。
 - [ ] 完成全站中英文案覆盖。
-- [x] 清零 ESLint 基线，并补齐内容校验、TypeScript 与构建门禁。
-- [ ] 清理重复依赖，迁移到统一的 `@xterm/*` 包。
+- [x] 清零 ESLint 基线，并补齐内容、资产、依赖、README、TypeScript 与构建门禁。
+- [x] 清理未使用的直接依赖，迁移到统一的 `@xterm/*` 包，并把 npm audit 清零。
 - [ ] 替换并压缩占位图片，降低当前约 14.1 MB 的公共素材体积。
 
 ## 贡献约定
@@ -349,10 +370,9 @@ npm run build
 
 ```bash
 npm ci
-npm run validate:content
-npm run typecheck
-npm run lint
-npm run build
+npm run verify
+npm run audit:prod
+npm run audit:all
 ```
 
 如果改动了 UI，请同时检查桌面和 390 px 移动视口；如果改动了任务，请给出“命令输入 → 目标状态 → 完成条件”的可复现证据。

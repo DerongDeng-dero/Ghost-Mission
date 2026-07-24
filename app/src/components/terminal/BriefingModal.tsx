@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Clock, Zap, ChevronRight, Terminal, AlertTriangle, Eye, Keyboard, Target, Lightbulb, CornerDownLeft } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { MissionLevel } from '@/engine/levels'
 
 interface BriefingModalProps {
@@ -13,16 +14,61 @@ interface BriefingModalProps {
 const TYPE_COLORS: Record<string, string> = {
   academy: 'var(--neon-green)',
   operation: 'var(--neon-cyan)',
+  boss: 'var(--status-danger)',
   nightmare: 'var(--status-purple)',
-  redzone: 'var(--status-danger)',
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  academy: 'ACADEMY',
-  operation: 'OPERATION',
-  nightmare: 'NIGHTMARE',
-  redzone: 'RED ZONE',
+const TYPE_LABELS: Record<'en' | 'zh', Record<string, string>> = {
+  en: {
+    academy: 'ACADEMY',
+    operation: 'OPERATION',
+    boss: 'BOSS',
+    nightmare: 'NIGHTMARE',
+  },
+  zh: {
+    academy: '学院',
+    operation: '行动',
+    boss: '首领战',
+    nightmare: '梦魇',
+  },
 }
+
+const BRIEFING_COPY = {
+  en: {
+    close: 'Close mission briefing',
+    tabs: ['Story', 'Mission', 'Parameters', 'How to Play'],
+    required: 'Required',
+    restricted: 'Restricted Commands',
+    howToPlay: 'This is a terminal command training game. Use the simulated terminal to complete the mission objectives.',
+    steps: [
+      'Read the objectives in the left panel',
+      'Type commands in the terminal',
+      'Complete every required objective',
+      'Use the hint button in the top bar if you get stuck',
+    ],
+    commonCommands: 'Common Commands for This Mission',
+    showMission: 'Got it! Show me the Mission',
+    begin: 'Begin Mission',
+    difficulty: (value: number) => `Difficulty: ${value} of 5`,
+  },
+  zh: {
+    close: '关闭任务简报',
+    tabs: ['故事', '任务', '参数', '玩法说明'],
+    required: '必需',
+    restricted: '受限命令',
+    howToPlay: '这是一款终端命令训练游戏。请使用模拟终端完成全部任务目标。',
+    steps: [
+      '阅读左侧面板中的任务目标',
+      '在终端中输入命令',
+      '完成所有必需目标',
+      '遇到困难时使用顶部栏的提示按钮',
+    ],
+    commonCommands: '本任务常用命令',
+    showMission: '明白了，查看任务',
+    begin: '开始任务',
+    difficulty: (value: number) => `难度：5 级中的第 ${value} 级`,
+  },
+} as const
 
 const COMMON_COMMANDS: Record<string, string[]> = {
   Filesystem: ['ls', 'cd', 'pwd', 'cat', 'touch', 'mkdir', 'rm', 'cp', 'mv'],
@@ -48,14 +94,63 @@ function getExampleCommands(level: MissionLevel): string[] {
 }
 
 export default function BriefingModal({ level, isOpen, onStart, onClose }: BriefingModalProps) {
+  const { i18n } = useTranslation()
+  const language: 'en' | 'zh' = i18n.resolvedLanguage?.startsWith('zh') ? 'zh' : 'en'
+  const copy = BRIEFING_COPY[language]
+  const dialogRef = useRef<HTMLDivElement>(null)
   // Default to "How to Play" tab for easy levels (first-time players)
   const isFirstTime = level ? level.difficulty <= 1 : false
   const [step, setStep] = useState(isFirstTime ? 3 : 0)
 
+  useEffect(() => {
+    if (!isOpen) return
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    const dialog = dialogRef.current
+    const getFocusable = () => Array.from(
+      dialog?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    )
+    const focusTimer = window.setTimeout(() => getFocusable()[0]?.focus(), 0)
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusable = getFocusable()
+      if (focusable.length === 0) {
+        event.preventDefault()
+        dialog?.focus()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.clearTimeout(focusTimer)
+      document.removeEventListener('keydown', handleKeyDown)
+      previouslyFocused?.focus()
+    }
+  }, [isOpen, onClose])
+
   if (!level) return null
 
   const typeColor = TYPE_COLORS[level.mode] || 'var(--neon-green)'
-  const typeLabel = TYPE_LABELS[level.mode] || 'ACADEMY'
+  const typeLabel = TYPE_LABELS[language][level.mode] || level.mode.toUpperCase()
+  const titleId = `briefing-title-${level.id}`
+  const panelId = `briefing-panel-${level.id}`
 
   return (
     <AnimatePresence>
@@ -70,8 +165,13 @@ export default function BriefingModal({ level, isOpen, onStart, onClose }: Brief
           onClick={onClose}
         >
           <motion.div
-            className="w-full max-w-[560px] rounded-lg overflow-hidden"
+            ref={dialogRef}
+            className="w-full max-w-[560px] max-h-[calc(100dvh-2rem)] rounded-lg overflow-y-auto"
             style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-subtle)' }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            tabIndex={-1}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
@@ -92,8 +192,8 @@ export default function BriefingModal({ level, isOpen, onStart, onClose }: Brief
                 </span>
                 <button
                   onClick={onClose}
-                  className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                  aria-label="Close briefing"
+                  className="min-h-11 min-w-11 -mr-3 inline-flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                  aria-label={copy.close}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -102,34 +202,41 @@ export default function BriefingModal({ level, isOpen, onStart, onClose }: Brief
               </div>
 
               {/* Title */}
-              <h2 className="font-jetbrains text-h2 mb-1" style={{ color: 'var(--text-primary)' }}>
-                {level.getTitle('en')}
+              <h2 id={titleId} className="font-jetbrains text-h2 mb-1" style={{ color: 'var(--text-primary)' }}>
+                {level.getTitle(language)}
               </h2>
               <p className="font-jetbrains text-body-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-                {level.chapter_id}: {level.chapter_title_en}
+                {level.chapter_id}: {language === 'zh' ? level.chapter_title_zh : level.chapter_title_en}
               </p>
 
               {/* Meta info */}
               <div className="flex items-center gap-4 mb-6">
                 <div className="flex items-center gap-1.5">
-                  <Zap size={14} style={{ color: 'var(--status-warning)' }} />
-                  <span className="font-jetbrains text-body-sm" style={{ color: 'var(--text-secondary)' }}>
-                    {Array(level.difficulty).fill('&#9733;').join('')}
+                  <Zap size={14} style={{ color: 'var(--status-warning)' }} aria-hidden="true" />
+                  <span
+                    className="font-jetbrains text-body-sm"
+                    style={{ color: 'var(--text-secondary)' }}
+                    aria-label={copy.difficulty(level.difficulty)}
+                  >
+                    {'★'.repeat(level.difficulty)}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Clock size={14} style={{ color: 'var(--neon-cyan)' }} />
+                  <Clock size={14} style={{ color: 'var(--neon-cyan)' }} aria-hidden="true" />
                   <span className="font-jetbrains text-body-sm" style={{ color: 'var(--text-secondary)' }}>{level.estimated_time}</span>
                 </div>
               </div>
 
               {/* Content tabs */}
-              <div className="flex gap-2 mb-4 flex-wrap">
-                {['Story', 'Mission', 'Parameters', 'How to Play'].map((label, i) => (
+              <div className="flex gap-2 mb-4 flex-wrap" role="tablist">
+                {copy.tabs.map((label, i) => (
                   <button
                     key={label}
                     onClick={() => setStep(i)}
-                    className="font-jetbrains text-body-sm px-3 py-1.5 rounded-md transition-all"
+                    className="min-h-11 font-jetbrains text-body-sm px-3 py-1.5 rounded-md transition-all"
+                    role="tab"
+                    aria-selected={step === i}
+                    aria-controls={panelId}
                     style={{
                       color: step === i ? 'var(--text-primary)' : 'var(--text-secondary)',
                       backgroundColor: step === i ? 'var(--bg-input)' : 'transparent',
@@ -142,7 +249,12 @@ export default function BriefingModal({ level, isOpen, onStart, onClose }: Brief
               </div>
 
               {/* Tab content */}
-              <div className="min-h-[100px]">
+              <div
+                id={panelId}
+                className="min-h-[100px]"
+                role="tabpanel"
+                aria-live="polite"
+              >
                 <AnimatePresence mode="wait">
                   {step === 0 && (
                     <motion.p
@@ -154,7 +266,7 @@ export default function BriefingModal({ level, isOpen, onStart, onClose }: Brief
                       className="font-inter text-body leading-relaxed italic"
                       style={{ color: 'var(--text-secondary)' }}
                     >
-                      {level.story.getBriefing('en')}
+                      {level.story.getBriefing(language)}
                     </motion.p>
                   )}
                   {step === 1 && (
@@ -166,7 +278,7 @@ export default function BriefingModal({ level, isOpen, onStart, onClose }: Brief
                       transition={{ duration: 0.2 }}
                     >
                       <p className="font-jetbrains text-body" style={{ color: 'var(--text-primary)' }}>
-                        {level.getSummary('en')}
+                        {level.getSummary(language)}
                       </p>
                       <div className="flex flex-wrap gap-2 mt-3">
                         {level.skills.map(skill => (
@@ -194,12 +306,12 @@ export default function BriefingModal({ level, isOpen, onStart, onClose }: Brief
                       transition={{ duration: 0.2 }}
                       className="space-y-2"
                     >
-                      {level.objectives.map((obj, i) => (
-                        <div key={i} className="flex items-start gap-2">
+                      {level.objectives.map(obj => (
+                        <div key={obj.id} className="flex items-start gap-2">
                           <Terminal size={12} className="mt-1 flex-shrink-0" style={{ color: obj.required ? 'var(--neon-cyan)' : 'var(--text-muted)' }} />
                           <span className="font-jetbrains text-body-sm" style={{ color: 'var(--text-primary)' }}>
-                            {obj.required && <span style={{ color: 'var(--neon-cyan)' }}>[Required] </span>}
-                            {obj.getLabel('en')}
+                            {obj.required && <span style={{ color: 'var(--neon-cyan)' }}>[{copy.required}] </span>}
+                            {obj.getLabel(language)}
                           </span>
                         </div>
                       ))}
@@ -207,7 +319,9 @@ export default function BriefingModal({ level, isOpen, onStart, onClose }: Brief
                         <div className="mt-3 p-2.5 rounded-md" style={{ backgroundColor: 'rgba(255, 71, 87, 0.06)', border: '1px solid rgba(255, 71, 87, 0.2)' }}>
                           <div className="flex items-center gap-1.5 mb-1">
                             <AlertTriangle size={12} style={{ color: 'var(--status-danger)' }} />
-                            <span className="font-jetbrains text-[10px] font-semibold uppercase" style={{ color: 'var(--status-danger)' }}>Restricted Commands</span>
+                            <span className="font-jetbrains text-[10px] font-semibold uppercase" style={{ color: 'var(--status-danger)' }}>
+                              {copy.restricted}
+                            </span>
                           </div>
                           <p className="font-jetbrains text-body-sm" style={{ color: 'var(--status-danger)' }}>
                             {(level.redCommands ?? []).join(', ')}
@@ -226,23 +340,23 @@ export default function BriefingModal({ level, isOpen, onStart, onClose }: Brief
                       className="space-y-4"
                     >
                       <p className="font-jetbrains text-body leading-relaxed" style={{ color: 'var(--text-primary)' }}>
-                        This is a <strong style={{ color: 'var(--neon-cyan)' }}>terminal command training game</strong>. You will use a simulated terminal to complete objectives.
+                        {copy.howToPlay}
                       </p>
 
                       {/* Step-by-step guide */}
                       <div className="space-y-3">
                         {[
-                          { icon: Eye, color: '#00E5FF', text: 'Read the objectives on the left panel' },
-                          { icon: Keyboard, color: '#C77DFF', text: 'Type commands in the terminal below' },
-                          { icon: Target, color: '#00FF88', text: 'Complete all objectives to finish the mission' },
-                          { icon: Lightbulb, color: '#FFD166', text: 'Use the ? hint button in the top bar if stuck' },
+                          { icon: Eye, color: '#00E5FF' },
+                          { icon: Keyboard, color: '#C77DFF' },
+                          { icon: Target, color: '#00FF88' },
+                          { icon: Lightbulb, color: '#FFD166' },
                         ].map((item, i) => (
-                          <div key={i} className="flex items-center gap-3">
+                          <div key={copy.steps[i]} className="flex items-center gap-3">
                             <div className="flex items-center justify-center w-8 h-8 rounded-md flex-shrink-0" style={{ backgroundColor: item.color + '15' }}>
-                              <item.icon size={16} style={{ color: item.color }} />
+                              <item.icon size={16} style={{ color: item.color }} aria-hidden="true" />
                             </div>
                             <span className="font-jetbrains text-body-sm" style={{ color: 'var(--text-secondary)' }}>
-                              <span style={{ color: item.color }}>{i + 1}.</span> {item.text}
+                              <span style={{ color: item.color }}>{i + 1}.</span> {copy.steps[i]}
                             </span>
                           </div>
                         ))}
@@ -251,7 +365,7 @@ export default function BriefingModal({ level, isOpen, onStart, onClose }: Brief
                       {/* Example commands for this level */}
                       <div>
                         <p className="font-jetbrains text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
-                          Common Commands for This Mission
+                          {copy.commonCommands}
                         </p>
                         <div className="flex flex-wrap gap-1.5">
                           {getExampleCommands(level).map(cmd => (
@@ -272,14 +386,14 @@ export default function BriefingModal({ level, isOpen, onStart, onClose }: Brief
 
                       <button
                         onClick={() => setStep(1)}
-                        className="flex items-center gap-2 font-jetbrains text-body-sm px-4 py-2 rounded-md transition-all"
+                        className="flex min-h-11 items-center gap-2 font-jetbrains text-body-sm px-4 py-2 rounded-md transition-all"
                         style={{
                           backgroundColor: 'var(--neon-green)',
                           color: '#0A0E14',
                         }}
                       >
                         <CornerDownLeft size={14} />
-                        Got it! Show me the Mission
+                        {copy.showMission}
                       </button>
                     </motion.div>
                   )}
@@ -288,19 +402,18 @@ export default function BriefingModal({ level, isOpen, onStart, onClose }: Brief
 
               {/* Action button */}
               <div className="mt-6 flex justify-end">
-                <motion.button
-                  onClick={onStart}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-md font-jetbrains text-body font-semibold transition-all"
+                <button
+                  type="button"
+                  onClick={() => onStart()}
+                  className="flex min-h-11 items-center gap-2 px-5 py-2.5 rounded-md font-jetbrains text-body font-semibold transition-all"
                   style={{
                     backgroundColor: typeColor,
                     color: '#0A0E14',
                   }}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
                 >
-                  Begin Mission
+                  {copy.begin}
                   <ChevronRight size={16} />
-                </motion.button>
+                </button>
               </div>
             </div>
           </motion.div>

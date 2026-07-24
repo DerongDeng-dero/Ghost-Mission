@@ -47,18 +47,13 @@ export default function MissionCard({ mission, index, featured = false }: Missio
   }
 
   return (
-    <motion.div
+    <motion.article
       variants={cardVariants}
       initial="hidden"
       animate="visible"
       layout
       whileHover={!isLocked ? { y: -2, transition: { duration: 0.15 } } : {}}
-      onClick={() => {
-        if (!isLocked) {
-          navigate(`/terminal/${mission.id}`)
-        }
-      }}
-      className={`relative flex flex-col overflow-hidden rounded-radius-md border ${featured ? 'min-h-[260px]' : 'min-h-[220px]'} ${isInProgress ? 'border-l-4 border-l-[#FFD166]' : 'border-l-0'} ${!isLocked ? 'cursor-pointer' : 'cursor-default'}`}
+      className={`relative flex flex-col overflow-hidden rounded-radius-md border ${featured ? 'min-h-[260px]' : 'min-h-[220px]'} ${isInProgress ? 'border-l-4 border-l-[#FFD166]' : 'border-l-0'}`}
       style={{
         backgroundColor: '#0F1419',
         borderColor: isInProgress ? '#1E2D3D' : '#1E2D3D',
@@ -70,7 +65,9 @@ export default function MissionCard({ mission, index, featured = false }: Missio
       <div
         className="h-1 w-full"
         style={{ backgroundColor: risk || '#00FF88' }}
+        aria-hidden="true"
       />
+      <span className="sr-only">{t('missionBoard.riskLevel', { level: mission.riskLevel })}</span>
 
       {/* Mode Badge */}
       <div className="absolute top-3 right-3">
@@ -111,13 +108,14 @@ export default function MissionCard({ mission, index, featured = false }: Missio
         {/* Difficulty + Time Row */}
         <div className="flex items-center gap-space-3">
           {/* Difficulty Stars */}
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-0.5" aria-label={t('missionBoard.difficultyStars', { count: mission.difficulty })}>
             {Array.from({ length: 5 }).map((_, i) => (
               <Star
                 key={i}
                 size={14}
                 className={i < mission.difficulty ? 'text-[#FFD166]' : 'text-[#1E2D3D]'}
                 fill={i < mission.difficulty ? '#FFD166' : 'none'}
+                aria-hidden="true"
               />
             ))}
           </div>
@@ -168,7 +166,14 @@ export default function MissionCard({ mission, index, featured = false }: Missio
           )}
           {isInProgress && (
             <div className="flex items-center gap-1.5">
-              <div className="w-16 h-1.5 rounded-full bg-[#1A2332] overflow-hidden">
+              <div
+                className="w-16 h-1.5 rounded-full bg-[#1A2332] overflow-hidden"
+                role="progressbar"
+                aria-label={t('missionBoard.missionProgress', { title: mission.title })}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={mission.score || 0}
+              >
                 <div
                   className="h-full rounded-full bg-[#FFD166]"
                   style={{ width: `${mission.score || 0}%` }}
@@ -182,7 +187,10 @@ export default function MissionCard({ mission, index, featured = false }: Missio
           {/* CTA Button */}
           {!isLocked && (
             <button
-              className="flex items-center gap-1.5 font-jetbrains text-code-sm px-3 py-1.5 rounded-radius-sm transition-all duration-fast pointer-events-none"
+              type="button"
+              onClick={() => navigate(`/terminal/${mission.id}`)}
+              aria-label={`${isCompleted ? t('missionBoard.replay') : isInProgress ? t('missionBoard.continue') : t('missionBoard.enter')}: ${mission.title}`}
+              className="flex min-h-11 items-center gap-1.5 rounded-radius-sm px-3 font-jetbrains text-code-sm transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
               style={{
                 backgroundColor: isCompleted ? 'rgba(0,255,136,0.1)' : 'rgba(0,255,136,0.15)',
                 color: '#00FF88',
@@ -200,6 +208,6 @@ export default function MissionCard({ mission, index, featured = false }: Missio
           )}
         </div>
       </div>
-    </motion.div>
+    </motion.article>
   )
 }

@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { domains, riskLevels, commandTypes } from '@/data/commands';
+import { useTranslation } from 'react-i18next';
 
 interface DomainFilterProps {
   activeDomain: string;
@@ -11,22 +12,6 @@ interface DomainFilterProps {
   commandCounts: Record<string, number>;
 }
 
-const domainLabels: Record<string, string> = {
-  All: '全部',
-  File: '文件',
-  Text: '文本',
-  Process: '进程',
-  Network: '网络',
-  Git: 'Git',
-  Editor: '编辑器',
-  Runtime: '运行时',
-  Package: '包管理',
-  Container: '容器',
-  Database: '数据库',
-  Services: '服务',
-  Shell: 'Shell',
-};
-
 export default function DomainFilter({
   activeDomain,
   onDomainChange,
@@ -36,25 +21,37 @@ export default function DomainFilter({
   onTypeToggle,
   commandCounts,
 }: DomainFilterProps) {
+  const { t } = useTranslation();
+  const domainLabel = (domain: string) => domain === 'All'
+    ? t('commandAtlas.domains.all')
+    : t(`commandAtlas.domains.${domain.toLowerCase()}`, { defaultValue: domain });
+
   return (
     <div className="w-full max-w-[1200px] mx-auto space-y-3">
       {/* Domain tabs */}
-      <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-thin">
+      <div
+        className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-thin"
+        role="group"
+        aria-label={t('commandAtlas.domainFilterLabel')}
+        tabIndex={0}
+      >
         {domains.map((domain) => {
           const isActive = activeDomain === domain;
           const count = commandCounts[domain] ?? 0;
           return (
             <button
+              type="button"
               key={domain}
               onClick={() => onDomainChange(domain)}
-              className="relative flex-shrink-0 px-4 py-2.5 font-jetbrains text-nav uppercase transition-colors duration-fast whitespace-nowrap"
+              aria-pressed={isActive}
+              className="relative min-h-11 flex-shrink-0 whitespace-nowrap px-4 font-jetbrains text-nav uppercase transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
               style={{
                 color: isActive ? '#00E5FF' : '#8B9EB0',
                 backgroundColor: isActive ? 'rgba(0, 229, 255, 0.08)' : 'transparent',
                 borderRadius: 'var(--radius-sm)',
               }}
             >
-              {domainLabels[domain] || domain}
+              {domainLabel(domain)}
               {count > 0 && (
                 <span
                   className="ml-1.5 font-jetbrains text-badge px-1.5 py-0.5 rounded-full"
@@ -82,16 +79,19 @@ export default function DomainFilter({
       {/* Risk + Type filters */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Risk level toggles */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-jetbrains text-body-sm text-[#4A6072] mr-1">风险:</span>
-          {riskLevels.map(({ level, color, label }) => {
+        <div className="flex items-center gap-2 flex-wrap" role="group" aria-label={t('commandAtlas.riskFilterLabel')}>
+          <span className="font-jetbrains text-body-sm text-[#4A6072] mr-1">{t('commandAtlas.riskFilterLabel')}:</span>
+          {riskLevels.map(({ level, color }) => {
             const isActive = activeRisks.has(level);
+            const label = t(`commandAtlas.riskLevels.${level}`);
             return (
               <button
+                type="button"
                 key={level}
                 onClick={() => onRiskToggle(level)}
                 title={label}
-                className="relative flex items-center gap-1.5 px-2.5 py-1.5 transition-all duration-fast rounded-radius-sm"
+                aria-pressed={isActive}
+                className="relative flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-radius-sm px-2.5 transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
                 style={{
                   border: `1px solid ${isActive ? color : '#1E2D3D'}`,
                   backgroundColor: isActive ? `${color}15` : 'transparent',
@@ -105,7 +105,7 @@ export default function DomainFilter({
                   }}
                 />
                 <span
-                  className="font-jetbrains text-body-sm hidden sm:inline"
+                  className="sr-only font-jetbrains text-body-sm sm:not-sr-only"
                   style={{ color: isActive ? color : '#4A6072' }}
                 >
                   {label}
@@ -115,10 +115,11 @@ export default function DomainFilter({
           })}
           {activeRisks.size > 0 && (
             <button
+              type="button"
               onClick={() => { activeRisks.forEach(r => onRiskToggle(r)); }}
-              className="font-jetbrains text-body-sm text-[#4A6072] hover:text-[#E8EDF2] transition-colors ml-1"
+              className="ml-1 min-h-11 rounded-radius-sm px-2 font-jetbrains text-body-sm text-[#4A6072] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
             >
-              清除
+              {t('commandAtlas.clearFilters')}
             </button>
           )}
         </div>
@@ -126,31 +127,34 @@ export default function DomainFilter({
         <div className="w-px h-5 bg-[#1E2D3D] hidden md:block" />
 
         {/* Type filters */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-jetbrains text-body-sm text-[#4A6072] mr-1">类型:</span>
-          {commandTypes.map(({ type, label }) => {
+        <div className="flex items-center gap-2 flex-wrap" role="group" aria-label={t('commandAtlas.typeFilterLabel')}>
+          <span className="font-jetbrains text-body-sm text-[#4A6072] mr-1">{t('commandAtlas.typeFilterLabel')}:</span>
+          {commandTypes.map(({ type }) => {
             const isActive = activeTypes.has(type);
             return (
               <button
+                type="button"
                 key={type}
                 onClick={() => onTypeToggle(type)}
-                className="px-2.5 py-1 font-jetbrains text-body-sm transition-all duration-fast rounded-radius-sm"
+                aria-pressed={isActive}
+                className="min-h-11 rounded-radius-sm px-2.5 font-jetbrains text-body-sm transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
                 style={{
                   color: isActive ? '#00E5FF' : '#4A6072',
                   border: `1px solid ${isActive ? '#00E5FF' : '#1E2D3D'}`,
                   backgroundColor: isActive ? 'rgba(0, 229, 255, 0.08)' : 'transparent',
                 }}
               >
-                {label}
+                {t(`commandAtlas.types.${type}`)}
               </button>
             );
           })}
           {activeTypes.size > 0 && (
             <button
+              type="button"
               onClick={() => { activeTypes.forEach(t => onTypeToggle(t)); }}
-              className="font-jetbrains text-body-sm text-[#4A6072] hover:text-[#E8EDF2] transition-colors ml-1"
+              className="ml-1 min-h-11 rounded-radius-sm px-2 font-jetbrains text-body-sm text-[#4A6072] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
             >
-              清除
+              {t('commandAtlas.clearFilters')}
             </button>
           )}
         </div>

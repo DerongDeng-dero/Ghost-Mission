@@ -1,9 +1,31 @@
 import { VFS } from './vfs'
+import { createGitState, gitCommand, type GitState } from './git'
 
 // Safety limits to prevent browser freeze from infinite loops / excessive output
 const MAX_OUTPUT_LENGTH = 10000
 const TRUNCATION_MSG = '\n... (output truncated)\n'
 const MAX_GREP_INPUT = 50000
+const SHELL_BUILTINS = new Set([
+  'alias', 'cd', 'command', 'dirs', 'echo', 'env', 'exit', 'export', 'history', 'popd',
+  'printenv', 'pushd', 'pwd', 'set', 'source', 'sudo', 'type', 'umask', 'unalias', 'unset', '.',
+])
+const SIMULATED_EXECUTABLES = new Set([
+  'apropos', 'awk', 'basename', 'bzip2', 'bunzip2', 'cargo', 'cat', 'chmod', 'chown', 'clear',
+  'comm', 'cp', 'crontab', 'curl', 'cut', 'date', 'df', 'diff', 'dig', 'dirname',
+  'dd', 'dmesg', 'docker', 'du', 'false', 'file', 'find', 'findmnt', 'free', 'go', 'grep', 'groups', 'gunzip',
+  'gzip', 'head', 'hostname', 'id', 'install', 'journalctl', 'jq', 'kill', 'kubectl',
+  'ip', 'less', 'ln', 'logger', 'ls', 'lsof', 'lsblk', 'make', 'man', 'mkdir', 'mv', 'nano', 'nc', 'netcat', 'git',
+  'node', 'npm', 'npx', 'paste', 'pgrep', 'ping', 'pkill', 'pnpm', 'ps',
+  'python', 'python3', 'readlink', 'realpath', 'rev', 'rm', 'screen', 'sed', 'seq', 'service', 'shred', 'sort',
+  'ssh', 'ssh-keygen', 'ss', 'stat', 'systemctl', 'tail', 'tar', 'tee', 'timeout', 'tmux', 'top', 'touch',
+  'tr', 'tree', 'true', 'uname', 'uniq', 'unzip', 'unxz', 'uptime', 'vi', 'vim',
+  'watch', 'wc', 'which', 'whoami', 'xargs', 'xz', 'yarn', 'zcat', 'zellij', 'zip',
+])
+
+export function isSupportedShellCommand(command: string): boolean {
+  const name = command.trim().split(/\s+/)[0]?.split('/').pop() ?? ''
+  return SHELL_BUILTINS.has(name) || SIMULATED_EXECUTABLES.has(name)
+}
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -24,6 +46,7 @@ export interface ShellState {
   aliases: Record<string, string>
   dirStack: string[][]
   umask: number
+  pipefail: boolean
 }
 
 // Simulated state for various subsystems
@@ -47,6 +70,15 @@ export interface SimulatedServices {
   cronJobs: Map<string, string>
   systemLogs: string[]
   containerLogs: Map<string, string[]>
+  openFiles: Array<{
+    command: string
+    pid: number
+    user: string
+    fd: string
+    type: string
+    name: string
+    deleted?: boolean
+  }>
 }
 
 function createSimulatedServices(): SimulatedServices {
@@ -138,6 +170,11 @@ function createSimulatedServices(): SimulatedServices {
       'Jun 10 12:05:00 neonmall-server postgres[2010]: checkpoint complete',
     ],
     containerLogs: new Map(),
+    openFiles: [
+      { command: 'node', pid: 1842, user: 'ghost', fd: '18u', type: 'IPv4', name: '*:3000 (LISTEN)' },
+      { command: 'nginx', pid: 1891, user: 'www-data', fd: '4w', type: 'REG', name: '/var/log/nginx/access.log (deleted)', deleted: true },
+      { command: 'postgres', pid: 2010, user: 'postgres', fd: '7u', type: 'IPv4', name: '127.0.0.1:5432 (LISTEN)' },
+    ],
   }
 }
 
@@ -166,11 +203,86 @@ export function createShellState(): ShellState {
     },
     dirStack: [],
     umask: 0o022,
+    pipefail: false,
   }
 }
 
-function expandVars(str: string, env: Record<string, string>): string {
-  return str.replace(/\$\{(\w+)\}|\$(\w+)/g, (_, a, b) => env[a || b] || '')
+function expandVars(str: string, env: Record<string, string>, lastExitCode: number): string {
+  return str.replace(/\$\?|\$\{(\w+)\}|\$(\w+)/g, (match, a, b) => {
+    if (match === '$?') return String(lastExitCode)
+    return env[a || b] ?? ''
+  })
+}
+
+function stripOuterQuotes(value: string): string {
+  if (
+    value.length >= 2 &&
+    ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'")))
+  ) {
+    return value.slice(1, -1)
+  }
+  return value
+}
+
+type ControlOperator = 'always' | '&&' | '||'
+
+function splitControlCommands(line: string): { command: string; operator: ControlOperator }[] {
+  const commands: { command: string; operator: ControlOperator }[] = []
+  let current = ''
+  let operator: ControlOperator = 'always'
+  let inQuote: '"' | "'" | null = null
+  let escaped = false
+  let requiresFollowingCommand = false
+
+  const pushCommand = () => {
+    const command = current.trim()
+    if (!command) throw new Error('syntax error near unexpected control operator')
+    commands.push({ command, operator })
+    current = ''
+  }
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    if (escaped) {
+      current += char
+      escaped = false
+      continue
+    }
+    if (char === '\\' && inQuote !== "'") {
+      current += char
+      escaped = true
+      continue
+    }
+    if (inQuote) {
+      current += char
+      if (char === inQuote) inQuote = null
+      continue
+    }
+    if (char === '"' || char === "'") {
+      inQuote = char
+      current += char
+      continue
+    }
+    const pair = line.slice(i, i + 2)
+    if (pair === '&&' || pair === '||') {
+      pushCommand()
+      operator = pair
+      requiresFollowingCommand = true
+      i++
+      continue
+    }
+    if (char === ';') {
+      pushCommand()
+      operator = 'always'
+      requiresFollowingCommand = false
+      continue
+    }
+    current += char
+  }
+
+  if (current.trim()) pushCommand()
+  else if (requiresFollowingCommand) throw new Error('syntax error near unexpected end of command')
+  return commands
 }
 
 function parseLine(line: string): string[][] {
@@ -179,7 +291,15 @@ function parseLine(line: string): string[][] {
   let inQuote: '"' | "'" | null = null
   let escape = false
 
-  for (const ch of line) {
+  const pushCurrent = () => {
+    if (cur.length > 0) {
+      tokens.push(cur)
+      cur = ''
+    }
+  }
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
     if (escape) {
       cur += ch
       escape = false
@@ -187,7 +307,6 @@ function parseLine(line: string): string[][] {
     }
     if (ch === '\\' && inQuote !== "'") {
       escape = true
-      cur += ch
       continue
     }
     if (inQuote) {
@@ -201,34 +320,67 @@ function parseLine(line: string): string[][] {
       continue
     }
     if (ch === ' ' || ch === '\t') {
-      if (cur.length > 0) { tokens.push(cur); cur = '' }
+      pushCurrent()
       continue
     }
-    cur += ch  }
-  if (cur.length > 0) tokens.push(cur)
+    if (ch === '|') {
+      pushCurrent()
+      if (line[i + 1] === '|') {
+        tokens.push('||')
+        i++
+      } else {
+        tokens.push('|')
+      }
+      continue
+    }
+    if (ch === '>' || ch === '<') {
+      let operator = ch
+      if (ch === '>' && line[i + 1] === '>') {
+        operator = '>>'
+        i++
+      }
+      if (cur === '2' && ch === '>') {
+        cur = ''
+        operator = `2${operator}`
+      } else {
+        pushCurrent()
+      }
+      tokens.push(operator)
+      continue
+    }
+    cur += ch
+  }
+  if (escape) cur += '\\'
+  if (inQuote) throw new Error(`unexpected EOF while looking for matching ${inQuote}`)
+  pushCurrent()
 
   const cmds: string[][] = [[]]
   let idx = 0
   while (idx < tokens.length) {
     const t = tokens[idx]
-    if (t === '|') { cmds.push([]) }
+    if (t === '|') {
+      if (cmds[cmds.length - 1].length === 0) throw new Error("syntax error near unexpected token '|'")
+      cmds.push([])
+    }
     else { cmds[cmds.length - 1].push(t) }
     idx++
   }
-  if (cmds[cmds.length - 1].length === 0 && cmds.length > 1) cmds.pop()
-  return cmds.filter(c => c.length > 0)
+  if (cmds[cmds.length - 1].length === 0 && cmds.length > 1) {
+    throw new Error('syntax error near unexpected end of command')
+  }
+  return cmds
 }
 
-function _tokenizeWithRedirects(args: string[]): { args: string[]; redirects: { type: string; target: string }[] } {
+function tokenizeWithRedirects(args: string[]): { args: string[]; redirects: { type: string; target: string }[]; error?: string } {
   const outArgs: string[] = []
   const redirects: { type: string; target: string }[] = []
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '>' && i + 1 < args.length) { redirects.push({ type: '>', target: args[++i] }) }
-    else if (args[i] === '>>' && i + 1 < args.length) { redirects.push({ type: '>>', target: args[++i] }) }
-    else if (args[i] === '2>' && i + 1 < args.length) { redirects.push({ type: '2>', target: args[++i] }) }
-    else if (args[i] === '2>>' && i + 1 < args.length) { redirects.push({ type: '2>>', target: args[++i] }) }
-    else if (args[i] === '<' && i + 1 < args.length) { redirects.push({ type: '<', target: args[++i] }) }
-    else { outArgs.push(args[i]) }
+    if (['>', '>>', '2>', '2>>', '<'].includes(args[i])) {
+      if (i + 1 >= args.length || ['>', '>>', '2>', '2>>', '<', '|'].includes(args[i + 1])) {
+        return { args: outArgs, redirects, error: `syntax error near unexpected token '${args[i]}'` }
+      }
+      redirects.push({ type: args[i], target: stripOuterQuotes(args[++i]) })
+    } else { outArgs.push(args[i]) }
   }
   return { args: outArgs, redirects }
 }
@@ -251,10 +403,10 @@ function formatDate(d: Date): string {
 }
 
 export function isRedCommand(cmd: string): boolean {
-  const redCommands = ['rm', 'dd', 'mkfs', 'fdisk', 'shutdown', 'reboot', 'kill', 'pkill', 'chmod', 'chown', '>',
-    'docker', 'kubectl', 'systemctl', 'shred', 'apt', 'yum', 'dnf', 'pacman']
+  const redCommands = new Set(['rm', 'dd', 'mkfs', 'fdisk', 'shutdown', 'reboot', 'kill', 'pkill', 'chmod', 'chown',
+    'docker', 'kubectl', 'systemctl', 'shred', 'apt', 'yum', 'dnf', 'pacman'])
   const base = cmd.split('/').pop() || cmd
-  return redCommands.some(c => base.startsWith(c))
+  return redCommands.has(base)
 }
 
 
@@ -262,40 +414,96 @@ export class ShellEngine {
   state: ShellState
   vfs: VFS
   services: SimulatedServices
+  gitState: GitState
   private onRedCommand?: (cmd: string) => void
 
-  constructor(vfs: VFS, state?: ShellState, onRedCommand?: (cmd: string) => void) {
+  constructor(
+    vfs: VFS,
+    state?: ShellState,
+    onRedCommand?: (cmd: string) => void,
+    gitState?: GitState,
+  ) {
     this.vfs = vfs
     this.state = state ?? createShellState()
     this.services = createSimulatedServices()
+    this.gitState = gitState ?? createGitState()
     this.onRedCommand = onRedCommand
   }
 
-  execute(line: string, depth: number = 0): ShellResult {
+  execute(line: string, depth: number = 0, recordHistory = true): ShellResult {
     try {
       if (depth > 10) {
         return { stdout: '', stderr: 'alias: too many levels of recursion', exitCode: 1 }
       }
       if (line.trim() === '') return { stdout: '', stderr: '', exitCode: 0 }
-      this.state.history.push(line)
 
       const trimmed = line.trim()
+      const controlCommands = splitControlCommands(trimmed)
+      if (controlCommands.length > 1) {
+        if (recordHistory) this.state.history.push(line)
+        let stdout = ''
+        let stderr = ''
+        let lastResult: ShellResult = { stdout: '', stderr: '', exitCode: 0 }
+        for (const controlCommand of controlCommands) {
+          const shouldRun = controlCommand.operator === 'always' ||
+            (controlCommand.operator === '&&' && lastResult.exitCode === 0) ||
+            (controlCommand.operator === '||' && lastResult.exitCode !== 0)
+          if (!shouldRun) continue
+          lastResult = this.execute(controlCommand.command, depth, false)
+          stdout += lastResult.stdout
+          stderr += lastResult.stderr
+        }
+        return { stdout, stderr, exitCode: lastResult.exitCode, mode: lastResult.mode }
+      }
+      if (recordHistory) this.state.history.push(line)
       const aliasCmd = trimmed.split(' ')[0]
-      if (this.state.aliases[aliasCmd] && !this.state.history.slice(0, -1).includes(trimmed)) {
+      if (this.state.aliases[aliasCmd]) {
         const expansion = this.state.aliases[aliasCmd] + trimmed.slice(aliasCmd.length)
-        return this.execute(expansion, depth + 1)
+        return this.execute(expansion, depth + 1, false)
       }
 
       const cmds = parseLine(trimmed)
       let prevStdout = ''
+      let pipelineStderr = ''
+      let pipelineFailure = 0
+      let finalMode: string | undefined
 
       for (let ci = 0; ci < cmds.length; ci++) {
-        const rawTokens = cmds[ci].map(t => expandVars(t, this.state.env))
-        const { args, redirects } = _tokenizeWithRedirects(rawTokens)
-        const stdin = ci === 0 ? '' : prevStdout
+        const rawTokens = cmds[ci].map(token => {
+          if (token.startsWith("'") && token.endsWith("'")) return token
+          return expandVars(token, this.state.env, this.state.lastExitCode)
+        })
+        const { args, redirects, error: redirectSyntaxError } = tokenizeWithRedirects(rawTokens)
+        if (redirectSyntaxError) {
+          const result = { stdout: '', stderr: `bash: ${redirectSyntaxError}`, exitCode: 2 }
+          this.state.lastExitCode = result.exitCode
+          return result
+        }
+        let stdin = ci === 0 ? '' : prevStdout
+
+        let redirectSetupError = ''
+        for (const redirect of redirects) {
+          if (redirect.type === '<') {
+            const input = this.vfs.readFile(redirect.target, this.state.cwd)
+            if (input.error) {
+              redirectSetupError = input.error
+              break
+            }
+            stdin = input.content
+            continue
+          }
+          const append = redirect.type === '>>' || redirect.type === '2>>'
+          const opened = this.vfs.writeFile(redirect.target, this.state.cwd, '', append)
+          if (opened.error) {
+            redirectSetupError = opened.error
+            break
+          }
+        }
 
         let result: ShellResult
-        try {
+        if (redirectSetupError) {
+          result = { stdout: '', stderr: redirectSetupError, exitCode: 1 }
+        } else try {
           result = this.runCommand(args, stdin)
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e)
@@ -310,26 +518,35 @@ export class ShellEngine {
           result.stderr = result.stderr.slice(0, MAX_OUTPUT_LENGTH) + TRUNCATION_MSG
         }
 
-        for (const red of redirects) {
-          try {
-            if (red.type === '>') this.vfs.writeFile(red.target, this.state.cwd, result.stdout)
-            if (red.type === '>>') this.vfs.writeFile(red.target, this.state.cwd, result.stdout, true)
-            if (red.type === '2>') this.vfs.writeFile(red.target, this.state.cwd, result.stderr)
-            if (red.type === '2>>') this.vfs.writeFile(red.target, this.state.cwd, result.stderr, true)
-            if (red.type === '<') {
-              const fc = this.vfs.readFile(red.target, this.state.cwd)
-              if (!fc.error) result.stdout = fc.content
+        if (!redirectSetupError) {
+          let stdoutRedirect: (typeof redirects)[number] | undefined
+          let stderrRedirect: (typeof redirects)[number] | undefined
+          for (const redirect of redirects) {
+            if (redirect.type === '<') continue
+            if (redirect.type === '2>' || redirect.type === '2>>') stderrRedirect = redirect
+            else stdoutRedirect = redirect
+          }
+          for (const [redirect, content] of [
+            [stdoutRedirect, result.stdout],
+            [stderrRedirect, result.stderr],
+          ] as const) {
+            if (!redirect) continue
+            const append = redirect.type === '>>' || redirect.type === '2>>'
+            const written = this.vfs.writeFile(redirect.target, this.state.cwd, content, append)
+            if (written.error) {
+              result = { stdout: '', stderr: written.error, exitCode: 1 }
+              break
             }
-          } catch (redirectErr) {
-            result.stderr += `\nredirect error: ${redirectErr instanceof Error ? redirectErr.message : String(redirectErr)}`
+            if (redirect === stderrRedirect) result.stderr = ''
+            else result.stdout = ''
           }
         }
 
         this.state.lastExitCode = result.exitCode
-        if (result.exitCode !== 0 && cmds.length > 1) {
-          return { stdout: prevStdout, stderr: result.stderr, exitCode: result.exitCode }
-        }
+        if (result.exitCode !== 0) pipelineFailure = result.exitCode
         prevStdout = result.stdout
+        if (result.stderr) pipelineStderr += result.stderr
+        finalMode = result.mode
       }
 
       // Truncate final output if too long
@@ -337,9 +554,14 @@ export class ShellEngine {
         prevStdout = prevStdout.slice(0, MAX_OUTPUT_LENGTH) + TRUNCATION_MSG
       }
 
-      return { stdout: prevStdout, stderr: '', exitCode: this.state.lastExitCode }
+      const exitCode = this.state.pipefail && pipelineFailure !== 0
+        ? pipelineFailure
+        : this.state.lastExitCode
+      this.state.lastExitCode = exitCode
+      return { stdout: prevStdout, stderr: pipelineStderr, exitCode, mode: finalMode }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
+      this.state.lastExitCode = 1
       return { stdout: '', stderr: `shell error: ${msg}`, exitCode: 1 }
     }
   }
@@ -349,11 +571,14 @@ export class ShellEngine {
       if (args.length === 0) return { stdout: '', stderr: '', exitCode: 0 }
 
       const expanded = args.map(a => {
-        if ((a.startsWith('"') && a.endsWith('"')) || (a.startsWith("'") && a.endsWith("'"))) return a.slice(1, -1)
-        return a
+        return stripOuterQuotes(a)
       })
       const cmd = expanded[0]
       const cargs = expanded.slice(1)
+
+      if (cmd !== 'sudo' && cargs.includes('--help') && isSupportedShellCommand(cmd)) {
+        return this.cmdHelp(cmd)
+      }
 
       if (isRedCommand(cmd) && this.onRedCommand) {
         this.onRedCommand(cmd)
@@ -382,6 +607,7 @@ export class ShellEngine {
       case 'xargs': return this.cmdXargs(cargs, stdin)
       case 'awk': return this.cmdAwk(cargs, stdin)
       case 'sed': return this.cmdSed(cargs, stdin)
+      case 'dd': return this.cmdDd(cargs, stdin)
       case 'chmod': return this.cmdChmod(cargs)
       case 'chown': return this.cmdChown(cargs)
       case 'id': return this.cmdId(cargs)
@@ -400,6 +626,9 @@ export class ShellEngine {
       // === NETWORK TOOLS ===
       case 'ss': return this.cmdSs(cargs)
       case 'dig': return this.cmdDig(cargs)
+      case 'ip': return this.cmdIp(cargs)
+      case 'ssh': return this.cmdSsh(cargs)
+      case 'ssh-keygen': return this.cmdSshKeygen(cargs)
       case 'nc': case 'netcat': return this.cmdNc(cargs)
       // === COMPRESSION/ARCHIVES ===
       case 'tar': return this.cmdTar(cargs)
@@ -424,6 +653,9 @@ export class ShellEngine {
       // === FILE OPERATIONS ===
       case 'tree': return this.cmdTree(cargs)
       case 'stat': return this.cmdStat(cargs)
+      case 'file': return this.cmdFile(cargs)
+      case 'readlink': return this.cmdReadlink(cargs)
+      case 'realpath': return this.cmdRealpath(cargs)
       case 'shred': return this.cmdShred(cargs)
       case 'install': return this.cmdInstall(cargs)
       // === PACKAGE MANAGEMENT ===
@@ -435,6 +667,9 @@ export class ShellEngine {
       case 'systemctl': return this.cmdSystemctl(cargs)
       case 'journalctl': return this.cmdJournalctl(cargs)
       case 'dmesg': return this.cmdDmesg(cargs)
+      case 'findmnt': return this.cmdFindmnt(cargs)
+      case 'lsblk': return this.cmdLsblk(cargs)
+      case 'lsof': return this.cmdLsof(cargs)
       case 'logger': return this.cmdLogger(cargs)
       case 'service': return this.cmdService(cargs)
       case 'crontab': return this.cmdCrontab(cargs)
@@ -454,6 +689,9 @@ export class ShellEngine {
       case 'zellij': return this.cmdZellij(cargs)
       // === SHELL BUILTINS ===
       case 'export': return this.cmdExport(cargs)
+      case 'set': return this.cmdSet(cargs)
+      case 'umask': return this.cmdUmask(cargs)
+      case 'command': return this.cmdCommand(cargs, stdin)
       case 'unset': return this.cmdUnset(cargs)
       case 'env': case 'printenv': return this.cmdEnv(cargs)
       case 'source': case '.': return this.cmdSource(cargs)
@@ -475,15 +713,16 @@ export class ShellEngine {
       case 'uptime': return { stdout: ' 08:00:00 up 15 days,  3:42,  1 user,  load average: 0.52, 0.58, 0.59', stderr: '', exitCode: 0 }
       case 'free': return { stdout: '              total        used        free\nMem:        8192000     4096000     4096000\nSwap:       2097152      104857     1992295', stderr: '', exitCode: 0 }
       case 'watch': return { stdout: 'Every 2.0s: ' + cargs.join(' ') + '\n\n' + this.runCommand(cargs, '').stdout, stderr: '', exitCode: 0 }
-      case 'timeout': return this.runCommand(cargs, stdin)
-      case 'tee': return { stdout: stdin, stderr: '', exitCode: 0 }
+      case 'timeout': return this.cmdTimeout(cargs, stdin)
+      case 'tee': return this.cmdTee(cargs, stdin)
       case 'date': return { stdout: new Date().toISOString().replace('T', ' ').slice(0, 19), stderr: '', exitCode: 0 }
       case 'true': return { stdout: '', stderr: '', exitCode: 0 }
       case 'false': return { stdout: '', stderr: '', exitCode: 1 }
       // === INFO ===
       case 'man': return this.cmdMan(cargs)
+      case 'apropos': return this.cmdApropos(cargs)
       case 'which': return this.cmdWhich(cargs)
-      case 'type': return this.cmdWhich(cargs)
+      case 'type': return this.cmdType(cargs)
       case 'uname': return this.cmdUname(cargs)
       case 'clear': return { stdout: '\x1b[2J\x1b[H', stderr: '', exitCode: 0 }
       case 'exit': return { stdout: '', stderr: '', exitCode: 0, mode: 'exit' }
@@ -492,11 +731,19 @@ export class ShellEngine {
       case 'vim': case 'vi': return { stdout: '', stderr: '', exitCode: 0, mode: 'vim' }
       case 'nano': return { stdout: '', stderr: '', exitCode: 0, mode: 'nano' }
       // === GIT ===
-      case 'git': return { stdout: '', stderr: 'Use the git engine directly.', exitCode: 0 }
+      case 'git': {
+        const result = gitCommand(this.gitState, args.slice(1), `/${this.state.cwd.join('/')}`)
+        this.gitState = result.state
+        return { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode }
+      }
       default:
         if (cmd.startsWith('./') || cmd.startsWith('/')) {
           const parts = this.vfs.resolvePath(cmd, this.state.cwd)
           const st = this.vfs.stat(parts.join('/'), [])
+          if (st.node?.type === 'directory') return { stdout: '', stderr: `bash: ${cmd}: Is a directory`, exitCode: 126 }
+          if (st.node && !this.vfs.hasPermission(`/${parts.join('/')}`, [], 'execute')) {
+            return { stdout: '', stderr: `bash: ${cmd}: Permission denied`, exitCode: 126 }
+          }
           if (st.node) return { stdout: `Executing ${cmd}...`, stderr: '', exitCode: 0 }
           return { stdout: '', stderr: `bash: ${cmd}: No such file or directory`, exitCode: 127 }
         }
@@ -524,6 +771,7 @@ export class ShellEngine {
       const st = this.vfs.stat(parts.join('/'), [])
       if (!st.node) return { stdout: '', stderr: `cd: ${target}: No such file or directory`, exitCode: 1 }
       if (st.node.type !== 'directory') return { stdout: '', stderr: `cd: ${target}: Not a directory`, exitCode: 1 }
+      if (!this.vfs.hasPermission(`/${parts.join('/')}`, [], 'execute')) return { stdout: '', stderr: `cd: ${target}: Permission denied`, exitCode: 1 }
       this.state.cwd = parts
     }
     this.state.env.PWD = '/' + this.state.cwd.join('/')
@@ -660,7 +908,13 @@ export class ShellEngine {
     if (args.length === 0) return { stdout: '', stderr: 'touch: missing file operand', exitCode: 1 }
     for (const f of args) {
       const st = this.vfs.stat(f, this.state.cwd)
-      if (!st.node) this.vfs.writeFile(f, this.state.cwd, '')
+      if (!st.node) {
+        const created = this.vfs.writeFile(f, this.state.cwd, '')
+        if (created.error) return { stdout: '', stderr: created.error, exitCode: 1 }
+        const mode = (0o666 & ~this.state.umask).toString(8).padStart(3, '0')
+        const chmod = this.vfs.chmod(f, this.state.cwd, mode)
+        if (chmod.error) return { stdout: '', stderr: chmod.error, exitCode: 1 }
+      }
     }
     return { stdout: '', stderr: '', exitCode: 0 }
   }
@@ -676,7 +930,13 @@ export class ShellEngine {
           const sub = parts.slice(0, i).join('/')
           if (!sub) continue
           const st = this.vfs.stat(sub, [])
-          if (!st.node) this.vfs.createDirectory(sub, [])
+          if (st.node && st.node.type !== 'directory') {
+            return { stdout: '', stderr: `mkdir: cannot create directory '${d}': Not a directory`, exitCode: 1 }
+          }
+          if (!st.node) {
+            const created = this.vfs.createDirectory(sub, [])
+            if (created.error) return { stdout: '', stderr: created.error, exitCode: 1 }
+          }
         }
       } else {
         const res = this.vfs.createDirectory(d, this.state.cwd)
@@ -717,15 +977,32 @@ export class ShellEngine {
   private cmdRm(args: string[]): ShellResult {
     let recursive = false
     let force = false
-    const files = args.filter(a => {
-      if (a === '-r' || a === '-R') { recursive = true; return false }
-      if (a === '-f') { force = true; return false }
-      if (a === '-i') return false
-      return true
-    })
-    if (files.length === 0) return { stdout: '', stderr: 'rm: missing operand', exitCode: 1 }
+    let parsingOptions = true
+    const files: string[] = []
+    for (const arg of args) {
+      if (parsingOptions && arg === '--') {
+        parsingOptions = false
+        continue
+      }
+      if (parsingOptions && /^-[^-]/.test(arg)) {
+        for (const flag of arg.slice(1)) {
+          if (flag === 'r' || flag === 'R') recursive = true
+          else if (flag === 'f') force = true
+          else if (flag !== 'i' && flag !== 'v') {
+            return { stdout: '', stderr: `rm: invalid option -- '${flag}'`, exitCode: 1 }
+          }
+        }
+        continue
+      }
+      files.push(arg)
+    }
+    if (files.length === 0) {
+      return force
+        ? { stdout: '', stderr: '', exitCode: 0 }
+        : { stdout: '', stderr: 'rm: missing operand', exitCode: 1 }
+    }
     for (const f of files) {
-      const st = this.vfs.stat(f, this.state.cwd)
+      const st = this.vfs.lstat(f, this.state.cwd)
       if (!st.node) {
         if (!force) return { stdout: '', stderr: `rm: cannot remove '${f}': No such file or directory`, exitCode: 1 }
         continue
@@ -747,7 +1024,11 @@ export class ShellEngine {
     if (files.length < 2) return { stdout: '', stderr: 'ln: missing file operand', exitCode: 1 }
     const target = files[0]
     const linkPath = files[1]
-    if (sym) { this.vfs.symlink(target, linkPath, this.state.cwd); return { stdout: '', stderr: '', exitCode: 0 } }
+    if (sym) {
+      const result = this.vfs.symlink(target, linkPath, this.state.cwd)
+      if (result.error) return { stdout: '', stderr: result.error, exitCode: 1 }
+      return { stdout: '', stderr: '', exitCode: 0 }
+    }
     return { stdout: '', stderr: 'ln: hard links not implemented', exitCode: 1 }
   }
 
@@ -811,7 +1092,7 @@ export class ShellEngine {
         stdout += line.text + '\n'
       }
     }
-    return { stdout, stderr: '', exitCode: 0 }
+    return { stdout, stderr: '', exitCode: stdout ? 0 : 1 }
   }
 
   private cmdFind(args: string[]): ShellResult {
@@ -835,7 +1116,7 @@ export class ShellEngine {
         const fullPath = path.concat(e.name).join('/')
         let match = true
         if (namePattern) {
-          const pat = namePattern.replace(/\*/g, '.*').replace(/\?/g, '.')
+          const pat = escapeRegex(namePattern).replace(/\\\*/g, '.*').replace(/\\\?/g, '.')
           match = new RegExp('^' + pat + '$').test(e.name)
         }
         if (typeFilter) {
@@ -885,17 +1166,47 @@ export class ShellEngine {
   }
 
   private cmdXargs(args: string[], stdin: string): ShellResult {
-    if (args.length === 0) return { stdout: stdin, stderr: '', exitCode: 0 }
-    const lines = stdin.split('\n').filter(Boolean)
-    let stdout = ''
-    for (const line of lines) {
-      const parts = line.split(/\s+/)
-      const cmd = [...args]
-      const expanded = cmd.map(c => c === '{}' ? line : c)
-      const result = this.runCommand(expanded.concat(parts), '')
-      stdout += result.stdout
+    let delimiter = /\s+/
+    let maxArgs = Number.POSITIVE_INFINITY
+    let replaceToken = ''
+    const command: string[] = []
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === '-0') delimiter = /\0/
+      else if (args[i] === '-n') {
+        const parsed = Number(args[++i])
+        if (!Number.isInteger(parsed) || parsed < 1 || parsed > 1000) {
+          return { stdout: '', stderr: 'xargs: invalid number for -n', exitCode: 1 }
+        }
+        maxArgs = parsed
+      } else if (args[i] === '-I') {
+        replaceToken = args[++i] ?? ''
+        if (!replaceToken) return { stdout: '', stderr: 'xargs: option requires an argument -- I', exitCode: 1 }
+      } else command.push(args[i])
     }
-    return { stdout, stderr: '', exitCode: 0 }
+    const boundedInput = stdin.slice(0, MAX_GREP_INPUT)
+    const items = boundedInput.split(delimiter).filter(Boolean)
+    const base = command.length > 0 ? command : ['echo']
+    let stdout = ''
+    let stderr = ''
+    let exitCode = 0
+    const groups = replaceToken
+      ? items.map(item => [item])
+      : Number.isFinite(maxArgs)
+        ? Array.from({ length: Math.ceil(items.length / maxArgs) }, (_, index) => items.slice(index * maxArgs, (index + 1) * maxArgs))
+        : (items.length > 0 ? [items] : [])
+    for (const group of groups) {
+      const expanded = replaceToken
+        ? base.map(part => part.split(replaceToken).join(group[0]))
+        : [...base, ...group]
+      const result = this.runCommand(expanded, '')
+      stdout += result.stdout
+      stderr += result.stderr
+      if (result.exitCode !== 0) {
+        exitCode = result.exitCode
+        break
+      }
+    }
+    return { stdout, stderr, exitCode }
   }
 
   private cmdAwk(args: string[], stdin: string): ShellResult {
@@ -967,9 +1278,11 @@ export class ShellEngine {
     if (args.length === 0) return { stdout: '', stderr: 'sudo: no command specified', exitCode: 1 }
     const prevUser = this.vfs.getCurrentUser()
     this.vfs.setCurrentUser('root')
-    const result = this.runCommand(args, '')
-    this.vfs.setCurrentUser(prevUser)
-    return result
+    try {
+      return this.runCommand(args, '')
+    } finally {
+      this.vfs.setCurrentUser(prevUser)
+    }
   }
 
   private cmdPs(args: string[]): ShellResult {
@@ -1280,7 +1593,7 @@ tmpfs            4096000    51200   4044800   2% /tmp
 [    1.234567] SCSI subsystem initialized
 [    2.345678] VFS: Mounted root (ext4 filesystem) readonly
 [    3.456789] random: crng init done
-[    5.678901] Adding 2097148k swap on /dev/sda2
+[    5.678901] Adding 2097148k swap on /dev/sda3
 `, stderr: '', exitCode: 0
     }
   }
@@ -2343,6 +2656,422 @@ Change: ${n.mtime.toISOString()}
 
   // === EXISTING UTILITIES ===
 
+  private cmdTee(args: string[], stdin: string): ShellResult {
+    let append = false
+    let parsingOptions = true
+    const files: string[] = []
+    for (const arg of args) {
+      if (parsingOptions && arg === '--') {
+        parsingOptions = false
+        continue
+      }
+      if (parsingOptions && arg === '-a') {
+        append = true
+        continue
+      }
+      if (parsingOptions && arg.startsWith('-')) {
+        return { stdout: '', stderr: `tee: invalid option -- '${arg.slice(1)}'`, exitCode: 1 }
+      }
+      files.push(arg)
+    }
+    let stderr = ''
+    let exitCode = 0
+    for (const file of files) {
+      const written = this.vfs.writeFile(file, this.state.cwd, stdin, append)
+      if (written.error) {
+        stderr += `${written.error}\n`
+        exitCode = 1
+      }
+    }
+    return { stdout: stdin, stderr, exitCode }
+  }
+
+  private cmdTimeout(args: string[], stdin: string): ShellResult {
+    if (args.length < 2) return { stdout: '', stderr: 'timeout: missing operand', exitCode: 125 }
+    const duration = args[0].match(/^(\d+(?:\.\d+)?)([smhd]?)$/)
+    if (!duration) return { stdout: '', stderr: `timeout: invalid time interval '${args[0]}'`, exitCode: 125 }
+    const amount = Number(duration[1])
+    if (!Number.isFinite(amount) || amount < 0) {
+      return { stdout: '', stderr: `timeout: invalid time interval '${args[0]}'`, exitCode: 125 }
+    }
+    // All simulator commands are synchronous and independently bounded, so a
+    // valid timeout delegates once without pretending that a real process ran.
+    return this.runCommand(args.slice(1), stdin)
+  }
+
+  private cmdHelp(command: string): ShellResult {
+    const usages: Record<string, string> = {
+      apropos: 'apropos KEYWORD...',
+      command: 'command [-v|-V] COMMAND [ARG...]',
+      dd: 'dd [if=FILE] [of=FILE] [bs=BYTES] [count=N]',
+      file: 'file FILE...',
+      findmnt: 'findmnt [TARGET]',
+      ip: 'ip { address | link | route }',
+      lsof: 'lsof [-i [ADDRESS]] [+L1] [PATH]',
+      ls: 'ls [OPTION]... [FILE]...',
+      lsblk: 'lsblk [-f] [DEVICE]',
+      readlink: 'readlink [-f] FILE',
+      realpath: 'realpath FILE...',
+      set: 'set [-o|+o pipefail]',
+      ssh: 'ssh [-p PORT] [-i IDENTITY] [USER@]HOST [COMMAND]',
+      'ssh-keygen': 'ssh-keygen [-t ed25519|rsa] [-f OUTPUT_FILE]',
+      umask: 'umask [MODE]',
+    }
+    const synopsis = usages[command] ?? `${command} [OPTION]...`
+    return {
+      stdout: `Usage: ${synopsis}\nGhostOS provides a bounded in-browser simulation of this command.\n`,
+      stderr: '',
+      exitCode: 0,
+    }
+  }
+
+  private cmdApropos(args: string[]): ShellResult {
+    if (args.length === 0) {
+      return { stdout: '', stderr: 'apropos what?', exitCode: 1 }
+    }
+    const manuals: Array<[string, string]> = [
+      ['apropos', 'search the manual page names and descriptions'],
+      ['cat', 'concatenate files and print them'],
+      ['chmod', 'change file mode bits'],
+      ['find', 'search for files in a directory hierarchy'],
+      ['grep', 'print lines that match patterns'],
+      ['ls', 'list directory contents'],
+      ['man', 'display system manual pages'],
+      ['mkdir', 'make directories'],
+      ['readlink', 'print resolved symbolic links'],
+      ['ssh', 'open a secure remote shell'],
+    ]
+    const terms = args.filter(arg => !arg.startsWith('-')).map(arg => arg.toLowerCase())
+    if (terms.length === 0) return { stdout: '', stderr: 'apropos: missing keyword', exitCode: 1 }
+    const matches = manuals.filter(([name, description]) => {
+      const text = `${name} ${description}`.toLowerCase()
+      return terms.some(term => text.includes(term))
+    })
+    if (matches.length === 0) {
+      return { stdout: '', stderr: `${args.join(' ')}: nothing appropriate.`, exitCode: 1 }
+    }
+    return {
+      stdout: matches.map(([name, description]) => `${name.padEnd(12)} - ${description}`).join('\n') + '\n',
+      stderr: '',
+      exitCode: 0,
+    }
+  }
+
+  private cmdCommand(args: string[], stdin: string): ShellResult {
+    if (args.length === 0) return { stdout: '', stderr: '', exitCode: 0 }
+    if (args[0] === '-v') {
+      const name = args[1]
+      if (!name) return { stdout: '', stderr: '', exitCode: 1 }
+      if (this.state.aliases[name] || SHELL_BUILTINS.has(name)) {
+        return { stdout: `${name}\n`, stderr: '', exitCode: 0 }
+      }
+      if (SIMULATED_EXECUTABLES.has(name)) {
+        return { stdout: `/usr/bin/${name}\n`, stderr: '', exitCode: 0 }
+      }
+      const which = this.cmdWhich([name])
+      return which.exitCode === 0
+        ? { stdout: `${which.stdout.trim()}\n`, stderr: '', exitCode: 0 }
+        : { stdout: '', stderr: '', exitCode: 1 }
+    }
+    if (args[0] === '-V') return this.cmdType(args.slice(1))
+    if (args[0] === 'command') {
+      return { stdout: '', stderr: 'command: recursive invocation is not supported', exitCode: 2 }
+    }
+    return this.runCommand(args, stdin)
+  }
+
+  private cmdSet(args: string[]): ShellResult {
+    if (args.length === 0 || (args.length === 1 && args[0] === '-o')) {
+      return { stdout: `pipefail\t${this.state.pipefail ? 'on' : 'off'}\n`, stderr: '', exitCode: 0 }
+    }
+    if (args.length === 2 && args[1] === 'pipefail' && (args[0] === '-o' || args[0] === '+o')) {
+      this.state.pipefail = args[0] === '-o'
+      return { stdout: '', stderr: '', exitCode: 0 }
+    }
+    return { stdout: '', stderr: `set: ${args.join(' ')}: invalid option`, exitCode: 2 }
+  }
+
+  private cmdUmask(args: string[]): ShellResult {
+    if (args.length === 0) {
+      return { stdout: `${this.state.umask.toString(8).padStart(4, '0')}\n`, stderr: '', exitCode: 0 }
+    }
+    if (args.length !== 1 || !/^[0-7]{3,4}$/.test(args[0])) {
+      return { stdout: '', stderr: `umask: ${args.join(' ')}: invalid octal number`, exitCode: 1 }
+    }
+    const mode = parseInt(args[0], 8)
+    if (mode > 0o777) return { stdout: '', stderr: `umask: ${args[0]}: invalid octal number`, exitCode: 1 }
+    this.state.umask = mode
+    return { stdout: '', stderr: '', exitCode: 0 }
+  }
+
+  private canonicalPath(input: string): { path?: string; error?: string } {
+    let pending = this.vfs.resolvePath(input, this.state.cwd)
+    let resolved: string[] = []
+    const seen = new Set<string>()
+    let links = 0
+
+    while (pending.length > 0) {
+      const part = pending.shift()!
+      const candidate = [...resolved, part]
+      const absolute = `/${candidate.join('/')}`
+      const entry = this.vfs.lstat(absolute, [])
+      if (entry.error) return { error: entry.error }
+      if (!entry.node) return { error: `realpath: ${input}: No such file or directory` }
+      if (entry.node.type !== 'symlink') {
+        resolved.push(part)
+        continue
+      }
+      if (!entry.node.target || seen.has(absolute) || ++links > 16) {
+        return { error: `realpath: ${input}: Too many levels of symbolic links` }
+      }
+      seen.add(absolute)
+      const target = this.vfs.resolvePath(entry.node.target, entry.node.target.startsWith('/') ? [] : resolved)
+      pending = [...target, ...pending]
+      resolved = []
+    }
+    return { path: `/${resolved.join('/')}` }
+  }
+
+  private cmdReadlink(args: string[]): ShellResult {
+    const canonical = args.includes('-f') || args.includes('-e')
+    const files = args.filter(arg => !arg.startsWith('-'))
+    if (files.length !== 1) return { stdout: '', stderr: 'readlink: missing operand', exitCode: 1 }
+    if (canonical) return this.cmdRealpath(files)
+    const result = this.vfs.lstat(files[0], this.state.cwd)
+    if (result.error) return { stdout: '', stderr: result.error, exitCode: 1 }
+    if (!result.node || result.node.type !== 'symlink' || !result.node.target) {
+      return { stdout: '', stderr: `readlink: ${files[0]}: Invalid argument`, exitCode: 1 }
+    }
+    return { stdout: `${result.node.target}\n`, stderr: '', exitCode: 0 }
+  }
+
+  private cmdRealpath(args: string[]): ShellResult {
+    const files = args.filter(arg => !arg.startsWith('-'))
+    if (files.length === 0) return { stdout: '', stderr: 'realpath: missing operand', exitCode: 1 }
+    const paths: string[] = []
+    for (const file of files) {
+      const resolved = this.canonicalPath(file)
+      if (resolved.error || !resolved.path) return { stdout: '', stderr: resolved.error ?? 'realpath: failed', exitCode: 1 }
+      paths.push(resolved.path)
+    }
+    return { stdout: `${paths.join('\n')}\n`, stderr: '', exitCode: 0 }
+  }
+
+  private cmdFile(args: string[]): ShellResult {
+    const files = args.filter(arg => !arg.startsWith('-'))
+    if (files.length === 0) return { stdout: '', stderr: 'file: missing operand', exitCode: 1 }
+    const output: string[] = []
+    for (const file of files) {
+      const result = this.vfs.lstat(file, this.state.cwd)
+      if (result.error || !result.node) {
+        output.push(`${file}: cannot open (No such file or directory)`)
+        continue
+      }
+      const node = result.node
+      if (node.type === 'directory') output.push(`${file}: directory`)
+      else if (node.type === 'symlink') output.push(`${file}: symbolic link to ${node.target ?? ''}`)
+      else if ((node.content ?? '').startsWith('#!')) output.push(`${file}: script text executable`)
+      else if (/^\s*[[{]/.test(node.content ?? '')) output.push(`${file}: JSON or structured text data`)
+      else output.push(`${file}: UTF-8 Unicode text`)
+    }
+    const failed = output.some(line => line.includes('cannot open'))
+    return { stdout: `${output.join('\n')}\n`, stderr: '', exitCode: failed ? 1 : 0 }
+  }
+
+  private cmdLsblk(args: string[]): ShellResult {
+    const device = args.find(arg => !arg.startsWith('-'))
+    if (device && !['sda', '/dev/sda', 'sda1', '/dev/sda1', 'sda2', '/dev/sda2', 'sda3', '/dev/sda3'].includes(device)) {
+      return { stdout: '', stderr: `lsblk: ${device}: not a block device`, exitCode: 32 }
+    }
+    const full = args.includes('-f')
+    const rows = full
+      ? 'NAME   FSTYPE LABEL UUID                                 MOUNTPOINTS\nsda\n├─sda1 ext4         11111111-1111-1111-1111-111111111111 /\n├─sda2 ext4         22222222-2222-2222-2222-222222222222 /home\n└─sda3 swap         33333333-3333-3333-3333-333333333333 [SWAP]\n'
+      : 'NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS\nsda      8:0    0  152G  0 disk\n├─sda1   8:1    0   50G  0 part /\n├─sda2   8:2    0  100G  0 part /home\n└─sda3   8:3    0    2G  0 part [SWAP]\n'
+    return { stdout: rows, stderr: '', exitCode: 0 }
+  }
+
+  private cmdFindmnt(args: string[]): ShellResult {
+    const mounts = [
+      { target: '/', source: '/dev/sda1', type: 'ext4', options: 'rw,relatime' },
+      { target: '/home', source: '/dev/sda2', type: 'ext4', options: 'rw,relatime' },
+      { target: '/tmp', source: 'tmpfs', type: 'tmpfs', options: 'rw,nosuid,nodev' },
+    ]
+    const target = args.find(arg => !arg.startsWith('-'))
+    const selected = target ? mounts.filter(mount => mount.target === target) : mounts
+    if (selected.length === 0) return { stdout: '', stderr: '', exitCode: 1 }
+    const rows = selected.map(mount => `${mount.target.padEnd(10)} ${mount.source.padEnd(12)} ${mount.type.padEnd(7)} ${mount.options}`)
+    return { stdout: `TARGET     SOURCE       FSTYPE  OPTIONS\n${rows.join('\n')}\n`, stderr: '', exitCode: 0 }
+  }
+
+  private cmdIp(args: string[]): ShellResult {
+    const subcommand = args.find(arg => !arg.startsWith('-')) ?? ''
+    if (subcommand === 'addr' || subcommand === 'address' || subcommand === 'a') {
+      return { stdout: '1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536\n    inet 127.0.0.1/8 scope host lo\n2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500\n    inet 10.0.0.5/24 brd 10.0.0.255 scope global eth0\n', stderr: '', exitCode: 0 }
+    }
+    if (subcommand === 'route' || subcommand === 'r') {
+      return { stdout: 'default via 10.0.0.1 dev eth0\n10.0.0.0/24 dev eth0 proto kernel scope link src 10.0.0.5\n', stderr: '', exitCode: 0 }
+    }
+    if (subcommand === 'link' || subcommand === 'l') {
+      return { stdout: '1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 state UNKNOWN\n2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n', stderr: '', exitCode: 0 }
+    }
+    return { stdout: '', stderr: 'Usage: ip { address | link | route }', exitCode: 1 }
+  }
+
+  private cmdLsof(args: string[]): ShellResult {
+    let rows = [...this.services.openFiles]
+    if (args.includes('+L1')) rows = rows.filter(row => row.deleted)
+    const internetIndex = args.indexOf('-i')
+    const compactInternet = args.find(arg => arg.startsWith('-i') && arg.length > 2)
+    if (internetIndex >= 0 || compactInternet) {
+      const selector = compactInternet?.slice(2) || (internetIndex >= 0 && args[internetIndex + 1]?.startsWith(':') ? args[internetIndex + 1] : '')
+      rows = rows.filter(row => row.type.startsWith('IPv'))
+      if (selector) rows = rows.filter(row => row.name.includes(selector))
+    }
+    const selectorIndex = internetIndex >= 0 && args[internetIndex + 1]?.startsWith(':') ? internetIndex + 1 : -1
+    const paths = args.filter((arg, index) => !arg.startsWith('-') && !arg.startsWith('+') && index !== selectorIndex)
+    if (paths.length > 0) rows = rows.filter(row => paths.some(path => row.name.startsWith(path)))
+    if (rows.length === 0) return { stdout: '', stderr: '', exitCode: 1 }
+    const output = rows.map(row => `${row.command.padEnd(10)} ${String(row.pid).padEnd(6)} ${row.user.padEnd(9)} ${row.fd.padEnd(5)} ${row.type.padEnd(5)} ${row.name}`)
+    return { stdout: `COMMAND    PID    USER      FD    TYPE  NAME\n${output.join('\n')}\n`, stderr: '', exitCode: 0 }
+  }
+
+  private normalizeHomePath(path: string): string {
+    if (path === '~') return this.state.env.HOME
+    return path.startsWith('~/') ? `${this.state.env.HOME}/${path.slice(2)}` : path
+  }
+
+  private cmdSshKeygen(args: string[]): ShellResult {
+    let type = 'ed25519'
+    let output = `${this.state.env.HOME}/.ssh/id_ed25519`
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === '-t') {
+        if (!args[i + 1]) return { stdout: '', stderr: 'ssh-keygen: option requires an argument -- t', exitCode: 1 }
+        type = args[++i]
+      } else if (args[i] === '-f') {
+        if (!args[i + 1]) return { stdout: '', stderr: 'ssh-keygen: option requires an argument -- f', exitCode: 1 }
+        output = this.normalizeHomePath(args[++i])
+      } else if (['-N', '-C'].includes(args[i])) {
+        if (!args[i + 1]) return { stdout: '', stderr: `ssh-keygen: option requires an argument -- ${args[i].slice(1)}`, exitCode: 1 }
+        i++
+      } else if (args[i].startsWith('-')) {
+        return { stdout: '', stderr: `ssh-keygen: unsupported option ${args[i]}`, exitCode: 1 }
+      }
+    }
+    if (!['ed25519', 'rsa'].includes(type)) return { stdout: '', stderr: `unknown key type ${type}`, exitCode: 1 }
+    if (this.vfs.lstat(output, this.state.cwd).node || this.vfs.lstat(`${output}.pub`, this.state.cwd).node) {
+      return { stdout: '', stderr: `${output} already exists.`, exitCode: 1 }
+    }
+    const parts = this.vfs.resolvePath(output, this.state.cwd)
+    const parent = `/${parts.slice(0, -1).join('/')}`
+    if (!this.vfs.stat(parent, []).node) {
+      const created = this.vfs.createDirectory(parent, [])
+      if (created.error) return { stdout: '', stderr: created.error, exitCode: 1 }
+    }
+    const privateKey = `-----BEGIN GHOSTOS SIMULATED ${type.toUpperCase()} PRIVATE KEY-----\ntraining-only-key-material\n-----END GHOSTOS SIMULATED ${type.toUpperCase()} PRIVATE KEY-----\n`
+    const publicType = type === 'rsa' ? 'ssh-rsa' : 'ssh-ed25519'
+    const publicKey = `${publicType} R2hvc3RPUy1zaW11bGF0ZWQta2V5 ghost@neonmall-server\n`
+    const privateResult = this.vfs.writeFile(output, this.state.cwd, privateKey)
+    if (privateResult.error) return { stdout: '', stderr: privateResult.error, exitCode: 1 }
+    const modeResult = this.vfs.chmod(output, this.state.cwd, '600')
+    if (modeResult.error) return { stdout: '', stderr: modeResult.error, exitCode: 1 }
+    const publicResult = this.vfs.writeFile(`${output}.pub`, this.state.cwd, publicKey)
+    if (publicResult.error) return { stdout: '', stderr: publicResult.error, exitCode: 1 }
+    return { stdout: `Your simulated public key has been saved in ${output}.pub\n`, stderr: '', exitCode: 0 }
+  }
+
+  private cmdSsh(args: string[]): ShellResult {
+    let port = 22
+    let identity = ''
+    let target = ''
+    let command: string[] = []
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i]
+      if (arg === '-p' || arg === '-i') {
+        const value = args[++i]
+        if (!value) return { stdout: '', stderr: `ssh: option requires an argument -- ${arg.slice(1)}`, exitCode: 255 }
+        if (arg === '-p') {
+          port = Number(value)
+          if (!Number.isInteger(port) || port < 1 || port > 65535) return { stdout: '', stderr: `Bad port '${value}'`, exitCode: 255 }
+        } else identity = this.normalizeHomePath(value)
+        continue
+      }
+      if (arg.startsWith('-')) return { stdout: '', stderr: `ssh: unsupported option ${arg}`, exitCode: 255 }
+      target = arg
+      command = args.slice(i + 1)
+      break
+    }
+    if (!target) return { stdout: '', stderr: 'usage: ssh [user@]hostname [command]', exitCode: 255 }
+    if (identity && !this.vfs.stat(identity, this.state.cwd).node) {
+      return { stdout: '', stderr: `Warning: Identity file ${identity} not accessible.`, exitCode: 255 }
+    }
+    const at = target.lastIndexOf('@')
+    const user = at >= 0 ? target.slice(0, at) : this.state.env.USER
+    const host = at >= 0 ? target.slice(at + 1) : target
+    if (!['localhost', '127.0.0.1', 'neonmall-server', '10.0.0.5'].includes(host)) {
+      return { stdout: '', stderr: `ssh: Could not resolve hostname ${host}: Name or service not known`, exitCode: 255 }
+    }
+    if (port !== 22) return { stdout: '', stderr: `ssh: connect to host ${host} port ${port}: Connection refused`, exitCode: 255 }
+    if (command.length === 0) {
+      return { stdout: `Simulated SSH session to ${user}@${host} opened and closed.\n`, stderr: '', exitCode: 0 }
+    }
+    if (command[0] === 'whoami') return { stdout: `${user}\n`, stderr: '', exitCode: 0 }
+    if (command[0] === 'hostname') return { stdout: 'neonmall-server\n', stderr: '', exitCode: 0 }
+    if (command[0] === 'pwd') return { stdout: `/home/${user}\n`, stderr: '', exitCode: 0 }
+    return { stdout: '', stderr: `bash: ${command[0]}: command not found`, exitCode: 127 }
+  }
+
+  private parseDdSize(value: string): number | null {
+    const match = value.match(/^(\d+)([kKmM]?)$/)
+    if (!match) return null
+    const multiplier = match[2].toLowerCase() === 'k' ? 1024 : match[2].toLowerCase() === 'm' ? 1024 * 1024 : 1
+    const size = Number(match[1]) * multiplier
+    return Number.isSafeInteger(size) ? size : null
+  }
+
+  private cmdDd(args: string[], stdin: string): ShellResult {
+    const options = new Map<string, string>()
+    for (const arg of args) {
+      const separator = arg.indexOf('=')
+      if (separator <= 0) return { stdout: '', stderr: `dd: unrecognized operand '${arg}'`, exitCode: 1 }
+      const key = arg.slice(0, separator)
+      if (!['if', 'of', 'bs', 'count'].includes(key)) return { stdout: '', stderr: `dd: unrecognized operand '${arg}'`, exitCode: 1 }
+      options.set(key, arg.slice(separator + 1))
+    }
+    const blockSize = this.parseDdSize(options.get('bs') ?? '512')
+    const countText = options.get('count')
+    const count = countText === undefined ? null : Number(countText)
+    if (blockSize === null || blockSize < 1 || blockSize > 1024 * 1024 || (count !== null && (!Number.isInteger(count) || count < 0 || count > 1024))) {
+      return { stdout: '', stderr: 'dd: invalid or unsafe block size/count', exitCode: 1 }
+    }
+    const maximum = count === null ? 10 * 1024 * 1024 : blockSize * count
+    if (maximum > 10 * 1024 * 1024) return { stdout: '', stderr: 'dd: requested copy exceeds the 10 MiB simulator limit', exitCode: 1 }
+    let content = stdin
+    const input = options.get('if')
+    if (input) {
+      if (input === '/dev/zero') content = '\0'.repeat(maximum)
+      else {
+        const read = this.vfs.readFile(input, this.state.cwd)
+        if (read.error) return { stdout: '', stderr: `dd: failed to open '${input}': No such file or directory`, exitCode: 1 }
+        content = read.content
+      }
+    }
+    if (content.length > 10 * 1024 * 1024) content = content.slice(0, 10 * 1024 * 1024)
+    const copied = count === null ? content : content.slice(0, maximum)
+    const output = options.get('of')
+    if (output?.startsWith('/dev/') && output !== '/dev/null') {
+      return { stdout: '', stderr: `dd: writing to ${output} is disabled in the browser simulator`, exitCode: 1 }
+    }
+    if (output && output !== '/dev/null') {
+      const written = this.vfs.writeFile(output, this.state.cwd, copied)
+      if (written.error) return { stdout: '', stderr: written.error, exitCode: 1 }
+    }
+    return {
+      stdout: output ? '' : copied,
+      stderr: `${copied.length} bytes copied (GhostOS simulated)\n`,
+      exitCode: 0,
+    }
+  }
+
   private cmdMan(args: string[]): ShellResult {
     const page = args[0]
     const pages: Record<string, string> = {
@@ -2365,16 +3094,41 @@ Change: ${n.mtime.toISOString()}
   }
 
   private cmdWhich(args: string[]): ShellResult {
-    const builtins = ['cd', 'echo', 'pwd', 'alias', 'export', 'history', 'source', '.', 'exit', 'help', 'unset', 'type']
     const cmd = args[0]
     if (!cmd) return { stdout: '', stderr: '', exitCode: 1 }
-    if (builtins.includes(cmd)) return { stdout: '', stderr: `${cmd}: shell builtin`, exitCode: 1 }
+    if (SHELL_BUILTINS.has(cmd)) return { stdout: '', stderr: `${cmd}: shell builtin`, exitCode: 1 }
+    if (SIMULATED_EXECUTABLES.has(cmd)) return { stdout: `/usr/bin/${cmd}\n`, stderr: '', exitCode: 0 }
     const paths = ['/bin', '/usr/bin', '/usr/local/bin']
     for (const p of paths) {
       const st = this.vfs.stat(p + '/' + cmd, [])
       if (st.node) return { stdout: p + '/' + cmd, stderr: '', exitCode: 0 }
     }
     return { stdout: '', stderr: `which: no ${cmd} in (${this.state.env.PATH})`, exitCode: 1 }
+  }
+
+  private cmdType(args: string[]): ShellResult {
+    const all = args[0] === '-a'
+    const cmd = all ? args[1] : args[0]
+    if (!cmd) return { stdout: '', stderr: 'type: missing operand', exitCode: 1 }
+    if (all) {
+      const resolutions: string[] = []
+      if (this.state.aliases[cmd]) resolutions.push(`${cmd} is aliased to '${this.state.aliases[cmd]}'`)
+      if (SHELL_BUILTINS.has(cmd)) resolutions.push(`${cmd} is a shell builtin`)
+      if (SIMULATED_EXECUTABLES.has(cmd)) resolutions.push(`${cmd} is /usr/bin/${cmd}`)
+      for (const path of ['/bin', '/usr/bin', '/usr/local/bin']) {
+        if (this.vfs.stat(`${path}/${cmd}`, []).node && !resolutions.includes(`${cmd} is ${path}/${cmd}`)) {
+          resolutions.push(`${cmd} is ${path}/${cmd}`)
+        }
+      }
+      return resolutions.length > 0
+        ? { stdout: `${resolutions.join('\n')}\n`, stderr: '', exitCode: 0 }
+        : { stdout: '', stderr: `bash: type: ${cmd}: not found`, exitCode: 1 }
+    }
+    if (this.state.aliases[cmd]) return { stdout: `${cmd} is aliased to '${this.state.aliases[cmd]}'\n`, stderr: '', exitCode: 0 }
+    if (SHELL_BUILTINS.has(cmd)) return { stdout: `${cmd} is a shell builtin\n`, stderr: '', exitCode: 0 }
+    const which = this.cmdWhich([cmd])
+    if (which.exitCode === 0) return { stdout: `${cmd} is ${which.stdout.trim()}\n`, stderr: '', exitCode: 0 }
+    return { stdout: '', stderr: `bash: type: ${cmd}: not found`, exitCode: 1 }
   }
 
   private cmdUname(args: string[]): ShellResult {
@@ -2435,8 +3189,12 @@ Change: ${n.mtime.toISOString()}
 
   private cmdPushd(args: string[]): ShellResult {
     const path = args[0] || '/home/ghost'
-    this.state.dirStack.push([...this.state.cwd])
     const parts = this.vfs.resolvePath(path, this.state.cwd)
+    const target = this.vfs.stat(`/${parts.join('/')}`, [])
+    if (!target.node) return { stdout: '', stderr: `pushd: ${path}: No such file or directory`, exitCode: 1 }
+    if (target.node.type !== 'directory') return { stdout: '', stderr: `pushd: ${path}: Not a directory`, exitCode: 1 }
+    if (!this.vfs.hasPermission(`/${parts.join('/')}`, [], 'execute')) return { stdout: '', stderr: `pushd: ${path}: Permission denied`, exitCode: 1 }
+    this.state.dirStack.push([...this.state.cwd])
     this.state.cwd = parts
     this.state.env.PWD = '/' + parts.join('/')
     return { stdout: this.state.dirStack.map(d => '/' + d.join('/')).join(' ') + ' ' + '/' + this.state.cwd.join('/') + '\n', stderr: '', exitCode: 0 }

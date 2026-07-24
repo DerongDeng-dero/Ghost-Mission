@@ -238,14 +238,19 @@ export default function CommandAtlas() {
         </motion.div>
 
         {/* View Toggle */}
-        <div className="flex items-center justify-end gap-2">
+        <div
+          className="flex items-center justify-end gap-2"
+          role="group"
+          aria-label={t('commandAtlas.viewMode')}
+        >
           <div
             className="inline-flex rounded-lg border overflow-hidden"
             style={{ backgroundColor: '#0F1419', borderColor: '#1E2D3D' }}
           >
             <button
               onClick={() => setViewMode('list')}
-              className="flex items-center gap-1.5 px-3 py-1.5 font-jetbrains text-body-sm transition-colors"
+              className="flex min-h-11 items-center gap-1.5 px-3 py-1.5 font-jetbrains text-body-sm transition-colors"
+              aria-pressed={viewMode === 'list'}
               style={{
                 backgroundColor: viewMode === 'list' ? '#1E2D3D' : 'transparent',
                 color: viewMode === 'list' ? '#E8EDF2' : '#4A6072',
@@ -256,7 +261,8 @@ export default function CommandAtlas() {
             </button>
             <button
               onClick={() => setViewMode('graph')}
-              className="flex items-center gap-1.5 px-3 py-1.5 font-jetbrains text-body-sm transition-colors"
+              className="flex min-h-11 items-center gap-1.5 px-3 py-1.5 font-jetbrains text-body-sm transition-colors"
+              aria-pressed={viewMode === 'graph'}
               style={{
                 backgroundColor: viewMode === 'graph' ? '#1E2D3D' : 'transparent',
                 color: viewMode === 'graph' ? '#E8EDF2' : '#4A6072',
@@ -307,7 +313,7 @@ export default function CommandAtlas() {
                   setActiveRisks(new Set());
                   setActiveTypes(new Set());
                 }}
-                className="flex items-center gap-1 font-jetbrains text-body-sm underline transition-colors"
+                className="flex min-h-11 items-center gap-1 px-2 font-jetbrains text-body-sm underline transition-colors"
                 style={{ color: '#00E5FF' }}
               >
                 <X size={14} />

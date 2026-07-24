@@ -11,7 +11,15 @@ import { useLocalizedChapters } from '@/hooks/useLocalizedData'
 
 export default function Academy() {
   const { t } = useTranslation()
-  const chapters = useLocalizedChapters()
+  const sourceChapters = useLocalizedChapters()
+  const chapters = useMemo(() => sourceChapters.map((item) => {
+    const key = item.number.toLowerCase()
+    return {
+      ...item,
+      subtitle: t(`academy.chapterDetails.${key}.subtitle`),
+      description: t(`academy.chapterDetails.${key}.description`),
+    }
+  }), [sourceChapters, t])
   const [activeChapter, setActiveChapter] = useState(1)
   const chapter = chapters.find((c) => c.id === activeChapter) || chapters[0]
 
@@ -24,7 +32,8 @@ export default function Academy() {
   const scrollTabs = (dir: 'left' | 'right') => {
     const container = document.getElementById('chapter-tabs-container')
     if (container) {
-      container.scrollBy({ left: dir === 'left' ? -200 : 200, behavior: 'smooth' })
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      container.scrollBy({ left: dir === 'left' ? -200 : 200, behavior: reduceMotion ? 'auto' : 'smooth' })
     }
   }
 
@@ -102,15 +111,19 @@ export default function Academy() {
           {/* Chapter Navigation Tabs */}
           <motion.div variants={itemVariants} className="relative">
             <button
+              type="button"
               onClick={() => scrollTabs('left')}
-              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 flex items-center justify-center rounded-full"
+              aria-label={t('academy.scrollChaptersLeft')}
+              className="absolute left-0 top-1/2 z-10 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
               style={{ backgroundColor: 'rgba(10,14,20,0.9)', border: '1px solid #1E2D3D' }}
             >
-              <ChevronLeft size={14} className="text-[#8B9EB0]" />
+              <ChevronLeft size={14} aria-hidden="true" className="text-[#8B9EB0]" />
             </button>
 
             <div
               id="chapter-tabs-container"
+              tabIndex={0}
+              aria-label={t('academy.chapterNavigation')}
               className="flex gap-1 overflow-x-auto px-space-8 py-1 scrollbar-none"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
@@ -125,11 +138,13 @@ export default function Academy() {
             </div>
 
             <button
+              type="button"
               onClick={() => scrollTabs('right')}
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 flex items-center justify-center rounded-full"
+              aria-label={t('academy.scrollChaptersRight')}
+              className="absolute right-0 top-1/2 z-10 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
               style={{ backgroundColor: 'rgba(10,14,20,0.9)', border: '1px solid #1E2D3D' }}
             >
-              <ChevronRight size={14} className="text-[#8B9EB0]" />
+              <ChevronRight size={14} aria-hidden="true" className="text-[#8B9EB0]" />
             </button>
           </motion.div>
         </div>
@@ -239,7 +254,14 @@ export default function Academy() {
                   <span className="font-fira text-code-sm text-[#4A6072] w-12 flex-shrink-0">
                     {ch.number}
                   </span>
-                  <div className="flex-1 h-1.5 bg-[#1A2332] rounded-full overflow-hidden">
+                  <div
+                    className="flex-1 h-1.5 bg-[#1A2332] rounded-full overflow-hidden"
+                    role="progressbar"
+                    aria-label={t('academy.chapterBarLabel', { number: ch.number })}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(progress)}
+                  >
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${progress}%` }}

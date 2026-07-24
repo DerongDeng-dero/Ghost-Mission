@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, useId } from 'react'
 import { motion } from 'framer-motion'
 import {
   Palette,
@@ -131,6 +131,7 @@ function NeonSlider({
   step,
   onChange,
   unit,
+  label,
 }: {
   value: number
   min: number
@@ -138,14 +139,16 @@ function NeonSlider({
   step?: number
   onChange: (v: number) => void
   unit?: string
+  label: string
 }) {
   const pct = ((value - min) / (max - min)) * 100
 
   return (
     <div className="flex items-center gap-space-4">
-      <div className="flex-1 relative h-[6px] rounded-full" style={{ backgroundColor: '#1A2332' }}>
+      <div className="relative flex h-11 flex-1 items-center">
+        <div className="absolute left-0 right-0 top-1/2 h-[6px] -translate-y-1/2 rounded-full" style={{ backgroundColor: '#1A2332' }} />
         <div
-          className="absolute top-0 left-0 h-full rounded-full"
+          className="absolute left-0 top-1/2 h-[6px] -translate-y-1/2 rounded-full"
           style={{ width: `${pct}%`, backgroundColor: '#00E5FF' }}
         />
         <input
@@ -154,8 +157,9 @@ function NeonSlider({
           max={max}
           step={step || 1}
           value={value}
+          aria-label={label}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0 focus-visible:opacity-100"
           style={{ zIndex: 2 }}
         />
         {/* Visible thumb */}
@@ -183,21 +187,24 @@ function NeonSelect({
   value,
   options,
   onChange,
+  label,
 }: {
   value: string | number
   options: { label: string; value: string | number }[]
   onChange: (v: string | number) => void
+  label: string
 }) {
   return (
     <div className="relative inline-block">
       <select
+        aria-label={label}
         value={value}
         onChange={(e) => {
           const val = e.target.value
           const num = Number(val)
           onChange(Number.isNaN(num) || e.target.value === '' ? val : num)
         }}
-        className="appearance-none px-space-4 py-space-2 pr-space-10 rounded-radius-sm font-jetbrains text-body bg-[#1A2332] text-[#E8EDF2] border border-[#1E2D3D] focus:outline-none focus:border-[#00E5FF] cursor-pointer transition-colors duration-fast min-w-[160px]"
+        className="min-h-11 min-w-[160px] cursor-pointer appearance-none rounded-radius-sm border border-[#1E2D3D] bg-[#1A2332] px-space-4 py-space-2 pr-space-10 font-jetbrains text-body text-[#E8EDF2] transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -218,6 +225,37 @@ function NeonSelect({
 
 function ResetModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
   const { t } = useTranslation()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  const titleId = useId()
+  const descriptionId = useId()
+
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null
+    cancelRef.current?.focus()
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCancel()
+      if (event.key !== 'Tab' || !dialogRef.current) return
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+        .filter((element) => !element.hasAttribute('disabled'))
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      previousFocus?.focus()
+    }
+  }, [onCancel])
+
   return (
     <motion.div
       className="fixed inset-0 z-overlay flex items-center justify-center px-space-4"
@@ -234,6 +272,11 @@ function ResetModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: 
 
       {/* Modal */}
       <motion.div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
         className="relative w-full max-w-[480px] p-space-6 rounded-radius-lg border"
         style={{
           backgroundColor: '#131B23',
@@ -245,8 +288,9 @@ function ResetModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: 
         transition={{ duration: 0.3 }}
       >
         <button
+          type="button"
           onClick={onCancel}
-          className="absolute top-space-4 right-space-4 text-[#4A6072] hover:text-[#E8EDF2] transition-colors"
+          className="absolute right-space-3 top-space-3 flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-[#4A6072] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
           aria-label={t('common.close')}
         >
           <X size={18} />
@@ -259,24 +303,27 @@ function ResetModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: 
           >
             <AlertTriangle size={20} style={{ color: '#FF4757' }} />
           </div>
-          <h3 className="font-jetbrains text-h3 text-[#E8EDF2]">{t('settings.resetTitle')}</h3>
+          <h3 id={titleId} className="font-jetbrains text-h3 text-[#E8EDF2]">{t('settings.resetTitle')}</h3>
         </div>
 
-        <p className="font-inter text-body text-[#8B9EB0] mb-space-6">
+        <p id={descriptionId} className="font-inter text-body text-[#8B9EB0] mb-space-6">
           {t('settings.resetWarning')}
         </p>
 
         <div className="flex items-center gap-space-3 justify-end">
           <button
+            ref={cancelRef}
+            type="button"
             onClick={onCancel}
-            className="px-space-4 py-space-2 rounded-radius-sm font-jetbrains text-body border transition-all duration-fast"
+            className="min-h-11 rounded-radius-sm border px-space-4 py-space-2 font-jetbrains text-body transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
             style={{ borderColor: '#1E2D3D', color: '#8B9EB0' }}
           >
             {t('common.cancel')}
           </button>
           <button
+            type="button"
             onClick={onConfirm}
-            className="px-space-4 py-space-2 rounded-radius-sm font-jetbrains text-body transition-all duration-fast"
+            className="min-h-11 rounded-radius-sm px-space-4 py-space-2 font-jetbrains text-body transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
             style={{ backgroundColor: '#FF4757', color: '#FFFFFF' }}
           >
             {t('settings.resetConfirm')}
@@ -290,7 +337,7 @@ function ResetModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: 
 // ─── Main Settings Page ─────────────────────────────────────────────
 
 export default function Settings() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [activeSection, setActiveSection] = useState('appearance')
   const [showResetModal, setShowResetModal] = useState(false)
   const [s, setS] = useState<SettingsState>(() => {
@@ -361,7 +408,8 @@ export default function Settings() {
     setActiveSection(id)
     const el = document.getElementById(`settings-${id}`)
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
     }
   }
 
@@ -427,15 +475,18 @@ export default function Settings() {
           ref={sidebarRef}
           className="md:w-[200px] lg:w-[240px] flex-shrink-0"
         >
-          <div className="sticky top-[72px] flex md:flex-col gap-space-1 overflow-x-auto md:overflow-visible pb-space-2 md:pb-0">
+          <div className="sticky top-[72px] flex md:flex-col gap-space-1 overflow-x-auto md:overflow-visible pb-space-2 md:pb-0" role="navigation" aria-label={t('settings.sectionNavigation')}>
             {navItems.map((item) => {
               const Icon = item.icon
               const isActive = activeSection === item.id
               return (
                 <button
+                  type="button"
                   key={item.id}
                   onClick={() => scrollToSection(item.id)}
-                  className="flex items-center gap-space-3 px-space-4 py-[10px] rounded-radius-sm font-jetbrains text-body transition-all duration-fast whitespace-nowrap flex-shrink-0 md:flex-shrink"
+                  aria-current={isActive ? 'location' : undefined}
+                  aria-label={item.label}
+                  className="flex min-h-11 flex-shrink-0 items-center gap-space-3 whitespace-nowrap rounded-radius-sm px-space-4 py-[10px] font-jetbrains text-body transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF] md:flex-shrink"
                   style={{
                     color: isActive ? '#00E5FF' : '#8B9EB0',
                     backgroundColor: isActive ? '#1E2A3A' : 'transparent',
@@ -473,9 +524,11 @@ export default function Settings() {
                     { v: 'none' as const, label: t('settings.animation.none') },
                   ]).map((opt) => (
                     <button
+                      type="button"
                       key={opt.v}
                       onClick={() => update('animationIntensity', opt.v)}
-                      className="flex-1 px-space-4 py-space-3 rounded-radius-md border font-jetbrains text-body text-center transition-all duration-fast"
+                      aria-pressed={s.animationIntensity === opt.v}
+                      className="min-h-11 flex-1 rounded-radius-md border px-space-4 py-space-3 text-center font-jetbrains text-body transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
                       style={{
                         borderColor: s.animationIntensity === opt.v ? '#00E5FF' : '#1E2D3D',
                         backgroundColor: s.animationIntensity === opt.v ? 'rgba(0,229,255,0.08)' : '#0F1419',
@@ -590,6 +643,7 @@ export default function Settings() {
                   <h4 className="font-jetbrains text-h4 text-[#E8EDF2]">{t('settings.fontSize')}</h4>
                 </div>
                 <NeonSlider
+                  label={t('settings.fontSize')}
                   value={s.fontSize}
                   min={11}
                   max={16}
@@ -615,6 +669,7 @@ export default function Settings() {
               <div className="mt-space-6">
                 <h4 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.fontFamily')}</h4>
                 <NeonSelect
+                  label={t('settings.fontFamily')}
                   value={s.fontFamily}
                   options={[
                     { label: 'Fira Code', value: 'Fira Code' },
@@ -635,9 +690,11 @@ export default function Settings() {
                     { v: 'bar' as const, label: t('settings.cursor.bar') },
                   ]).map((opt) => (
                     <button
+                      type="button"
                       key={opt.v}
                       onClick={() => update('cursorStyle', opt.v)}
-                      className="flex-1 px-space-4 py-space-3 rounded-radius-md border font-jetbrains text-body text-center transition-all duration-fast"
+                      aria-pressed={s.cursorStyle === opt.v}
+                      className="min-h-11 flex-1 rounded-radius-md border px-space-4 py-space-3 text-center font-jetbrains text-body transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
                       style={{
                         borderColor: s.cursorStyle === opt.v ? '#00E5FF' : '#1E2D3D',
                         backgroundColor: s.cursorStyle === opt.v ? 'rgba(0,229,255,0.08)' : '#0F1419',
@@ -654,6 +711,7 @@ export default function Settings() {
               <div className="mt-space-6">
                 <h4 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.scrollbackLines')}</h4>
                 <NeonSelect
+                  label={t('settings.scrollbackLines')}
                   value={s.scrollbackLines}
                   options={[
                     { label: '1,000 lines', value: 1000 },
@@ -693,6 +751,7 @@ export default function Settings() {
                 <h4 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.defaultHintLevel')}</h4>
                 <div className="flex items-center gap-space-4">
                   <NeonSlider
+                    label={t('settings.defaultHintLevel')}
                     value={s.defaultHintLevel}
                     min={0}
                     max={5}
@@ -743,8 +802,9 @@ export default function Settings() {
                       {t('settings.resetProgressDesc')}
                     </p>
                     <button
+                      type="button"
                       onClick={() => setShowResetModal(true)}
-                      className="mt-space-3 px-space-4 py-space-2 rounded-radius-sm font-jetbrains text-body border transition-all duration-fast"
+                      className="mt-space-3 min-h-11 rounded-radius-sm border px-space-4 py-space-2 font-jetbrains text-body transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4757]"
                       style={{
                         borderColor: '#FF4757',
                         color: '#FF4757',
@@ -779,6 +839,7 @@ export default function Settings() {
                   <h4 className="font-jetbrains text-h4 text-[#E8EDF2]">{t('settings.masterVolume')}</h4>
                 </div>
                 <NeonSlider
+                  label={t('settings.masterVolume')}
                   value={s.masterVolume}
                   min={0}
                   max={100}
@@ -825,16 +886,19 @@ export default function Settings() {
             >
               {/* Display Name */}
               <div>
-                <h4 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.displayName')}</h4>
+                <label htmlFor="settings-display-name" className="mb-space-3 block font-jetbrains text-h4 text-[#E8EDF2]">{t('settings.displayName')}</label>
                 <div className="flex items-center gap-space-3">
                   <input
+                    id="settings-display-name"
                     type="text"
+                    maxLength={20}
+                    aria-describedby="settings-display-name-count"
                     value={s.displayName}
                     onChange={(e) => update('displayName', e.target.value.slice(0, 20))}
-                    className="flex-1 max-w-[300px] px-space-3 py-space-2 rounded-radius-sm font-jetbrains text-body bg-[#1A2332] text-[#E8EDF2] border border-[#1E2D3D] focus:outline-none focus:border-[#00E5FF] transition-colors duration-fast"
+                    className="min-h-11 flex-1 max-w-[300px] rounded-radius-sm border border-[#1E2D3D] bg-[#1A2332] px-space-3 py-space-2 font-jetbrains text-body text-[#E8EDF2] transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
                     placeholder={t('settings.callsignPlaceholder')}
                   />
-                  <span className="font-jetbrains text-code-sm text-[#4A6072]">
+                  <span id="settings-display-name-count" className="font-jetbrains text-code-sm text-[#4A6072]">
                     {s.displayName.length}/20
                   </span>
                 </div>
@@ -856,18 +920,26 @@ export default function Settings() {
               <div className="mt-space-6">
                 <h4 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.locale')}</h4>
                 <NeonSelect
+                  label={t('settings.locale')}
                   value={s.locale}
                   options={[
                     { label: '中文（简体）', value: 'zh-CN' },
                     { label: 'English (US)', value: 'en-US' },
                   ]}
-                  onChange={(v) => update('locale', String(v))}
+                  onChange={(v) => {
+                    const locale = String(v)
+                    update('locale', locale)
+                    const language = locale.startsWith('zh') ? 'zh' : 'en'
+                    localStorage.setItem('i18nextLng', language)
+                    void i18n.changeLanguage(language)
+                  }}
                 />
               </div>
 
               {/* Export + Sign Out */}
               <div className="mt-space-6 flex flex-wrap items-center gap-space-3">
                 <button
+                  type="button"
                   onClick={() => {
                     const data: Record<string, unknown> = {}
                     for (let i = 0; i < localStorage.length; i++) {
@@ -888,7 +960,7 @@ export default function Settings() {
                     a.click()
                     URL.revokeObjectURL(url)
                   }}
-                  className="flex items-center gap-space-2 px-space-4 py-space-2 rounded-radius-sm font-jetbrains text-body transition-all duration-fast"
+                  className="flex min-h-11 items-center gap-space-2 rounded-radius-sm px-space-4 py-space-2 font-jetbrains text-body transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
                   style={{
                     backgroundColor: '#1A2332',
                     color: '#00E5FF',
@@ -899,19 +971,20 @@ export default function Settings() {
                 </button>
 
                 <button
-                  onClick={() => {
-                    // Clear session/cookies
-                    localStorage.clear()
-                    window.location.reload()
-                  }}
-                  className="flex items-center gap-space-2 px-space-4 py-space-2 rounded-radius-sm font-jetbrains text-body transition-all duration-fast"
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  title={t('settings.signOutUnavailable')}
+                  className="flex min-h-11 items-center gap-space-2 rounded-radius-sm px-space-4 py-space-2 font-jetbrains text-body transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4757]"
                   style={{
                     backgroundColor: '#1A2332',
                     color: '#FF4757',
+                    opacity: 0.5,
+                    cursor: 'not-allowed',
                   }}
                 >
                   <LogOut size={14} />
-                  {t('settings.signOut')}
+                  {t('settings.signOutUnavailable')}
                 </button>
               </div>
             </SettingSection>

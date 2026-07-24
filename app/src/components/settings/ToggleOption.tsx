@@ -27,18 +27,17 @@ export default function ToggleOption({ label, description, enabled, onChange, di
 
       {/* Neon toggle switch */}
       <button
+        type="button"
         onClick={() => !disabled && onChange(!enabled)}
         disabled={disabled}
-        className="relative flex-shrink-0 w-[44px] h-[24px] rounded-full transition-colors duration-fast focus:outline-none"
-        style={{
-          backgroundColor: enabled ? '#00FF88' : '#1A2332',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-        }}
+        className="relative flex h-11 w-12 flex-shrink-0 items-center justify-center rounded-full transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+        style={{ cursor: disabled ? 'not-allowed' : 'pointer' }}
         aria-checked={enabled}
         role="switch"
         aria-label={label}
       >
-        <motion.div
+        <span className="relative h-6 w-11 rounded-full" style={{ backgroundColor: enabled ? '#00FF88' : '#1A2332' }} aria-hidden="true">
+        <motion.span
           className="absolute top-[2px] w-5 h-5 rounded-full bg-white shadow-sm"
           animate={{ left: enabled ? '22px' : '2px' }}
           transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
@@ -46,6 +45,7 @@ export default function ToggleOption({ label, description, enabled, onChange, di
             boxShadow: enabled ? '0 0 8px rgba(0,255,136,0.5)' : '0 1px 3px rgba(0,0,0,0.3)',
           }}
         />
+        </span>
       </button>
     </div>
   )

@@ -17,6 +17,7 @@ export interface ScoreResult {
 
 export interface MissionState {
   commandHistory: string[]
+  attemptedCommandHistory?: string[]
   gitState: GitState
   vfs: { files: Record<string, string> }
   redCommandsUsed: string[]
@@ -30,21 +31,163 @@ function matchesLiteralCommand(command: string, pattern: string): boolean {
   if (!candidate || !target) return false
 
   // Catalog patterns are command/action literals, not regular expressions.
-  // Pure punctuation operators are matched verbatim; word-like commands use
-  // token boundaries so `man` does not accidentally match `command`.
-  if (!/[\p{L}\p{N}_]/u.test(target)) {
+  // Punctuation-only patterns describe operators, paths, editor commands, or
+  // search gestures and therefore intentionally match inside the submitted
+  // action. Word-like patterns must start a simple command segment so an
+  // innocent `echo dd` cannot satisfy a task that requires running `dd`.
+  if (!/^[\p{L}\p{N}_]/u.test(target)) {
     return candidate.toLocaleLowerCase().includes(target.toLocaleLowerCase())
   }
 
-  const escaped = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(
-    `(^|[^\\p{L}\\p{N}_])${escaped}(?=$|[^\\p{L}\\p{N}_])`,
-    'iu',
-  ).test(candidate)
+  const expectedTokens = tokenizeAction(target)
+  if (expectedTokens.length === 0) return false
+  return splitSimpleCommands(candidate).some(segment => {
+    const actualTokens = stripCommandPrefixes(tokenizeAction(segment))
+    if (actualTokens.length < expectedTokens.length) return false
+    return expectedTokens.every(
+      (token, index) => actualTokens[index]?.toLocaleLowerCase() === token.toLocaleLowerCase(),
+    )
+  })
+}
+
+function splitSimpleCommands(line: string): string[] {
+  const segments: string[] = []
+  let current = ''
+  let quote: '"' | "'" | null = null
+  let escaped = false
+
+  const push = () => {
+    if (current.trim()) segments.push(current.trim())
+    current = ''
+  }
+
+  for (let index = 0; index < line.length; index++) {
+    const character = line[index]
+    if (escaped) {
+      current += character
+      escaped = false
+      continue
+    }
+    if (character === '\\' && quote !== "'") {
+      current += character
+      escaped = true
+      continue
+    }
+    if (quote) {
+      current += character
+      if (character === quote) quote = null
+      continue
+    }
+    if (character === '"' || character === "'") {
+      quote = character
+      current += character
+      continue
+    }
+    if (character === ';' || character === '|') {
+      push()
+      if (line[index + 1] === character) index++
+      continue
+    }
+    if (character === '&' && line[index + 1] === '&') {
+      push()
+      index++
+      continue
+    }
+    current += character
+  }
+  push()
+  return segments
+}
+
+function tokenizeAction(value: string): string[] {
+  const tokens: string[] = []
+  let current = ''
+  let quote: '"' | "'" | null = null
+  let escaped = false
+
+  const push = () => {
+    if (current) tokens.push(current)
+    current = ''
+  }
+
+  for (const character of value) {
+    if (escaped) {
+      current += character
+      escaped = false
+      continue
+    }
+    if (character === '\\' && quote !== "'") {
+      escaped = true
+      continue
+    }
+    if (quote) {
+      if (character === quote) quote = null
+      else current += character
+      continue
+    }
+    if (character === '"' || character === "'") {
+      quote = character
+      continue
+    }
+    if (/\s/u.test(character)) {
+      push()
+      continue
+    }
+    current += character
+  }
+  if (escaped) current += '\\'
+  push()
+  return tokens
+}
+
+function stripCommandPrefixes(tokens: string[]): string[] {
+  const remaining = [...tokens]
+  while (remaining[0] && /^[A-Za-z_][A-Za-z0-9_]*=/.test(remaining[0])) remaining.shift()
+  if (remaining[0]?.toLocaleLowerCase() !== 'sudo') return remaining
+
+  remaining.shift()
+  const sudoOptionsWithValue = new Set([
+    '-C', '-D', '-g', '-h', '-p', '-R', '-T', '-u',
+    '--chdir', '--group', '--host', '--prompt', '--role', '--type', '--user',
+  ])
+  while (remaining[0]?.startsWith('-')) {
+    const option = remaining.shift()!
+    if (option === '--') break
+    const optionName = option.split('=', 1)[0]
+    if (!option.includes('=') && sudoOptionsWithValue.has(optionName)) remaining.shift()
+  }
+  while (remaining[0] && /^[A-Za-z_][A-Za-z0-9_]*=/.test(remaining[0])) remaining.shift()
+  return remaining
+}
+
+function compileContentPattern(pattern: string): RegExp | null {
+  try {
+    return new RegExp(pattern, 'i')
+  } catch {
+    return null
+  }
+}
+
+function getUnexpectedRedCommands(level: MissionLevel, state: MissionState): string[] {
+  const allowedRedPatterns = [
+    ...level.checks
+      .filter(candidate => candidate.type === 'command_used' && candidate.pattern)
+      .map(candidate => candidate.pattern!),
+    ...(level.redCommands ?? []),
+  ]
+  return state.redCommandsUsed.filter(redCommand =>
+    !allowedRedPatterns.some(pattern => matchesLiteralCommand(pattern, redCommand)),
+  )
 }
 
 export function validateMission(level: MissionLevel, state: MissionState): ValidationResult[] {
   const hasExplicitBindings = level.checks.some(check => Boolean(check.objectiveId))
+  const explicitBindingsValid = !hasExplicitBindings || level.checks.every(check => {
+    if (!check.objectiveId) return false
+    const objective = level.objectives.find(candidate => candidate.id === check.objectiveId)
+    if (!objective) return false
+    return check.type !== 'no_red_command_used' || objective.required
+  })
   const progressChecks = level.checks.filter(check => check.type !== 'no_red_command_used')
   const legacySkillObjectives = level.objectives.filter(
     objective => objective.required && /^obj-\d+$/.test(objective.id),
@@ -58,8 +201,13 @@ export function validateMission(level: MissionLevel, state: MissionState): Valid
     let completed = false
 
     if (hasExplicitBindings) {
-      const relevantChecks = level.checks.filter(check => check.objectiveId === obj.id)
-      completed = relevantChecks.length > 0 && relevantChecks.every(check => evaluateCheck(check, state))
+      if (explicitBindingsValid) {
+        const relevantChecks = level.checks.filter(check => check.objectiveId === obj.id)
+        completed = (
+          relevantChecks.length > 0
+          && relevantChecks.every(check => evaluateCheck(check, state, level))
+        )
+      }
     } else {
       // Legacy catalog contract: required obj-N entries correspond, in order,
       // to progress checks. The one required non-numeric objective summarizes
@@ -67,13 +215,16 @@ export function validateMission(level: MissionLevel, state: MissionState): Valid
       const objectiveIndex = legacySkillObjectives.findIndex(objective => objective.id === obj.id)
       if (objectiveIndex >= 0) {
         const check = progressChecks[objectiveIndex]
-        completed = Boolean(check && evaluateCheck(check, state))
+        completed = Boolean(check && evaluateCheck(check, state, level))
       } else if (
         obj.required &&
         legacyAggregateObjectives.length === 1 &&
         legacyAggregateObjectives[0].id === obj.id
       ) {
-        completed = progressChecks.length > 0 && progressChecks.every(check => evaluateCheck(check, state))
+        completed = (
+          progressChecks.length > 0
+          && level.checks.every(check => evaluateCheck(check, state, level))
+        )
       }
     }
 
@@ -82,7 +233,7 @@ export function validateMission(level: MissionLevel, state: MissionState): Valid
   return results
 }
 
-function evaluateCheck(check: LevelCheck, state: MissionState): boolean {
+function evaluateCheck(check: LevelCheck, state: MissionState, level: MissionLevel): boolean {
   switch (check.type) {
     case 'command_used': {
       if (!check.pattern) return false
@@ -90,48 +241,56 @@ function evaluateCheck(check: LevelCheck, state: MissionState): boolean {
     }
     case 'command_not_used': {
       if (!check.pattern) return false
-      return !state.commandHistory.some(command => matchesLiteralCommand(command, check.pattern!))
+      const attemptedCommands = state.attemptedCommandHistory ?? state.commandHistory
+      return !attemptedCommands.some(command => matchesLiteralCommand(command, check.pattern!))
     }
     case 'file_exists': {
       if (!check.pattern) return false
-      return !!state.vfs.files[check.pattern]
+      return Object.prototype.hasOwnProperty.call(state.vfs.files, check.pattern)
     }
     case 'file_contains': {
       if (!check.pattern) return false
       // pattern format: "filename:regex" or just regex to check all files
-      const parts = check.pattern.split(':')
-      if (parts.length >= 2) {
-        const filename = parts[0]
-        const contentRegex = new RegExp(parts.slice(1).join(':'), 'i')
-        const content = state.vfs.files[filename] || ''
+      const separatorIndex = check.pattern.indexOf(':')
+      if (separatorIndex >= 0) {
+        const filename = check.pattern.slice(0, separatorIndex)
+        if (!Object.prototype.hasOwnProperty.call(state.vfs.files, filename)) return false
+        const contentRegex = compileContentPattern(check.pattern.slice(separatorIndex + 1))
+        if (!contentRegex) return false
+        const content = state.vfs.files[filename]
         return contentRegex.test(content)
       }
       // Check all files
-      return Object.values(state.vfs.files).some(content => new RegExp(check.pattern!, 'i').test(content))
+      const contentRegex = compileContentPattern(check.pattern)
+      return Boolean(contentRegex && Object.values(state.vfs.files).some(content => contentRegex.test(content)))
     }
     case 'file_not_contains': {
       if (!check.pattern) return false
-      const parts = check.pattern.split(':')
-      if (parts.length >= 2) {
-        const filename = parts[0]
-        const contentRegex = new RegExp(parts.slice(1).join(':'), 'i')
-        const content = state.vfs.files[filename] || ''
+      const separatorIndex = check.pattern.indexOf(':')
+      if (separatorIndex >= 0) {
+        const filename = check.pattern.slice(0, separatorIndex)
+        if (!Object.prototype.hasOwnProperty.call(state.vfs.files, filename)) return false
+        const contentRegex = compileContentPattern(check.pattern.slice(separatorIndex + 1))
+        if (!contentRegex) return false
+        const content = state.vfs.files[filename]
         return !contentRegex.test(content)
       }
-      return !Object.values(state.vfs.files).some(content => new RegExp(check.pattern!, 'i').test(content))
+      const contentRegex = compileContentPattern(check.pattern)
+      const contents = Object.values(state.vfs.files)
+      return Boolean(contentRegex && contents.length > 0 && contents.every(content => !contentRegex.test(content)))
     }
     case 'git_clean': {
-      return state.gitState.stagingArea.size === 0 && state.gitState.workingDirectory.size === 0
+      return state.gitState.initialized && state.gitState.stagingArea.size === 0 && state.gitState.workingDirectory.size === 0
     }
     case 'git_branch': {
       if (!check.pattern) return false
-      return state.gitState.currentBranch === check.pattern
+      return state.gitState.initialized && state.gitState.currentBranch === check.pattern
     }
     case 'git_commit_exists': {
       return state.gitState.commits.length > 0
     }
     case 'no_red_command_used': {
-      return state.redCommandsUsed.length === 0
+      return getUnexpectedRedCommands(level, state).length === 0
     }
     default:
       return false
@@ -157,10 +316,11 @@ export function calculateScore(
   const objectiveScore = Math.round(sc.objectives_weight * (requiredDone / Math.max(1, requiredTotal)))
   breakdown.objectives = objectiveScore
 
-  const safetyScore = sc.safety_weight * (state.redCommandsUsed.length === 0 ? 1 : 0)
+  const unexpectedRedCommands = getUnexpectedRedCommands(level, state)
+  const safetyScore = sc.safety_weight * (unexpectedRedCommands.length === 0 ? 1 : 0)
   breakdown.safety = safetyScore
-  if (state.redCommandsUsed.length > 0) {
-    penalties.push(`Red commands used: ${state.redCommandsUsed.join(', ')}`)
+  if (unexpectedRedCommands.length > 0) {
+    penalties.push(`Unexpected red commands used: ${unexpectedRedCommands.join(', ')}`)
   }
 
   const verificationScore = sc.verification_weight
@@ -197,9 +357,10 @@ export function calculateScore(
 }
 
 export function isMissionComplete(level: MissionLevel, validationResults: ValidationResult[]): boolean {
-  const required = validationResults.filter(r => {
-    const obj = level.objectives.find(o => o.id === r.objectiveId)
-    return obj?.required
+  const requiredObjectives = level.objectives.filter(objective => objective.required)
+  if (requiredObjectives.length === 0) return false
+  return requiredObjectives.every(objective => {
+    const matches = validationResults.filter(candidate => candidate.objectiveId === objective.id)
+    return matches.length === 1 && matches[0].completed === true
   })
-  return required.length > 0 && required.every(r => r.completed)
 }

@@ -1,10 +1,10 @@
 import { motion } from 'framer-motion'
+import { useTranslation } from 'react-i18next'
 
 export type Theme = 'dark' | 'high-contrast' | 'warm'
 
 interface ThemeOption {
   id: Theme
-  name: string
   preview: {
     bg: string
     text: string
@@ -15,17 +15,14 @@ interface ThemeOption {
 const themes: ThemeOption[] = [
   {
     id: 'dark',
-    name: 'Standard',
     preview: { bg: '#0A0E14', text: '#00FF88', accent: '#00E5FF' },
   },
   {
     id: 'high-contrast',
-    name: 'High Contrast',
     preview: { bg: '#000000', text: '#FFFFFF', accent: '#00FF00' },
   },
   {
     id: 'warm',
-    name: 'Eye Care',
     preview: { bg: '#12100E', text: '#3DCC91', accent: '#D4C5A9' },
   },
 ]
@@ -36,15 +33,18 @@ interface ThemeSelectorProps {
 }
 
 export default function ThemeSelector({ value, onChange }: ThemeSelectorProps) {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-col sm:flex-row gap-space-4">
       {themes.map((theme) => {
         const isSelected = value === theme.id
         return (
           <motion.button
+            type="button"
             key={theme.id}
             onClick={() => onChange(theme.id)}
-            className="flex-1 p-space-4 rounded-radius-md border-2 transition-all duration-normal focus:outline-none text-left"
+            aria-label={t(`settings.themes.${theme.id}`)}
+            className="min-h-11 flex-1 rounded-radius-md border-2 p-space-4 text-left transition-all duration-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
             style={{
               backgroundColor: '#0F1419',
               borderColor: isSelected ? theme.preview.accent : '#1E2D3D',
@@ -70,7 +70,7 @@ export default function ThemeSelector({ value, onChange }: ThemeSelectorProps) {
             {/* Name + radio */}
             <div className="flex items-center justify-between">
               <span className="font-jetbrains text-h4" style={{ color: '#E8EDF2' }}>
-                {theme.name}
+                {t(`settings.themes.${theme.id}`)}
               </span>
               <div
                 className="w-4 h-4 rounded-full border-2 flex items-center justify-center"

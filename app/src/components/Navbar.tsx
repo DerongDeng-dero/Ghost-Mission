@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { Settings, Terminal, ChevronRight } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Settings, Terminal, Menu, X, UserRound } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { LanguageSwitcher } from '@/i18n/LanguageSwitcher'
 import { useTranslation } from 'react-i18next'
@@ -10,6 +10,7 @@ export default function Navbar() {
   const location = useLocation()
   const { rank, connectionStatus } = useGameStore()
   const [scrolled, setScrolled] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { t } = useTranslation()
 
   const navLinks = [
@@ -45,8 +46,20 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileMenuOpen(false)
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [mobileMenuOpen])
+
+  const linkClass = 'relative flex min-h-11 items-center rounded-radius-sm px-space-4 font-jetbrains text-nav uppercase transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]'
+
   return (
     <nav
+      aria-label={t('nav.mainNavigation')}
       className="fixed top-0 left-0 right-0 h-[52px] z-elevated flex items-center justify-between px-space-4"
       style={{
         backgroundColor: scrolled ? 'rgba(19, 27, 35, 0.95)' : 'rgba(19, 27, 35, 0.9)',
@@ -55,13 +68,14 @@ export default function Navbar() {
       }}
     >
       {/* Left: Logo */}
-      <Link to="/" className="flex items-center gap-space-2 group">
+      <Link to="/" onClick={() => setMobileMenuOpen(false)} aria-label={t('app.title')} className="flex min-h-11 items-center gap-space-2 rounded-radius-sm group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]">
         <svg
           width="28"
           height="28"
           viewBox="0 0 28 28"
           fill="none"
           className="text-[#00FF88]"
+          aria-hidden="true"
         >
           {/* Terminal window frame */}
           <rect x="2" y="3" width="24" height="22" rx="3" stroke="currentColor" strokeWidth="1.5" fill="none" />
@@ -93,6 +107,7 @@ export default function Navbar() {
             stroke="currentColor"
             strokeWidth="1.5"
             strokeLinecap="round"
+            className="motion-reduce:hidden"
           >
             <animate attributeName="opacity" values="1;0;1" dur="1.2s" repeatCount="indefinite" />
           </path>
@@ -113,7 +128,8 @@ export default function Navbar() {
             <Link
               key={link.path}
               to={link.path}
-              className="relative px-space-4 py-space-2 font-jetbrains text-nav uppercase transition-colors duration-fast"
+              aria-current={isActive ? 'page' : undefined}
+              className={linkClass}
               style={{
                 color: isActive ? '#00E5FF' : '#8B9EB0',
                 backgroundColor: isActive ? 'rgba(0, 229, 255, 0.08)' : 'transparent',
@@ -135,28 +151,34 @@ export default function Navbar() {
       </div>
 
       {/* Right: Status + Icons */}
-      <div className="flex items-center gap-space-3">
+      <div className="flex items-center gap-space-2 md:gap-space-3">
         {/* Connection Status Dot */}
-        <div className="relative flex items-center" title={`Status: ${connectionStatus}`}>
+        <div
+          className="relative flex min-h-11 min-w-11 items-center justify-center"
+          title={t('nav.connectionStatus', { status: connectionStatus })}
+          role="status"
+        >
+          <span className="sr-only">{t('nav.connectionStatus', { status: connectionStatus })}</span>
           <div
             className="w-2 h-2 rounded-full"
             style={{ backgroundColor: connectionColors[connectionStatus] }}
           />
           {connectionStatus === 'connecting' && (
             <div
-              className="absolute w-2 h-2 rounded-full animate-ping"
+              className="absolute w-2 h-2 rounded-full animate-ping motion-reduce:animate-none"
               style={{ backgroundColor: connectionColors[connectionStatus] }}
             />
           )}
         </div>
 
         {/* Language Switcher */}
-        <LanguageSwitcher />
+        <div className="hidden md:block"><LanguageSwitcher /></div>
 
         {/* Rank Badge */}
         <Link
           to="/profile"
-          className="w-7 h-7 rounded-full flex items-center justify-center font-jetbrains text-[10px] font-bold transition-transform duration-fast hover:scale-110"
+          aria-label={t('nav.rankProfile', { rank: rankLabels[rank] })}
+          className="hidden md:flex min-h-11 min-w-11 rounded-full items-center justify-center font-jetbrains text-[10px] font-bold transition-transform duration-fast hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
           style={{
             border: `2px solid ${rankColors[rank]}`,
             color: rankColors[rank],
@@ -169,28 +191,78 @@ export default function Navbar() {
         {/* Settings */}
         <Link
           to="/settings"
-          className="p-space-1.5 rounded-radius-sm text-[#4A6072] hover:text-[#E8EDF2] hover:bg-[rgba(0,229,255,0.08)] transition-all duration-fast"
+          aria-label={t('nav.settings')}
+          className="hidden md:flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-[#4A6072] hover:text-[#E8EDF2] hover:bg-[rgba(0,229,255,0.08)] transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
         >
-          <Settings size={18} />
+          <Settings size={18} aria-hidden="true" />
         </Link>
 
         {/* Quick Terminal */}
         <Link
           to="/terminal/whoami-shell"
-          className="p-space-1.5 rounded-radius-sm text-[#4A6072] hover:text-[#00FF88] hover:bg-[rgba(0,255,136,0.08)] transition-all duration-fast"
+          aria-label={t('nav.terminal')}
+          className="hidden md:flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-[#4A6072] hover:text-[#00FF88] hover:bg-[rgba(0,255,136,0.08)] transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
         >
-          <Terminal size={18} />
+          <Terminal size={18} aria-hidden="true" />
         </Link>
 
         {/* Mobile menu button */}
         <button
-          className="md:hidden p-space-1.5 rounded-radius-sm text-[#8B9EB0]"
-          onClick={() => {}}
-          aria-label="Open menu"
+          type="button"
+          className="md:hidden flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-[#8B9EB0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+          onClick={() => setMobileMenuOpen((open) => !open)}
+          aria-label={t(mobileMenuOpen ? 'nav.closeMenu' : 'nav.openMenu')}
+          aria-expanded={mobileMenuOpen}
+          aria-controls="mobile-navigation"
         >
-          <ChevronRight size={18} className="rotate-90" />
+          {mobileMenuOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
         </button>
       </div>
+
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            id="mobile-navigation"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="absolute left-0 right-0 top-[52px] border-b border-[#1E2D3D] bg-[#0F1419]/[0.98] p-3 shadow-2xl md:hidden"
+          >
+            <div className="grid gap-1">
+              {navLinks.map((link) => {
+                const isActive = location.pathname === link.path
+                return (
+                  <Link
+                    key={link.path}
+                    to={link.path}
+                    onClick={() => setMobileMenuOpen(false)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={linkClass}
+                    style={{
+                      color: isActive ? '#00E5FF' : '#8B9EB0',
+                      backgroundColor: isActive ? 'rgba(0, 229, 255, 0.08)' : 'transparent',
+                    }}
+                  >
+                    {link.label}
+                  </Link>
+                )
+              })}
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2 border-t border-[#1E2D3D] pt-3">
+              <Link to="/profile" onClick={() => setMobileMenuOpen(false)} className="flex min-h-11 items-center justify-center gap-2 rounded-radius-sm text-[#8B9EB0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]">
+                <UserRound size={18} aria-hidden="true" /> {t('nav.profile')}
+              </Link>
+              <Link to="/settings" onClick={() => setMobileMenuOpen(false)} className="flex min-h-11 items-center justify-center gap-2 rounded-radius-sm text-[#8B9EB0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]">
+                <Settings size={18} aria-hidden="true" /> {t('nav.settings')}
+              </Link>
+              <Link to="/terminal/whoami-shell" onClick={() => setMobileMenuOpen(false)} className="flex min-h-11 items-center justify-center gap-2 rounded-radius-sm text-[#8B9EB0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]">
+                <Terminal size={18} aria-hidden="true" /> {t('nav.terminal')}
+              </Link>
+            </div>
+            <div className="mt-3 flex justify-center"><LanguageSwitcher /></div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </nav>
   )
 }

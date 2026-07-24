@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import * as d3 from 'd3'
 import { X, Maximize2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { commands } from '@/data/commands'
 
 interface CommandNode extends d3.SimulationNodeDatum {
@@ -57,6 +58,7 @@ const RISK_COLORS: Record<string, string> = {
 }
 
 export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps) {
+  const { t } = useTranslation()
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [selectedNode, setSelectedNode] = useState<CommandNode | null>(null)
@@ -124,6 +126,11 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
 
     const svg = d3.select(svgRef.current)
     svg.selectAll('*').remove()
+    svg
+      .attr('role', 'img')
+      .attr('aria-label', t('commandAtlas.graphLabel'))
+    svg.append('title').text(t('commandAtlas.graphLabel'))
+    svg.append('desc').text(t('commandAtlas.instructions'))
 
     const width = dimensions.width
     const height = dimensions.height
@@ -171,6 +178,9 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
       .data(nodes)
       .join('g')
       .style('cursor', 'pointer')
+      .attr('role', 'button')
+      .attr('tabindex', 0)
+      .attr('aria-label', d => `${d.name}: ${d.summary}`)
 
     const dragBehavior = d3.drag<SVGGElement, CommandNode>()
       .on('start', (event, d) => {
@@ -223,16 +233,13 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
       .attr('pointer-events', 'none')
       .style('text-shadow', '0 1px 3px #0A0E14')
 
-    // Hover effects
-    node.on('mouseenter', function(event: MouseEvent, d: CommandNode) {
+    const highlightNode = (element: SVGGElement, d: CommandNode) => {
       const connected = getConnectedNodes(d.id)
-      const hoveredGroup = d3.select<SVGGElement, CommandNode>(event.currentTarget as SVGGElement)
+      const hoveredGroup = d3.select<SVGGElement, CommandNode>(element)
 
-      // Dim unconnected nodes
       node.transition().duration(150)
         .style('opacity', n => connected.has(n.id) ? 1 : 0.15)
 
-      // Highlight connected links
       link.transition().duration(150)
         .attr('stroke-opacity', l => {
           const sourceId = getNodeId(l.source)
@@ -250,7 +257,6 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
           return (sourceId === d.id || targetId === d.id) ? 2 : 1
         })
 
-      // Scale up hovered node
       hoveredGroup.select<SVGCircleElement>('.main-circle')
         .transition().duration(150)
         .attr('r', nodeDatum => nodeDatum.name.length > 8 ? 14 : 12)
@@ -259,22 +265,19 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
         .transition().duration(150)
         .attr('opacity', 0.4)
         .attr('r', nodeDatum => nodeDatum.name.length > 8 ? 20 : 17)
-    })
+    }
 
-    node.on('mouseleave', function(event: MouseEvent) {
-      const hoveredGroup = d3.select<SVGGElement, CommandNode>(event.currentTarget as SVGGElement)
+    const resetHighlight = (element: SVGGElement) => {
+      const hoveredGroup = d3.select<SVGGElement, CommandNode>(element)
 
-      // Restore all nodes
       node.transition().duration(300)
         .style('opacity', 1)
 
-      // Restore links
       link.transition().duration(300)
         .attr('stroke-opacity', 0.5)
         .attr('stroke', '#1E2D3D')
         .attr('stroke-width', 1)
 
-      // Scale down
       hoveredGroup.select<SVGCircleElement>('.main-circle')
         .transition().duration(300)
         .attr('r', nodeDatum => nodeDatum.name.length > 8 ? 11 : 9)
@@ -283,13 +286,31 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
         .transition().duration(300)
         .attr('opacity', 0.15)
         .attr('r', nodeDatum => nodeDatum.name.length > 8 ? 16 : 13)
-    })
+    }
 
-    // Click handler
+    node
+      .on('mouseenter', function(_event: MouseEvent, d: CommandNode) {
+        highlightNode(this, d)
+      })
+      .on('mouseleave', function() {
+        resetHighlight(this)
+      })
+      .on('focus', function(_event: FocusEvent, d: CommandNode) {
+        highlightNode(this, d)
+      })
+      .on('blur', function() {
+        resetHighlight(this)
+      })
+
     node.on('click', (event: MouseEvent, d: CommandNode) => {
       event.stopPropagation()
       setSelectedNode(d)
-      onCommandSelect?.(d.name)
+    })
+    node.on('keydown', (event: KeyboardEvent, d: CommandNode) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return
+      event.preventDefault()
+      event.stopPropagation()
+      setSelectedNode(d)
     })
 
     // Click background to deselect
@@ -315,7 +336,7 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
       svg.on('click', null)
       svg.selectAll('*').interrupt()
     }
-  }, [nodes, links, dimensions, onCommandSelect, getConnectedNodes])
+  }, [nodes, links, dimensions, getConnectedNodes, t])
 
   // Get related commands for selected node
   const relatedCommands = useMemo(() => {
@@ -339,6 +360,8 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
     <div
       ref={containerRef}
       className="w-full relative overflow-hidden rounded-lg border"
+      role="region"
+      aria-label={t('commandAtlas.graphLabel')}
       style={{
         height: isExpanded ? '85vh' : 520,
         backgroundColor: '#0A0E14',
@@ -348,15 +371,17 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
     >
       {/* Header */}
       <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
-        <div className="font-jetbrains text-[11px] text-[#4A6072] bg-[#0F1419] px-2 py-1 rounded border border-[#1E2D3D]">
-          {nodes.length} nodes · {links.length} links
+        <div className="font-jetbrains text-[11px] text-[#8B9EB0] bg-[#0F1419] px-2 py-1 rounded border border-[#1E2D3D]">
+          {t('commandAtlas.nodesLinks', { nodes: nodes.length, links: links.length })}
         </div>
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="bg-[#0F1419] border border-[#1E2D3D] text-[#4A6072] hover:text-[#E8EDF2] p-1 rounded transition-colors"
-          title={isExpanded ? 'Collapse' : 'Expand'}
+          className="min-h-11 min-w-11 inline-flex items-center justify-center bg-[#0F1419] border border-[#1E2D3D] text-[#8B9EB0] hover:text-[#E8EDF2] p-2 rounded transition-colors"
+          title={isExpanded ? t('commandAtlas.collapse') : t('commandAtlas.expand')}
+          aria-label={isExpanded ? t('commandAtlas.collapse') : t('commandAtlas.expand')}
+          aria-pressed={isExpanded}
         >
-          <Maximize2 size={12} />
+          <Maximize2 size={16} aria-hidden="true" />
         </button>
       </div>
 
@@ -368,6 +393,8 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
         <div
           className="absolute top-3 right-3 w-64 rounded-lg border p-4 z-10"
           style={{ backgroundColor: '#0F1419EE', borderColor: '#1E2D3D', backdropFilter: 'blur(8px)' }}
+          role="status"
+          aria-live="polite"
         >
           <div className="flex items-center justify-between mb-2">
             <code className="font-jetbrains text-code-lg" style={{ color: selectedNode.color }}>
@@ -375,9 +402,10 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
             </code>
             <button
               onClick={() => setSelectedNode(null)}
-              className="text-[#4A6072] hover:text-[#E8EDF2] transition-colors"
+              className="min-h-11 min-w-11 -mr-2 inline-flex items-center justify-center text-[#8B9EB0] hover:text-[#E8EDF2] transition-colors"
+              aria-label={t('commandAtlas.closeDetails')}
             >
-              <X size={14} />
+              <X size={16} aria-hidden="true" />
             </button>
           </div>
           <p className="font-inter text-body-xs text-[#8B9EB0] mb-1">{selectedNode.summary}</p>
@@ -404,12 +432,15 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
 
           {relatedCommands.length > 0 && (
             <div className="mt-3 pt-3 border-t border-[#1E2D3D]">
-              <p className="font-jetbrains text-[10px] text-[#4A6072] mb-1.5">Related</p>
+              <p className="font-jetbrains text-[10px] text-[#8B9EB0] mb-1.5">
+                {t('commandAtlas.related')}
+              </p>
               <div className="flex flex-wrap gap-1">
                 {relatedCommands.map(cmd => (
-                  <span
+                  <button
+                    type="button"
                     key={cmd.id}
-                    className="font-jetbrains text-[10px] px-1.5 py-0.5 rounded cursor-pointer hover:opacity-80 transition-opacity"
+                    className="font-jetbrains text-[10px] min-h-9 px-2 py-1 rounded cursor-pointer hover:opacity-80 transition-opacity"
                     style={{
                       backgroundColor: `${DOMAIN_COLORS[cmd.domain] || '#8B9EB0'}15`,
                       color: DOMAIN_COLORS[cmd.domain] || '#8B9EB0',
@@ -419,12 +450,11 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
                       const node = nodes.find(n => n.id === cmd.id)
                       if (node) {
                         setSelectedNode(node)
-                        onCommandSelect?.(cmd.name)
                       }
                     }}
                   >
                     {cmd.name}
-                  </span>
+                  </button>
                 ))}
               </div>
             </div>
@@ -440,7 +470,7 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
                 border: `1px solid ${selectedNode.color}40`,
               }}
             >
-              View Details
+              {t('commandAtlas.viewDetails')}
             </button>
           )}
         </div>
@@ -460,8 +490,8 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
       </div>
 
       {/* Instructions */}
-      <div className="absolute bottom-3 right-3 font-jetbrains text-[9px] text-[#4A6072]">
-        drag · scroll to zoom · click to select
+      <div className="absolute bottom-3 right-3 hidden sm:block font-jetbrains text-[9px] text-[#8B9EB0]">
+        {t('commandAtlas.instructions')}
       </div>
     </div>
   )

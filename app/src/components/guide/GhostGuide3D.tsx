@@ -1,46 +1,53 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useEffect, useRef, useState, useCallback, useId } from 'react'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import { useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
 
 interface Message {
   id: string
-  text: string
+  key: string
   type: 'info' | 'tip' | 'success' | 'warning'
 }
 
 const routeMessages: Record<string, Message[]> = {
   '/': [
-    { id: 'welcome', text: '欢迎来到终端幽灵行动！我是你的AI助手 Ghost。点击「任务板」开始你的第一次黑客行动。', type: 'info' },
-    { id: 'tip1', text: '提示：按 ↑ 方向键可以快速使用上一条命令', type: 'tip' },
+    { id: 'welcome', key: 'guide.messages.welcome', type: 'info' },
+    { id: 'tip1', key: 'guide.tips.previousCommand', type: 'tip' },
   ],
   '/missions': [
-    { id: 'mission', text: '选择一个绿色边框的任务开始你的黑客之旅。每个任务都是一个真实的渗透测试场景。', type: 'info' },
+    { id: 'mission', key: 'guide.messages.missions', type: 'info' },
   ],
   '/academy': [
-    { id: 'academy', text: '学院课程从基础到高级，循序渐进。完成所有课程成为 Shell 大师！', type: 'info' },
+    { id: 'academy', key: 'guide.messages.academy', type: 'info' },
   ],
   '/atlas': [
-    { id: 'atlas', text: '命令图谱展示了所有命令之间的关系。切换到「关系图谱」视图可以看到3D力导向图！', type: 'tip' },
+    { id: 'atlas', key: 'guide.messages.atlas', type: 'tip' },
   ],
   '/terminal': [
-    { id: 'terminal', text: '在终端中输入命令来完成目标。点击左上角的 ? 按钮获取提示。', type: 'info' },
+    { id: 'terminal', key: 'guide.messages.terminal', type: 'info' },
   ],
 }
 
 const randomTips: Message[] = [
-  { id: 't1', text: '提示：按 Tab 键可以自动补全命令', type: 'tip' },
-  { id: 't2', text: '提示：Ctrl+C 可以中断当前进程', type: 'tip' },
-  { id: 't3', text: '提示：输入 history 查看执行过的命令', type: 'tip' },
-  { id: 't4', text: '提示：按 ↑ 方向键快速使用上一条命令', type: 'tip' },
-  { id: 't5', text: '提示：cd - 可以快速切换到上一个目录', type: 'tip' },
-  { id: 't6', text: '提示：ls -la 显示包括隐藏文件在内的所有文件', type: 'tip' },
-  { id: 't7', text: '提示：grep -r 可以递归搜索目录中的文件', type: 'tip' },
-  { id: 't8', text: '提示：使用提示会扣除分数，尽量自己解决！', type: 'tip' },
+  { id: 't1', key: 'guide.tips.autocomplete', type: 'tip' },
+  { id: 't2', key: 'guide.tips.interrupt', type: 'tip' },
+  { id: 't3', key: 'guide.tips.history', type: 'tip' },
+  { id: 't4', key: 'guide.tips.previousCommand', type: 'tip' },
+  { id: 't5', key: 'guide.tips.previousDirectory', type: 'tip' },
+  { id: 't6', key: 'guide.tips.hiddenFiles', type: 'tip' },
+  { id: 't7', key: 'guide.tips.recursiveSearch', type: 'tip' },
+  { id: 't8', key: 'guide.tips.scoreCost', type: 'tip' },
 ]
 
 export default function GhostGuide3D() {
+  const { t } = useTranslation()
+  const location = useLocation()
+  const reduceMotion = useReducedMotion() ?? false
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const mouseRef = useRef({ x: 0, y: 0 })
+  const tipIndexRef = useRef(0)
+  const messageId = useId()
 
   const [message, setMessage] = useState<Message | null>(null)
   const msgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -159,13 +166,17 @@ export default function GhostGuide3D() {
     const pPositions = new Float32Array(particleCount * 3)
     const pSizes = new Float32Array(particleCount)
     for (let i = 0; i < particleCount; i++) {
-      const theta = Math.random() * Math.PI * 2
-      const phi = Math.random() * Math.PI
-      const r = 0.8 + Math.random() * 0.6
+      const pseudoRandom = (seed: number) => {
+        const value = Math.sin(seed * 999) * 43758.5453
+        return value - Math.floor(value)
+      }
+      const theta = pseudoRandom(i * 3 + 1) * Math.PI * 2
+      const phi = pseudoRandom(i * 3 + 2) * Math.PI
+      const r = 0.8 + pseudoRandom(i * 3 + 3) * 0.6
       pPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta)
       pPositions[i * 3 + 1] = r * Math.cos(phi) * 0.8
       pPositions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta)
-      pSizes[i] = Math.random() * 3 + 1
+      pSizes[i] = pseudoRandom(i * 3 + 4) * 3 + 1
     }
     pGeo.setAttribute('position', new THREE.BufferAttribute(pPositions, 3))
     pGeo.setAttribute('size', new THREE.BufferAttribute(pSizes, 1))
@@ -227,14 +238,18 @@ export default function GhostGuide3D() {
 
       renderer.render(scene, camera)
     }
-    animate()
+    if (reduceMotion) {
+      renderer.render(scene, camera)
+    } else {
+      animate()
+    }
 
     // Mouse tracking
     const handleMouse = (e: MouseEvent) => {
       mouseRef.current.x = (e.clientX / window.innerWidth - 0.5) * 2
       mouseRef.current.y = -(e.clientY / window.innerHeight - 0.5) * 2
     }
-    window.addEventListener('mousemove', handleMouse)
+    if (!reduceMotion) window.addEventListener('mousemove', handleMouse)
 
     return () => {
       cancelAnimationFrame(frameId)
@@ -248,7 +263,7 @@ export default function GhostGuide3D() {
       scene.clear()
       renderer.dispose()
     }
-  }, [])
+  }, [reduceMotion])
 
   // Show greeting on first visit
   useEffect(() => {
@@ -256,33 +271,41 @@ export default function GhostGuide3D() {
     if (greeted) return
 
     const greetingTimer = window.setTimeout(() => {
-      showMessage(routeMessages['/'][0])
+      const routeKey = location.pathname.startsWith('/terminal') ? '/terminal' : location.pathname
+      showMessage(routeMessages[routeKey]?.[0] ?? routeMessages['/'][0])
       localStorage.setItem('ghost-greeted', 'true')
     }, 0)
 
     return () => window.clearTimeout(greetingTimer)
-  }, [showMessage])
+  }, [location.pathname, showMessage])
 
   const handleClick = () => {
     if (message) {
       hideMessage()
     } else {
-      const tip = randomTips[Math.floor(Math.random() * randomTips.length)]
+      const routeKey = location.pathname.startsWith('/terminal') ? '/terminal' : location.pathname
+      const contextualMessages = routeMessages[routeKey] ?? []
+      const tips = [...contextualMessages, ...randomTips]
+      const tip = tips[tipIndexRef.current % tips.length]
+      tipIndexRef.current += 1
       showMessage(tip)
     }
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end gap-3">
+    <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-[20] flex flex-col items-end gap-3 sm:bottom-6 sm:left-auto sm:right-6">
       {/* Speech Bubble */}
       <AnimatePresence>
         {message && (
           <motion.div
+            id={messageId}
+            role="status"
+            aria-live="polite"
             initial={{ opacity: 0, y: 10, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.9 }}
             transition={{ duration: 0.3 }}
-            className="max-w-[300px] p-4 rounded-xl relative"
+            className="pointer-events-auto relative w-full max-w-[300px] rounded-xl p-4 pr-12"
             style={{
               background: 'linear-gradient(135deg, rgba(15, 20, 30, 0.95), rgba(10, 14, 25, 0.98))',
               border: '1px solid rgba(0, 229, 255, 0.25)',
@@ -299,11 +322,13 @@ export default function GhostGuide3D() {
               }}
             />
             <p className="font-jetbrains text-[13px] leading-relaxed" style={{ color: '#E8EDF2' }}>
-              {message.text}
+              {t(message.key)}
             </p>
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); hideMessage() }}
-              className="absolute top-2 right-2 text-[10px] text-[#4A6072] hover:text-[#E8EDF2] transition-colors"
+              aria-label={t('common.close')}
+              className="absolute right-1 top-1 flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-sm text-[#4A6072] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
             >
               ✕
             </button>
@@ -313,10 +338,14 @@ export default function GhostGuide3D() {
 
       {/* 3D Ghost Avatar */}
       <motion.button
+        type="button"
         onClick={handleClick}
+        aria-label={message ? t('guide.hideMessage') : t('guide.showTip')}
+        aria-expanded={Boolean(message)}
+        aria-controls={message ? messageId : undefined}
         whileHover={{ scale: 1.08 }}
         whileTap={{ scale: 0.95 }}
-        className="relative w-20 h-20 rounded-full flex items-center justify-center overflow-hidden"
+        className="pointer-events-auto relative w-20 h-20 rounded-full flex items-center justify-center overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
         style={{
           background: 'radial-gradient(circle, rgba(0, 229, 255, 0.08), transparent 70%)',
           border: '1px solid rgba(0, 229, 255, 0.2)',
@@ -327,15 +356,16 @@ export default function GhostGuide3D() {
           ref={canvasRef}
           width={160}
           height={160}
+          aria-hidden="true"
           style={{ width: 80, height: 80 }}
         />
         {/* Pulse ring */}
-        <motion.div
+        {!reduceMotion && <motion.div
           className="absolute inset-0 rounded-full"
           style={{ border: '1.5px solid rgba(0, 229, 255, 0.3)' }}
           animate={{ scale: [1, 1.4, 1], opacity: [0.4, 0, 0.4] }}
           transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-        />
+        />}
       </motion.button>
     </div>
   )

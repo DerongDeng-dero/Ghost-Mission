@@ -11,6 +11,7 @@ export interface StashEntry {
   id: string
   message: string
   changes: Map<string, string>
+  stagedChanges: Map<string, string>
   branch: string
 }
 
@@ -74,9 +75,59 @@ function generateHash(): string {
   return Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
 }
 
+function cloneBranches(branches: Map<string, Commit[]>): Map<string, Commit[]> {
+  return new Map(Array.from(branches, ([name, commits]) => [name, [...commits]]))
+}
+
+function resolveCommitReference(state: GitState, reference: string): Commit | null {
+  if (reference === 'HEAD') return state.commits.find(commit => commit.hash === state.head) ?? null
+  const ancestorMatch = reference.match(/^HEAD~(\d+)$/)
+  if (ancestorMatch) {
+    let commit = state.commits.find(candidate => candidate.hash === state.head) ?? null
+    for (let i = 0; commit && i < Number(ancestorMatch[1]); i++) {
+      commit = commit.parent
+        ? state.commits.find(candidate => candidate.hash === commit?.parent) ?? null
+        : null
+    }
+    return commit
+  }
+  const branchTip = state.branches.get(reference)?.at(-1)
+  if (branchTip) return branchTip
+  const tag = state.tags.get(reference)
+  if (tag) return state.commits.find(commit => commit.hash === tag.hash) ?? null
+  const matches = state.commits.filter(commit => commit.hash.startsWith(reference))
+  return matches.length === 1 ? matches[0] : null
+}
+
+function buildLinearHistory(state: GitState, tip: Commit): Commit[] {
+  const history: Commit[] = []
+  const seen = new Set<string>()
+  let current: Commit | null = tip
+  while (current && !seen.has(current.hash)) {
+    seen.add(current.hash)
+    history.push(current)
+    current = current.parent
+      ? state.commits.find(candidate => candidate.hash === current?.parent) ?? null
+      : null
+  }
+  return history.reverse()
+}
+
+function repositoryError(state: GitState) {
+  return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128, state }
+}
+
 export function gitCommand(state: GitState, args: string[], cwd: string): { stdout: string; stderr: string; exitCode: number; state: GitState } {
   const cmd = args[0]
   const cargs = args.slice(1)
+  if (!cmd) return { stdout: '', stderr: 'usage: git <command> [<args>]', exitCode: 1, state }
+  const repositoryCommands = new Set([
+    'status', 'add', 'commit', 'diff', 'log', 'show', 'blame', 'branch', 'switch',
+    'checkout', 'merge', 'rebase', 'stash', 'restore', 'reset', 'revert', 'reflog',
+    'cherry-pick', 'tag', 'remote', 'fetch', 'pull', 'push', 'clean', 'worktree',
+    'submodule', 'shortlog', 'archive',
+  ])
+  if (!state.initialized && repositoryCommands.has(cmd)) return repositoryError(state)
 
   switch (cmd) {
     case 'init': return gitInit(state, cargs, cwd)
@@ -119,10 +170,13 @@ function gitInit(state: GitState, _args: string[], _cwd: string) {
   if (state.initialized) {
     return { stdout: `Reinitialized existing Git repository in ${_cwd}/.git/`, stderr: '', exitCode: 0, state }
   }
-  const newState = { ...state, initialized: true }
-  newState.branches.set('main', [])
-  newState.currentBranch = 'main'
-  newState.reflog = [`${generateHash()} HEAD@{0}: initialize`]
+  const newState: GitState = {
+    ...state,
+    initialized: true,
+    branches: new Map([['main', []]]),
+    currentBranch: 'main',
+    reflog: [`${generateHash()} HEAD@{0}: initialize`],
+  }
   return { stdout: `Initialized empty Git repository in ${_cwd}/.git/`, stderr: '', exitCode: 0, state: newState }
 }
 
@@ -131,7 +185,7 @@ function gitStatus(state: GitState, _args: string[], _cwd: string) {
   void _cwd
   if (!state.initialized) return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128, state }
   let stdout = `On branch ${state.currentBranch}\n`
-  if (state.commits.length === 0) {
+  if ((state.branches.get(state.currentBranch)?.length ?? 0) === 0) {
     stdout += 'No commits yet\n'
   }
   if (state.stagingArea.size === 0 && state.workingDirectory.size === 0) {
@@ -153,12 +207,18 @@ function gitAdd(state: GitState, args: string[], _cwd: string) {
   void _cwd
   if (!state.initialized) return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128, state }
   if (args.length === 0) return { stdout: '', stderr: 'Nothing specified, nothing added.', exitCode: 0, state }
-  const newState = { ...state, stagingArea: new Map(state.stagingArea) }
+  const newState = {
+    ...state,
+    stagingArea: new Map(state.stagingArea),
+    workingDirectory: new Map(state.workingDirectory),
+  }
   for (const f of args) {
     if (f === '.') {
-      state.workingDirectory.forEach((_v, k) => { newState.stagingArea.set(k, _v) })
+      state.workingDirectory.forEach((value, path) => { newState.stagingArea.set(path, value) })
+      newState.workingDirectory.clear()
     } else {
-      newState.stagingArea.set(f, f)
+      newState.stagingArea.set(f, state.workingDirectory.get(f) ?? f)
+      newState.workingDirectory.delete(f)
     }
   }
   return { stdout: '', stderr: '', exitCode: 0, state: newState }
@@ -184,16 +244,18 @@ function gitCommit(state: GitState, args: string[], _cwd: string) {
     parent: state.head || null,
     changes: new Map(state.stagingArea),
   }
-  const newState = {
+  const branches = cloneBranches(state.branches)
+  const branchCommits = branches.get(state.currentBranch) || []
+  branches.set(state.currentBranch, [...branchCommits, commit])
+  const newState: GitState = {
     ...state,
     commits: [...state.commits, commit],
     head: hash,
     stagingArea: new Map(),
-    workingDirectory: new Map(),
+    workingDirectory: new Map(state.workingDirectory),
     reflog: [...state.reflog, `${hash} HEAD@{${state.commits.length}}: commit: ${message}`],
+    branches,
   }
-  const branchCommits = newState.branches.get(newState.currentBranch) || []
-  newState.branches.set(newState.currentBranch, [...branchCommits, commit])
   return { stdout: `[${newState.currentBranch} ${shortHash(hash)}] ${message}\n ${state.stagingArea.size} file(s) changed`, stderr: '', exitCode: 0, state: newState }
 }
 
@@ -222,7 +284,7 @@ function gitLog(state: GitState, args: string[], _cwd: string) {
   const sinceFilter = args.find(a => a.startsWith('--since='))?.slice(8)
 
   let stdout = ''
-  let commits = [...state.commits]
+  let commits = [...(state.branches.get(state.currentBranch) ?? [])]
   if (authorFilter) commits = commits.filter(c => c.author.includes(authorFilter))
   if (sinceFilter) commits = commits.slice(Math.floor(commits.length / 4) + 1) // simulate since filter
 
@@ -285,34 +347,47 @@ function gitBranch(state: GitState, args: string[], _cwd: string) {
     const name = args[1]
     if (!name) return { stdout: '', stderr: 'error: branch name required', exitCode: 1, state }
     if (name === state.currentBranch) return { stdout: '', stderr: `error: Cannot delete branch '${name}'`, exitCode: 1, state }
+    if (!state.branches.has(name)) return { stdout: '', stderr: `error: branch '${name}' not found.`, exitCode: 1, state }
     const newBranches = new Map(state.branches)
     newBranches.delete(name)
     return { stdout: `Deleted branch ${name}.`, stderr: '', exitCode: 0, state: { ...state, branches: newBranches } }
   }
   const newBranches = new Map(state.branches)
-  if (!newBranches.has(args[0])) {
-    newBranches.set(args[0], [])
-  }
+  if (newBranches.has(args[0])) return { stdout: '', stderr: `fatal: a branch named '${args[0]}' already exists`, exitCode: 128, state }
+  newBranches.set(args[0], [...(state.branches.get(state.currentBranch) ?? [])])
   return { stdout: '', stderr: '', exitCode: 0, state: { ...state, branches: newBranches } }
 }
 
 function gitSwitch(state: GitState, args: string[], _cwd: string) {
   void _cwd
   if (!state.initialized) return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128, state }
-  const name = args[0]
+  const createIndex = args.findIndex(arg => arg === '-c' || arg === '-C')
+  const create = createIndex >= 0
+  const forceCreate = args[createIndex] === '-C'
+  const name = create ? args[createIndex + 1] : args.find(arg => !arg.startsWith('-'))
   if (!name) return { stdout: '', stderr: 'git switch: branch name required', exitCode: 1, state }
+  if (create) {
+    if (state.branches.has(name) && !forceCreate) return { stdout: '', stderr: `fatal: a branch named '${name}' already exists`, exitCode: 128, state }
+    const newBranches = cloneBranches(state.branches)
+    newBranches.set(name, [...(state.branches.get(state.currentBranch) ?? [])])
+    return { stdout: `Switched to a new branch '${name}'`, stderr: '', exitCode: 0, state: { ...state, currentBranch: name, branches: newBranches } }
+  }
   if (!state.branches.has(name)) {
-    if (args.includes('-c')) {
-      const newBranches = new Map(state.branches)
-      newBranches.set(name, [])
-      return { stdout: `Switched to a new branch '${name}'`, stderr: '', exitCode: 0, state: { ...state, currentBranch: name, branches: newBranches } }
-    }
     return { stdout: '', stderr: `fatal: invalid reference: ${name}`, exitCode: 1, state }
   }
-  return { stdout: `Switched to branch '${name}'`, stderr: '', exitCode: 0, state: { ...state, currentBranch: name } }
+  const branchCommits = state.branches.get(name) ?? []
+  return {
+    stdout: `Switched to branch '${name}'`,
+    stderr: '',
+    exitCode: 0,
+    state: { ...state, currentBranch: name, head: branchCommits[branchCommits.length - 1]?.hash ?? '' },
+  }
 }
 
 function gitCheckout(state: GitState, args: string[], _cwd: string) {
+  if (args[0] === '-b' || args[0] === '-B') {
+    return gitSwitch(state, [args[0] === '-B' ? '-C' : '-c', ...args.slice(1)], _cwd)
+  }
   return gitSwitch(state, args, _cwd)
 }
 
@@ -322,7 +397,36 @@ function gitMerge(state: GitState, args: string[], _cwd: string) {
   const branch = args[0]
   if (!branch) return { stdout: '', stderr: 'git merge: branch name required', exitCode: 1, state }
   if (!state.branches.has(branch)) return { stdout: '', stderr: `merge: ${branch} - not something we can merge`, exitCode: 1, state }
-  return { stdout: `Merge made by the 'ort' strategy.\n ${branch} merged into ${state.currentBranch}`, stderr: '', exitCode: 0, state }
+  if (branch === state.currentBranch) return { stdout: 'Already up to date.', stderr: '', exitCode: 0, state }
+  const currentCommits = state.branches.get(state.currentBranch) ?? []
+  const targetCommits = state.branches.get(branch) ?? []
+  const currentHashes = new Set(currentCommits.map(commit => commit.hash))
+  if (targetCommits.every(commit => currentHashes.has(commit.hash))) {
+    return { stdout: 'Already up to date.', stderr: '', exitCode: 0, state }
+  }
+  const hash = generateHash()
+  const commit: Commit = {
+    hash,
+    message: `Merge branch '${branch}'`,
+    author: state.config.get('user.name') || 'Ghost Ops',
+    date: new Date().toISOString(),
+    parent: state.head || null,
+    changes: new Map(targetCommits[targetCommits.length - 1]?.changes ?? []),
+  }
+  const branches = cloneBranches(state.branches)
+  branches.set(state.currentBranch, [...currentCommits, commit])
+  return {
+    stdout: `Merge made by the 'ort' strategy.\n ${branch} merged into ${state.currentBranch}`,
+    stderr: '',
+    exitCode: 0,
+    state: {
+      ...state,
+      branches,
+      commits: [...state.commits, commit],
+      head: hash,
+      reflog: [...state.reflog, `${hash} HEAD@{${state.reflog.length}}: merge ${branch}`],
+    },
+  }
 }
 
 function gitRebase(state: GitState, args: string[], _cwd: string) {
@@ -331,7 +435,50 @@ function gitRebase(state: GitState, args: string[], _cwd: string) {
   const branch = args[0]
   if (!branch) return { stdout: '', stderr: 'git rebase: branch name required', exitCode: 1, state }
   if (!state.branches.has(branch)) return { stdout: '', stderr: `fatal: invalid reference: ${branch}`, exitCode: 1, state }
-  return { stdout: `Successfully rebased and updated ${state.currentBranch}.`, stderr: '', exitCode: 0, state }
+  if (state.stagingArea.size > 0 || state.workingDirectory.size > 0) {
+    return { stdout: '', stderr: 'error: cannot rebase: You have unstaged changes.', exitCode: 1, state }
+  }
+  if (branch === state.currentBranch) return { stdout: `Current branch ${state.currentBranch} is up to date.`, stderr: '', exitCode: 0, state }
+
+  const currentCommits = state.branches.get(state.currentBranch) ?? []
+  const targetCommits = state.branches.get(branch) ?? []
+  const currentHashes = new Set(currentCommits.map(commit => commit.hash))
+  if (targetCommits.every(commit => currentHashes.has(commit.hash))) {
+    return { stdout: `Current branch ${state.currentBranch} is up to date.`, stderr: '', exitCode: 0, state }
+  }
+
+  const targetHashes = new Set(targetCommits.map(commit => commit.hash))
+  const uniqueCurrentCommits = currentCommits.filter(commit => !targetHashes.has(commit.hash))
+  const replayed: Commit[] = []
+  let parent = targetCommits.at(-1)?.hash ?? null
+  for (const oldCommit of uniqueCurrentCommits) {
+    const commit: Commit = {
+      ...oldCommit,
+      hash: generateHash(),
+      date: new Date().toISOString(),
+      parent,
+      changes: new Map(oldCommit.changes),
+    }
+    replayed.push(commit)
+    parent = commit.hash
+  }
+
+  const rebasedHistory = [...targetCommits, ...replayed]
+  const head = rebasedHistory.at(-1)?.hash ?? ''
+  const branches = cloneBranches(state.branches)
+  branches.set(state.currentBranch, rebasedHistory)
+  return {
+    stdout: `Successfully rebased and updated ${state.currentBranch}.`,
+    stderr: '',
+    exitCode: 0,
+    state: {
+      ...state,
+      branches,
+      commits: [...state.commits, ...replayed],
+      head,
+      reflog: [...state.reflog, `${head} HEAD@{${state.reflog.length}}: rebase ${branch}`],
+    },
+  }
 }
 
 function gitStash(state: GitState, args: string[], _cwd: string) {
@@ -339,36 +486,63 @@ function gitStash(state: GitState, args: string[], _cwd: string) {
   if (!state.initialized) return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128, state }
   const sub = args[0] || 'push'
   if (sub === 'push' || sub === 'save') {
+    if (state.workingDirectory.size === 0 && state.stagingArea.size === 0) {
+      return { stdout: 'No local changes to save', stderr: '', exitCode: 0, state }
+    }
+    const messageIndex = args.findIndex(arg => arg === '-m' || arg === '--message')
+    const message = messageIndex >= 0 ? args[messageIndex + 1] : args.slice(1).filter(arg => !arg.startsWith('-')).join(' ')
     const entry: StashEntry = {
       id: `stash@{${state.stash.length}}`,
-      message: args.slice(1).join(' ') || `WIP on ${state.currentBranch}`,
+      message: message || `WIP on ${state.currentBranch}`,
       changes: new Map(state.workingDirectory),
+      stagedChanges: new Map(state.stagingArea),
       branch: state.currentBranch,
     }
-    return { stdout: `Saved working directory and index state: ${entry.message}`, stderr: '', exitCode: 0, state: { ...state, stash: [...state.stash, entry], workingDirectory: new Map() } }
+    return {
+      stdout: `Saved working directory and index state: ${entry.message}`,
+      stderr: '',
+      exitCode: 0,
+      state: { ...state, stash: [...state.stash, entry], workingDirectory: new Map(), stagingArea: new Map() },
+    }
   }
   if (sub === 'pop') {
     if (state.stash.length === 0) return { stdout: '', stderr: 'No stash entries found.', exitCode: 1, state }
     const last = state.stash[state.stash.length - 1]
-    return { stdout: `Dropped refs/stash@{0} (${last.id})`, stderr: '', exitCode: 0, state: { ...state, stash: state.stash.slice(0, -1), workingDirectory: new Map(last.changes) } }
+    return {
+      stdout: `Dropped refs/stash@{0} (${last.id})`,
+      stderr: '',
+      exitCode: 0,
+      state: {
+        ...state,
+        stash: state.stash.slice(0, -1),
+        workingDirectory: new Map(last.changes),
+        stagingArea: new Map(last.stagedChanges),
+      },
+    }
   }
   if (sub === 'list') {
     let stdout = ''
     state.stash.forEach(s => { stdout += `${s.id}: ${s.message}\n` })
     return { stdout, stderr: '', exitCode: 0, state }
   }
-  return { stdout: '', stderr: '', exitCode: 0, state }
+  return { stdout: '', stderr: `git stash: unknown subcommand '${sub}'`, exitCode: 1, state }
 }
 
 function gitRestore(state: GitState, args: string[], _cwd: string) {
   void _cwd
   const staged = args.includes('--staged')
   const files = args.filter(a => !a.startsWith('-'))
+  if (files.length === 0) return { stdout: '', stderr: 'fatal: you must specify path(s) to restore', exitCode: 128, state }
   const newStaging = new Map(state.stagingArea)
   const newWorking = new Map(state.workingDirectory)
   for (const f of files) {
-    if (staged) newStaging.delete(f)
-    newWorking.delete(f)
+    if (staged) {
+      const content = newStaging.get(f)
+      if (content !== undefined) newWorking.set(f, content)
+      newStaging.delete(f)
+    } else {
+      newWorking.delete(f)
+    }
   }
   return { stdout: '', stderr: '', exitCode: 0, state: { ...state, stagingArea: newStaging, workingDirectory: newWorking } }
 }
@@ -376,11 +550,35 @@ function gitRestore(state: GitState, args: string[], _cwd: string) {
 function gitReset(state: GitState, args: string[], _cwd: string) {
   void _cwd
   const hard = args.includes('--hard')
-  const target = args.find(a => !a.startsWith('-'))
-  const newState = { ...state, stagingArea: new Map() }
+  const soft = args.includes('--soft')
+  const targetReference = args.find(a => !a.startsWith('-')) ?? 'HEAD'
+  const target = resolveCommitReference(state, targetReference)
+  if (!target) return { stdout: '', stderr: `fatal: ambiguous argument '${targetReference}': unknown revision`, exitCode: 128, state }
+
+  const targetHistory = buildLinearHistory(state, target)
+  const targetHashes = new Set(targetHistory.map(commit => commit.hash))
+  const removedCommits = (state.branches.get(state.currentBranch) ?? []).filter(commit => !targetHashes.has(commit.hash))
+  const undoneChanges = new Map<string, string>()
+  removedCommits.forEach(commit => commit.changes.forEach((content, path) => undoneChanges.set(path, content)))
+
+  const branches = cloneBranches(state.branches)
+  branches.set(state.currentBranch, targetHistory)
+  const stagingArea = soft
+    ? new Map([...undoneChanges, ...state.stagingArea])
+    : new Map<string, string>()
+  const workingDirectory = hard
+    ? new Map<string, string>()
+    : new Map([...undoneChanges, ...state.workingDirectory])
+  const newState: GitState = {
+    ...state,
+    branches,
+    head: target.hash,
+    stagingArea,
+    workingDirectory,
+    reflog: [...state.reflog, `${target.hash} HEAD@{${state.reflog.length}}: reset: moving to ${targetReference}`],
+  }
   if (hard) {
-    newState.workingDirectory = new Map()
-    return { stdout: `HEAD is now at ${target || 'HEAD'}`, stderr: '', exitCode: 0, state: newState }
+    return { stdout: `HEAD is now at ${shortHash(target.hash)} ${target.message}`, stderr: '', exitCode: 0, state: newState }
   }
   return { stdout: 'Unstaged changes after reset:', stderr: '', exitCode: 0, state: newState }
 }
@@ -390,9 +588,24 @@ function gitRevert(state: GitState, args: string[], _cwd: string) {
   if (!state.initialized) return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128, state }
   const hash = args[0]
   if (!hash) return { stdout: '', stderr: 'usage: git revert <commit>', exitCode: 1, state }
+  const target = state.commits.find(commit => commit.hash.startsWith(hash))
+  if (!target) return { stdout: '', stderr: `fatal: bad revision '${hash}'`, exitCode: 128, state }
   const newHash = generateHash()
-  const commit: Commit = { hash: newHash, message: `Revert "commit ${hash}"`, author: 'ghost', date: new Date().toISOString(), parent: state.head, changes: new Map() }
-  return { stdout: `[${state.currentBranch} ${shortHash(newHash)}] Revert "commit ${hash}"`, stderr: '', exitCode: 0, state: { ...state, commits: [...state.commits, commit], head: newHash } }
+  const commit: Commit = { hash: newHash, message: `Revert "${target.message}"`, author: 'ghost', date: new Date().toISOString(), parent: state.head, changes: new Map() }
+  const branches = cloneBranches(state.branches)
+  branches.set(state.currentBranch, [...(branches.get(state.currentBranch) ?? []), commit])
+  return {
+    stdout: `[${state.currentBranch} ${shortHash(newHash)}] Revert "${target.message}"`,
+    stderr: '',
+    exitCode: 0,
+    state: {
+      ...state,
+      commits: [...state.commits, commit],
+      head: newHash,
+      branches,
+      reflog: [...state.reflog, `${newHash} HEAD@{${state.reflog.length}}: revert: ${target.message}`],
+    },
+  }
 }
 
 function gitReflog(state: GitState, _args: string[], _cwd: string) {
@@ -411,7 +624,20 @@ function gitCherryPick(state: GitState, args: string[], _cwd: string) {
   if (!target) return { stdout: '', stderr: `fatal: bad revision '${hash}'`, exitCode: 128, state }
   const newHash = generateHash()
   const commit: Commit = { hash: newHash, message: target.message, author: target.author, date: new Date().toISOString(), parent: state.head, changes: new Map(target.changes) }
-  return { stdout: `[${state.currentBranch} ${shortHash(newHash)}] ${target.message}`, stderr: '', exitCode: 0, state: { ...state, commits: [...state.commits, commit], head: newHash } }
+  const branches = cloneBranches(state.branches)
+  branches.set(state.currentBranch, [...(branches.get(state.currentBranch) ?? []), commit])
+  return {
+    stdout: `[${state.currentBranch} ${shortHash(newHash)}] ${target.message}`,
+    stderr: '',
+    exitCode: 0,
+    state: {
+      ...state,
+      commits: [...state.commits, commit],
+      head: newHash,
+      branches,
+      reflog: [...state.reflog, `${newHash} HEAD@{${state.reflog.length}}: cherry-pick: ${target.message}`],
+    },
+  }
 }
 
 // === NEW GIT COMMANDS ===
@@ -430,12 +656,15 @@ function gitTag(state: GitState, args: string[], _cwd: string) {
     state.tags.forEach((_t, n) => { stdout += `${n}\n` })
     return { stdout, stderr: '', exitCode: 0, state }
   }
+  if (!state.head) return { stdout: '', stderr: 'fatal: Failed to resolve HEAD as a valid ref.', exitCode: 128, state }
   if (annotate && name) {
+    if (state.tags.has(name)) return { stdout: '', stderr: `fatal: tag '${name}' already exists`, exitCode: 128, state }
     const newTags = new Map(state.tags)
     newTags.set(name, { name, message: message || `Tag ${name}`, hash: state.head })
     return { stdout: '', stderr: '', exitCode: 0, state: { ...state, tags: newTags } }
   }
   if (name) {
+    if (state.tags.has(name)) return { stdout: '', stderr: `fatal: tag '${name}' already exists`, exitCode: 128, state }
     const newTags = new Map(state.tags)
     newTags.set(name, { name, message: '', hash: state.head })
     return { stdout: '', stderr: '', exitCode: 0, state: { ...state, tags: newTags } }
@@ -449,9 +678,11 @@ function gitRemote(state: GitState, args: string[], _cwd: string) {
   const add = args.includes('add')
   const remove = args.includes('remove') || args.includes('rm')
   if (add) {
-    const name = args.find(a => !a.startsWith('-') && a !== 'add')
-    const url = args[args.length - 1]
+    const addIndex = args.indexOf('add')
+    const name = args[addIndex + 1]
+    const url = args[addIndex + 2]
     if (!name || !url) return { stdout: '', stderr: 'usage: git remote add <name> <url>', exitCode: 1, state }
+    if (state.remotes.has(name)) return { stdout: '', stderr: `error: remote ${name} already exists.`, exitCode: 3, state }
     const newRemotes = new Map(state.remotes)
     newRemotes.set(name, url)
     return { stdout: '', stderr: '', exitCode: 0, state: { ...state, remotes: newRemotes } }
@@ -459,6 +690,7 @@ function gitRemote(state: GitState, args: string[], _cwd: string) {
   if (remove) {
     const name = args.find(a => !a.startsWith('-') && a !== 'remove' && a !== 'rm')
     if (!name) return { stdout: '', stderr: 'usage: git remote remove <name>', exitCode: 1, state }
+    if (!state.remotes.has(name)) return { stdout: '', stderr: `error: No such remote: '${name}'`, exitCode: 2, state }
     const newRemotes = new Map(state.remotes)
     newRemotes.delete(name)
     return { stdout: '', stderr: '', exitCode: 0, state: { ...state, remotes: newRemotes } }
@@ -478,13 +710,16 @@ function gitRemote(state: GitState, args: string[], _cwd: string) {
 function gitFetch(_state: GitState, _args: string[], _cwd: string) {
   void _args
   void _cwd
-  return { stdout: `From ${Array.from(_state.remotes.values())[0] || 'origin'}\n * [new branch]      main     -> origin/main\n`, stderr: '', exitCode: 0, state: _state }
+  const remote = Array.from(_state.remotes.values())[0]
+  if (!remote) return { stdout: '', stderr: 'fatal: No remote repository specified.', exitCode: 128, state: _state }
+  return { stdout: `From ${remote}\n * [new branch]      main     -> origin/main\n`, stderr: '', exitCode: 0, state: _state }
 }
 
 function gitPull(state: GitState, _args: string[], _cwd: string) {
   void _args
   void _cwd
   if (!state.initialized) return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128, state }
+  if (state.remotes.size === 0) return { stdout: '', stderr: 'fatal: No remote repository specified.', exitCode: 128, state }
   return { stdout: `From origin\n * branch            main       -> FETCH_HEAD\nAlready up to date.\n`, stderr: '', exitCode: 0, state }
 }
 
@@ -492,6 +727,8 @@ function gitPush(state: GitState, _args: string[], _cwd: string) {
   void _args
   void _cwd
   if (!state.initialized) return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128, state }
+  if (!state.head) return { stdout: '', stderr: `error: src refspec ${state.currentBranch} does not match any`, exitCode: 1, state }
+  if (state.remotes.size === 0) return { stdout: '', stderr: 'fatal: No configured push destination.', exitCode: 128, state }
   return { stdout: `To ${Array.from(state.remotes.values())[0] || 'origin'}\n   ${shortHash(state.head || '0'.repeat(40))}..${shortHash(generateHash())}  ${state.currentBranch} -> ${state.currentBranch}\n`, stderr: '', exitCode: 0, state }
 }
 
@@ -499,7 +736,7 @@ function gitClean(state: GitState, args: string[], _cwd: string) {
   void _cwd
   const force = args.includes('-f') || args.includes('-fd')
   if (!force) return { stdout: '', stderr: 'fatal: clean.requireForce defaults to true and neither -i, -n, nor -f given;\nrefusing to clean', exitCode: 1, state }
-  return { stdout: 'Removing untracked files...\n', stderr: '', exitCode: 0, state }
+  return { stdout: 'Removing untracked files...\n', stderr: '', exitCode: 0, state: { ...state, workingDirectory: new Map() } }
 }
 
 function gitWorktree(state: GitState, args: string[], _cwd: string) {

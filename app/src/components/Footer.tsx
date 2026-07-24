@@ -15,34 +15,37 @@ export default function Footer() {
           <span className="font-jetbrains text-body-sm text-[#4A6072]">
             {t('app.title')}
           </span>
-          <span className="font-jetbrains text-[10px] text-[#4A6072] opacity-60">
+          <span className="font-jetbrains text-xs text-[#4A6072] opacity-60">
             v1.0.0
           </span>
         </div>
 
         {/* Center: Links */}
-        <div className="flex items-center gap-space-6">
-          <a
-            href="#"
-            className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#4A6072] hover:text-[#00E5FF] transition-colors duration-fast"
+        <div className="flex flex-wrap items-center justify-center gap-x-space-6 gap-y-space-2" aria-label={t('footer.plannedResources')}>
+          <span
+            aria-disabled="true"
+            title={t('common.unavailable')}
+            className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#4A6072]"
           >
-            <FileText size={12} />
+            <FileText size={12} aria-hidden="true" />
             {t('footer.documentation')}
-          </a>
-          <a
-            href="#"
-            className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#4A6072] hover:text-[#00E5FF] transition-colors duration-fast"
+          </span>
+          <span
+            aria-disabled="true"
+            title={t('common.unavailable')}
+            className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#4A6072]"
           >
-            <Shield size={12} />
+            <Shield size={12} aria-hidden="true" />
             {t('footer.securityPolicy')}
-          </a>
-          <a
-            href="#"
-            className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#4A6072] hover:text-[#00E5FF] transition-colors duration-fast"
+          </span>
+          <span
+            aria-disabled="true"
+            title={t('common.unavailable')}
+            className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#4A6072]"
           >
-            <AlertTriangle size={12} />
+            <AlertTriangle size={12} aria-hidden="true" />
             {t('footer.reportIssue')}
-          </a>
+          </span>
         </div>
 
         {/* Right: Tagline */}

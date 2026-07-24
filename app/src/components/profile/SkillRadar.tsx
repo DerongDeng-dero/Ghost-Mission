@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 
 interface Skill {
   name: string;
@@ -12,6 +13,7 @@ interface SkillRadarProps {
 }
 
 export default function SkillRadar({ skills, size = 400 }: SkillRadarProps) {
+  const { t } = useTranslation();
   const [animated, setAnimated] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -28,6 +30,10 @@ export default function SkillRadar({ skills, size = 400 }: SkillRadarProps) {
     if (ref.current) observer.observe(ref.current);
     return () => observer.disconnect();
   }, []);
+
+  if (skills.length === 0) {
+    return <p className="font-inter text-body text-[#8B9EB0]">{t('profile.noSkillData')}</p>;
+  }
 
   // Use exactly 5 axes for a pentagon radar, matching design.md
   const displaySkills = skills.slice(0, 5);
@@ -84,13 +90,17 @@ export default function SkillRadar({ skills, size = 400 }: SkillRadarProps) {
   });
 
   return (
-    <div ref={ref} className="flex flex-col items-center">
+    <div ref={ref} className="flex w-full flex-col items-center">
       <svg
         width={size}
         height={size}
         viewBox={`0 0 ${size} ${size}`}
-        className="overflow-visible"
+        className="h-auto w-full overflow-visible"
+        style={{ maxWidth: size }}
+        role="img"
+        aria-label={t('profile.skillRadarLabel', { skills: displaySkills.map((skill) => `${skill.name} ${skill.score}%`).join(', ') })}
       >
+        <title>{t('profile.skillMastery')}</title>
         {/* Grid */}
         {gridPolygons.map((points, i) => (
           <polygon
@@ -202,7 +212,7 @@ export default function SkillRadar({ skills, size = 400 }: SkillRadarProps) {
             fill: '#4A6072',
           }}
         >
-          Overall
+          {t('profile.overall')}
         </text>
         <text
           x={center}

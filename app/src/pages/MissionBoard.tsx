@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, Search, X } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import MissionFilter from '@/components/mission/MissionFilter'
 import type { ModeFilter, StatusFilter, SortOption } from '@/components/mission/MissionFilter'
@@ -302,11 +302,12 @@ export default function MissionBoard() {
                   {inProgress.length}
                 </span>
               </div>
-              <button className="flex items-center gap-1 font-jetbrains text-body-sm text-[#4A6072] hover:text-[#00E5FF] transition-colors duration-fast">
-                {t('missionBoard.seeAll')} <ArrowRight size={14} />
-              </button>
             </div>
-            <div className="flex gap-4 overflow-x-auto pb-space-2 snap-x snap-mandatory scrollbar-thin">
+            <div
+              className="flex gap-4 overflow-x-auto pb-space-2 snap-x snap-mandatory scrollbar-thin"
+              tabIndex={0}
+              aria-label={t('missionBoard.inProgress')}
+            >
               {inProgress.map((mission, index) => (
                 <div key={mission.id} className="snap-start flex-shrink-0" style={{ width: '280px' }}>
                   <MissionCard mission={mission} index={index} />
@@ -354,7 +355,7 @@ export default function MissionBoard() {
             <h2 className="font-jetbrains text-h3 text-[#E8EDF2]">
               {activeFilterCount > 0 ? t('missionBoard.filteredResults') : t('missionBoard.allMissions')}
             </h2>
-            <span className="font-jetbrains text-body-sm text-[#4A6072]">
+            <span role="status" aria-live="polite" className="font-jetbrains text-body-sm text-[#4A6072]">
               {t('missionBoard.showing', { filtered: filteredMissions.length, total: missions.length })}
             </span>
           </div>
@@ -364,6 +365,7 @@ export default function MissionBoard() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
               className="flex flex-col items-center justify-center py-16 gap-3 text-center"
+              role="status"
             >
               <Search size={48} className="opacity-30" style={{ color: 'var(--text-muted, #4A6072)' }} />
               <p className="font-jetbrains text-body text-[#8B9EB0]">{t('missionBoard.noMissionsMatch')}</p>
@@ -377,7 +379,8 @@ export default function MissionBoard() {
                   setSearchQuery('')
                   setSortOption('recommended')
                 }}
-                className="flex items-center gap-1 font-jetbrains text-body-sm underline transition-colors"
+                type="button"
+                className="flex min-h-11 items-center gap-1 rounded-radius-sm px-3 font-jetbrains text-body-sm underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
                 style={{ color: '#00E5FF' }}
               >
                 <X size={14} />

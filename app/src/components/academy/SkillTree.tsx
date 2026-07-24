@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { useTranslation } from 'react-i18next'
 import type { Chapter } from '@/data/academy'
 
 interface SkillTreeProps {
@@ -6,33 +7,47 @@ interface SkillTreeProps {
 }
 
 export default function SkillTree({ chapter }: SkillTreeProps) {
+  const { t } = useTranslation()
   const totalDrills = chapter.drills.length
   const completedCount = chapter.drills.filter((d) => d.status === 'completed').length
+  const progress = totalDrills > 0 ? Math.round((completedCount / totalDrills) * 100) : 0
 
   return (
     <div className="w-full py-space-4">
       {/* Progress Stats */}
       <div className="flex items-center justify-between mb-space-3">
         <span className="font-jetbrains text-code-sm text-[#8B9EB0]">
-          {completedCount} of {totalDrills} drills completed
+          {t('academy.drillsProgress', { completed: completedCount, total: totalDrills })}
         </span>
         <span className="font-jetbrains text-code-sm text-[#00FF88]">
-          {totalDrills > 0 ? Math.round((completedCount / totalDrills) * 100) : 0}%
+          {progress}%
         </span>
       </div>
 
       {/* Progress Bar */}
-      <div className="w-full h-1.5 bg-[#1A2332] rounded-full overflow-hidden mb-space-4">
+      <div
+        className="w-full h-1.5 bg-[#1A2332] rounded-full overflow-hidden mb-space-4"
+        role="progressbar"
+        aria-label={t('academy.chapterBarLabel', { number: chapter.number })}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={progress}
+      >
         <motion.div
           initial={{ width: 0 }}
-          animate={{ width: `${totalDrills > 0 ? (completedCount / totalDrills) * 100 : 0}%` }}
+          animate={{ width: `${progress}%` }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
           className="h-full rounded-full bg-[#00FF88]"
         />
       </div>
 
       {/* Node Tree */}
-      <div className="relative flex items-center gap-0 overflow-x-auto pb-space-2">
+      <div
+        className="relative flex items-center gap-0 overflow-x-auto pb-space-2"
+        role="list"
+        tabIndex={0}
+        aria-label={t('academy.drillSequence')}
+      >
         {/* Connecting Line Background */}
         <div
           className="absolute left-0 right-0 h-0.5"
@@ -50,7 +65,7 @@ export default function SkillTree({ chapter }: SkillTreeProps) {
             const isLocked = drill.status === 'locked'
 
             return (
-              <div key={drill.id} className="flex items-center">
+              <div key={drill.id} className="flex items-center" role="listitem">
                 {/* Node */}
                 <motion.div
                   initial={{ scale: 0 }}
@@ -77,7 +92,7 @@ export default function SkillTree({ chapter }: SkillTreeProps) {
 
                   {/* Drill Number */}
                   <span
-                    className="font-fira text-[9px] mt-0.5"
+                    className="font-fira text-xs mt-0.5"
                     style={{
                       color: isCompleted ? '#00FF88' : isCurrent ? '#00E5FF' : '#4A6072',
                     }}
@@ -87,13 +102,14 @@ export default function SkillTree({ chapter }: SkillTreeProps) {
 
                   {/* Drill Label (on hover / current / completed) */}
                   <span
-                    className="font-fira text-[8px] text-center max-w-[60px] truncate"
+                    className="max-w-[72px] truncate text-center font-fira text-xs"
                     style={{
                       color: isCompleted ? '#00FF88' : isCurrent ? '#00E5FF' : 'transparent',
                     }}
                   >
                     {drill.title.split(' ')[0]}
                   </span>
+                  <span className="sr-only">{t(`academy.drillStatus.${drill.status}`)}</span>
                 </motion.div>
 
                 {/* Connector Line (between nodes) */}

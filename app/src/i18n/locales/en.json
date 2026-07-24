@@ -11,7 +11,12 @@
     "atlas": "Command Atlas",
     "profile": "Profile",
     "settings": "Settings",
-    "terminal": "Terminal"
+    "terminal": "Terminal",
+    "mainNavigation": "Main navigation",
+    "openMenu": "Open navigation menu",
+    "closeMenu": "Close navigation menu",
+    "connectionStatus": "Connection status: {{status}}",
+    "rankProfile": "Open profile, rank {{rank}}"
   },
   "rank": {
     "recruit": "Recruit",
@@ -66,7 +71,11 @@
     "dailyIncidentDesc": "A ghost process has taken over port 3000. Find and eliminate it.",
     "difficultyEasy": "Easy",
     "difficultyMedium": "Medium",
-    "difficultyHard": "Hard"
+    "difficultyHard": "Hard",
+    "streakDays_one": "{{count}} day",
+    "streakDays_other": "{{count}} days",
+    "noSkillData": "No skill data yet.",
+    "skillRadarLabel": "Skill mastery radar: {{skills}}"
   },
   "missionBoard": {
     "title": "Mission Board",
@@ -84,7 +93,28 @@
       "difficulty": "Difficulty",
       "status": "Status",
       "sortBy": "Sort by",
-      "search": "Search missions..."
+      "search": "Search missions...",
+      "mode": "Mission mode",
+      "available": "Available",
+      "inProgress": "In progress",
+      "completed": "Completed",
+      "skills": "Skills",
+      "risk": "Risk levels",
+      "difficultyLevel": "Difficulty {{level}}",
+      "riskLevel": "Risk level {{level}}",
+      "searchLabel": "Search missions",
+      "clearSearch": "Clear mission search",
+      "sort": {
+        "recommended": "Recommended",
+        "difficulty": "Difficulty",
+        "newest": "Newest",
+        "az": "A–Z"
+      },
+      "activeMode": "Mode: {{value}}",
+      "activeStatus": "Status: {{value}}",
+      "activeDifficulty": "Difficulty: {{value}}",
+      "activeRisk": "Risk: {{value}}",
+      "activeSearch": "Search: {{value}}"
     },
     "enter": "Enter",
     "replay": "Replay",
@@ -103,7 +133,9 @@
     "filteredResults": "filtered results",
     "clearFilters": "Clear Filters",
     "noMissionsMatch": "No missions match your current filters.",
-    "continue": "Continue"
+    "continue": "Continue",
+    "riskLevel": "Risk level {{level}}",
+    "missionProgress": "Progress for {{title}}"
   },
   "academy": {
     "title": "Ghost Academy",
@@ -125,7 +157,9 @@
       "captainCat": "Captain Cat",
       "symlinkWraith": "Symlink Wraith",
       "diskHydra": "Disk Hydra",
-      "portMimic": "Port Mimic"
+      "portMimic": "Port Mimic",
+      "mergeConflictHydra": "Merge Conflict Hydra",
+      "backgroundJobGhost": "Background Job Ghost"
     },
     "xp": "XP",
     "drills": "Drills",
@@ -135,7 +169,62 @@
     "totalXP": "Total XP",
     "chaptersDone": "Chapters Done",
     "trainingTime": "Training Time",
-    "trainingTimeValue": "4h 32m"
+    "trainingTimeValue": "4h 32m",
+    "completePreviousDrills": "Complete previous drills",
+    "boss": "Boss",
+    "riskLevel": "Risk: {{level}}",
+    "replay": "Replay",
+    "start": "Start",
+    "scoreComplete": "{{score}}% complete",
+    "chapterProgressLabel": "Chapter {{number}}, {{title}}: {{completed}} of {{total}} drills complete",
+    "scrollChaptersLeft": "Scroll chapters left",
+    "scrollChaptersRight": "Scroll chapters right",
+    "chapterNavigation": "Chapter navigation",
+    "chapterBarLabel": "Progress for {{number}}",
+    "drillsProgress": "{{completed}} of {{total}} drills completed",
+    "drillSequence": "Drill sequence",
+    "drillStatus": {
+      "available": "Available",
+      "in-progress": "In progress",
+      "completed": "Completed",
+      "locked": "Locked"
+    },
+    "knowYourEnemies": "Know Your Enemies",
+    "enemyGallerySubtitle": "Habits and traps that catch even experienced operators",
+    "portraitUnavailable": "Portrait unavailable for {{name}}",
+    "enemyDescriptions": {
+      "pagerPhantom": "Traps operators inside scrolling text. Once inside, few remember to press q.",
+      "vimTrapMonk": "A silent guardian that locks you between modes. Many fall while trying to exit.",
+      "resetDemon": "Feeds on lost commits and force pushes, turning Git history into a wasteland.",
+      "mergeConflictHydra": "Resolve one conflict and two more appear in its place.",
+      "backgroundJobGhost": "A silent process consuming resources in the dark. You never see it coming.",
+      "captainCat": "Scatters randomly named files across the filesystem in chaotic feline form.",
+      "symlinkWraith": "Creates phantom links that lead to nowhere—or to disaster.",
+      "diskHydra": "Nine heads devour disk space. Remove one and two grow back.",
+      "portMimic": "Hides on random nonstandard ports, moving and dodging until connections time out."
+    },
+    "enemyChapters": {
+      "pagerPhantom": "Chapter 04: The Pager", "vimTrapMonk": "Chapter 05: Vim Temple", "resetDemon": "Chapter 06: Git Labyrinth", "mergeConflictHydra": "Chapter 06: Git Labyrinth", "backgroundJobGhost": "Chapter 15: Ghost Protocol", "captainCat": "Chapter 10: Shell Mastery", "symlinkWraith": "Chapter 15: Ghost Protocol", "diskHydra": "Chapter 11: The Monitor", "portMimic": "Chapter 12: Red Zone"
+    },
+    "chapterDetails": {
+      "ch01": { "subtitle": "Help & Foundations", "description": "Your journey starts here. Learn how to ask for help, navigate the terminal, and understand command-line fundamentals." },
+      "ch02": { "subtitle": "ls, cd, pwd", "description": "The filesystem is your battlefield. Learn to inspect, move through, and understand directory structures." },
+      "ch03": { "subtitle": "cat, cp, mv, rm", "description": "Create, copy, move, and remove files. With great power comes great responsibility." },
+      "ch04": { "subtitle": "less, more, head, tail", "description": "Not every file fits on one screen. Page through content, inspect its beginning and end, and never get trapped." },
+      "ch05": { "subtitle": "Editing & Survival", "description": "Enter the terminal world's most feared editor, master its modes, and escape with your sanity intact." },
+      "ch06": { "subtitle": "Version Control", "description": "Git is a maze of branches, commits, and merges. Cross it without losing your code." },
+      "ch07": { "subtitle": "ps, top, kill", "description": "Every process leaves a trace. Track, monitor, and terminate them when necessary." },
+      "ch08": { "subtitle": "ping, curl, ssh", "description": "The network is a dark forest. Probe it, connect to it, and move through it silently." },
+      "ch09": { "subtitle": "Containers", "description": "Containers shape modern deployment. Learn to build, run, and manage them." },
+      "ch10": { "subtitle": "Scripts & Variables", "description": "The shell is more than a command interpreter; it is a programming language. Master variables, loops, and conditions." },
+      "ch11": { "subtitle": "df, du, free", "description": "System resources are finite. Monitor disk and memory use, and recognize when the system is under pressure." },
+      "ch12": { "subtitle": "Advanced Operations", "description": "Enter the danger zone: advanced file operations, permissions, and system-level commands." },
+      "ch13": { "subtitle": "Permission Nightmare", "description": "Doctor 777 grants every permission to everyone. Learn to fight back and restore a secure configuration." },
+      "ch14": { "subtitle": "Escape Trapped Programs", "description": "Every operator gets trapped sometimes. Learn the common escape sequences for terminal programs." },
+      "ch15": { "subtitle": "Advanced Combinations", "description": "Combine your skills into complex operations. A true Ghost operator joins tools seamlessly." },
+      "ch16": { "subtitle": "Final Trial", "description": "Everything you have learned—every skill, drill, and enemy—comes together in the final exam." },
+      "ch17": { "subtitle": "tmux Mastery", "description": "Split terminals, manage sessions, and become a true multitasking operator." }
+    }
   },
   "terminal": {
     "title": "Terminal Cockpit",
@@ -185,9 +274,20 @@
       "step3": "Complete objectives to earn XP and rank up.",
       "step4": "Try to finish without hints for a perfect S-rank!",
       "startButton": "Start Training",
-      "dismissKey": "Press any key to dismiss"
+      "dismissKey": "Press Esc to close",
+      "close": "Close terminal tutorial",
+      "cheatSheet": "Common command cheat sheet",
+      "commands": {
+        "ls": "List files",
+        "cd": "Change directory",
+        "pwd": "Show current path",
+        "cat": "Read a file",
+        "echo": "Print text",
+        "whoami": "Show current user"
+      }
     },
     "helpTip": {
+      "input": "Type commands here",
       "text": "Tip: Use Tab for command completion and Up arrow for history."
     }
   },
@@ -196,6 +296,7 @@
     "subtitle": "Your tactical command reference across {{domains}} domains",
     "search": "Search commands...",
     "domains": {
+      "all": "All",
       "file": "File",
       "text": "Text",
       "process": "Process",
@@ -236,7 +337,33 @@
     "results": "{{count}} result",
     "resultsPlural": "{{count}} results",
     "noCommandsMatch": "No commands match your search.",
-    "clearFilters": "Clear Filters"
+    "clearFilters": "Clear Filters",
+    "nodesLinks": "{{nodes}} nodes · {{links}} links",
+    "expand": "Expand graph",
+    "collapse": "Collapse graph",
+    "related": "Related commands",
+    "viewDetails": "View command details",
+    "instructions": "Drag to rotate · Scroll to zoom · Select a node for details",
+    "closeDetails": "Close command details",
+    "graphLabel": "Interactive command relationship graph",
+    "domainFilterLabel": "Command domains",
+    "riskFilterLabel": "Risk",
+    "typeFilterLabel": "Type",
+    "viewMode": "View mode",
+    "listView": "List",
+    "graphView": "Graph",
+    "searchLabel": "Search commands, flags, and patterns",
+    "clearSearch": "Clear command search",
+    "noCommandsFound": "No commands found",
+    "tryDifferentSearch": "Try different keywords or clear the filters.",
+    "learned": "Learned",
+    "commonFlags": "Common Flags",
+    "examples": "Examples",
+    "antiPatterns": "Anti-Patterns",
+    "safePatterns": "Safe Patterns",
+    "relatedCommands": "Related Commands",
+    "usedInMissions": "Used in Missions",
+    "copyExample": "Copy example command: {{command}}"
   },
   "profile": {
     "title": "Operative Profile",
@@ -292,7 +419,19 @@
       "ghost": "Ghost"
     },
     "pass": "PASS",
-    "fail": "FAIL"
+    "fail": "FAIL",
+    "activityHeatmapLabel": "Command activity over 365 days, {{count}} commands used",
+    "less": "Less",
+    "more": "More",
+    "noSkillData": "No skill data yet.",
+    "skillRadarLabel": "Skill radar: {{skills}}",
+    "skillMastery": "Skill mastery",
+    "overall": "Overall",
+    "missionsCleared": "Missions Cleared",
+    "commandsLearned": "Commands Learned",
+    "dayStreak": "Day Streak",
+    "levelNumber": "Level {{level}}",
+    "xpProgress": "Experience progress to next level"
   },
   "debrief": {
     "title": "Mission Debrief",
@@ -407,6 +546,7 @@
     "displayName": "Display Name",
     "exportProgress": "Export Progress",
     "signOut": "Sign Out",
+    "signOutUnavailable": "Sign out unavailable in local demo",
     "fontSize": "Font Size",
     "fontFamily": "Font Family",
     "cursorStyle": "Cursor Style",
@@ -420,7 +560,34 @@
     "tagline": "Terminal Ghost Ops",
     "builtWith": "Built with React + TypeScript + Vite",
     "educational": "For Educational Purposes",
-    "version": "Version"
+    "version": "Version",
+    "sectionNavigation": "Settings sections",
+    "themes": {
+      "dark": "Standard",
+      "high-contrast": "High Contrast",
+      "warm": "Eye Care"
+    }
+  },
+  "guide": {
+    "showTip": "Show a Ghost tip",
+    "hideMessage": "Hide Ghost message",
+    "messages": {
+      "welcome": "Welcome to Terminal Ghost Ops! I am Ghost, your AI guide. Open the Mission Board to begin your first operation.",
+      "missions": "Choose an available mission to begin. Each mission recreates a practical terminal scenario.",
+      "academy": "Academy lessons progress from fundamentals to advanced techniques. Complete them to master the shell.",
+      "atlas": "The Command Atlas maps relationships between commands. Switch to graph view to explore them in 3D.",
+      "terminal": "Enter commands in the terminal to complete objectives. Use the help control when you need a hint."
+    },
+    "tips": {
+      "autocomplete": "Tip: press Tab to complete commands.",
+      "interrupt": "Tip: Ctrl+C interrupts the current process.",
+      "history": "Tip: enter history to review previous commands.",
+      "previousCommand": "Tip: press the Up Arrow to reuse the previous command.",
+      "previousDirectory": "Tip: cd - returns to the previous directory.",
+      "hiddenFiles": "Tip: ls -la includes hidden files.",
+      "recursiveSearch": "Tip: grep -r searches through directories recursively.",
+      "scoreCost": "Tip: hints reduce your score, so investigate first."
+    }
   },
   "common": {
     "loading": "Loading...",
@@ -436,12 +603,19 @@
     "copy": "Copy",
     "copied": "Copied!",
     "start": "Start",
-    "complete": "Complete"
+    "complete": "Complete",
+    "skipToContent": "Skip to main content",
+    "unavailable": "Not available in this demo",
+    "language": "Language",
+    "switchToEnglish": "Switch language to English",
+    "switchToChinese": "Switch language to Chinese",
+    "removeFilter": "Remove filter {{label}}"
   },
   "footer": {
     "documentation": "Documentation",
     "securityPolicy": "Security Policy",
     "reportIssue": "Report Issue",
-    "tagline": "Terminal Ghost Ops — Every hack is a lesson. Every escape is a command."
+    "tagline": "Terminal Ghost Ops — Every hack is a lesson. Every escape is a command.",
+    "plannedResources": "Planned resources"
   }
 }

@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useId } from 'react';
 import { Search, X, Command } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 
 interface CommandSearchProps {
   value: string;
@@ -9,8 +10,10 @@ interface CommandSearchProps {
 }
 
 export default function CommandSearch({ value, onChange, resultCount }: CommandSearchProps) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const inputId = useId();
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -55,13 +58,16 @@ export default function CommandSearch({ value, onChange, resultCount }: CommandS
         />
 
         <input
+          id={inputId}
           ref={inputRef}
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
-          placeholder="Search commands, flags, patterns..."
+          placeholder={t('commandAtlas.search')}
+          aria-label={t('commandAtlas.searchLabel')}
+          aria-keyshortcuts="Control+K Meta+K"
           className="w-full h-12 pl-10 pr-20 bg-transparent font-fira text-base placeholder:text-[#4A6072] focus:outline-none"
           style={{ color: '#E8EDF2' }}
         />
@@ -70,12 +76,14 @@ export default function CommandSearch({ value, onChange, resultCount }: CommandS
           <AnimatePresence>
             {value && (
               <motion.button
+                type="button"
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
                 transition={{ duration: 0.15 }}
                 onClick={() => { onChange(''); inputRef.current?.focus(); }}
-                className="p-1 rounded-sm text-[#4A6072] hover:text-[#E8EDF2] transition-colors"
+                aria-label={t('commandAtlas.clearSearch')}
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-sm text-[#4A6072] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
               >
                 <X size={16} />
               </motion.button>
@@ -103,8 +111,10 @@ export default function CommandSearch({ value, onChange, resultCount }: CommandS
       </div>
 
       {resultCount !== undefined && (
-        <p className="mt-2 font-jetbrains text-body-sm text-[#4A6072] text-center">
-          {resultCount === 0 ? 'No commands found' : `Showing ${resultCount} command${resultCount !== 1 ? 's' : ''}`}
+        <p role="status" aria-live="polite" className="mt-2 font-jetbrains text-body-sm text-[#4A6072] text-center">
+          {resultCount === 0
+            ? t('commandAtlas.noCommandsFound')
+            : t(resultCount === 1 ? 'commandAtlas.results' : 'commandAtlas.resultsPlural', { count: resultCount })}
         </p>
       )}
     </motion.div>

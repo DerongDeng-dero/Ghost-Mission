@@ -1,55 +1,58 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Eye, Keyboard, Target, X, Play, CornerDownLeft } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface TutorialOverlayProps {
   isVisible: boolean
   onDismiss: () => void
 }
 
-const TYPING_MESSAGES = [
-  '> Initializing terminal session...',
-  '> Welcome to Ghost Ops, operative.',
-  '> Your terminal is your weapon.',
-]
-
 export default function TutorialOverlay({ isVisible, onDismiss }: TutorialOverlayProps) {
-  const [typedIndex, setTypedIndex] = useState(0)
-  const [typedChar, setTypedChar] = useState(0)
+  const { t } = useTranslation()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const startButtonRef = useRef<HTMLButtonElement>(null)
 
-  // Animated typing effect
   useEffect(() => {
     if (!isVisible) return
-    const msg = TYPING_MESSAGES[typedIndex]
-    if (!msg) return
-
-    if (typedChar < msg.length) {
-      const timer = setTimeout(() => setTypedChar(c => c + 1), 35)
-      return () => clearTimeout(timer)
-    } else {
-      const timer = setTimeout(() => {
-        if (typedIndex < TYPING_MESSAGES.length - 1) {
-          setTypedIndex(i => i + 1)
-          setTypedChar(0)
-        }
-      }, 600)
-      return () => clearTimeout(timer)
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    const focusFrame = requestAnimationFrame(() => startButtonRef.current?.focus())
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onDismiss()
+        return
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      )
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
     }
-  }, [isVisible, typedIndex, typedChar])
-
-  // Dismiss on any key press
-  useEffect(() => {
-    if (!isVisible) return
-    const handleKey = () => onDismiss()
     window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
+    return () => {
+      cancelAnimationFrame(focusFrame)
+      window.removeEventListener('keydown', handleKey)
+      previouslyFocused?.focus()
+    }
   }, [isVisible, onDismiss])
 
   return (
     <AnimatePresence>
       {isVisible && (
         <motion.div
-          className="absolute inset-0 z-[25] flex items-center justify-center px-4"
+          className="absolute inset-0 z-[25] flex items-start justify-center overflow-y-auto px-4 py-4 sm:items-center"
           style={{ backgroundColor: 'rgba(10, 14, 20, 0.88)', backdropFilter: 'blur(8px)' }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -57,7 +60,12 @@ export default function TutorialOverlay({ isVisible, onDismiss }: TutorialOverla
           transition={{ duration: 0.4 }}
         >
           <motion.div
-            className="w-full max-w-[520px] rounded-lg overflow-hidden"
+            ref={dialogRef}
+            className="max-h-full w-full max-w-[520px] overflow-y-auto rounded-lg"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="terminal-tutorial-title"
+            aria-describedby="terminal-tutorial-steps"
             style={{
               backgroundColor: 'var(--bg-secondary)',
               border: '1px solid var(--border-subtle)',
@@ -73,30 +81,26 @@ export default function TutorialOverlay({ isVisible, onDismiss }: TutorialOverla
             <div className="p-6 relative">
               {/* Close button */}
               <button
+                type="button"
                 onClick={onDismiss}
-                className="absolute top-4 right-4 p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all"
-                aria-label="Close tutorial"
+                className="absolute right-2 top-2 inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-[var(--text-muted)] transition-all hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                aria-label={t('terminal.tutorial.close')}
               >
-                <X size={16} />
+                <X size={16} aria-hidden="true" />
               </button>
 
               {/* Title */}
-              <h2 className="font-jetbrains text-h2 mb-1" style={{ color: 'var(--neon-green)' }}>
-                Welcome to Terminal Ghost Ops
+              <h2 id="terminal-tutorial-title" className="mb-5 pr-10 font-jetbrains text-h2" style={{ color: 'var(--neon-green)' }}>
+                {t('terminal.tutorial.welcome')}
               </h2>
 
-              {/* Animated typing subtitle */}
-              <p className="font-jetbrains text-code-sm mb-6 min-h-[20px]" style={{ color: 'var(--neon-cyan)' }}>
-                {TYPING_MESSAGES[typedIndex]?.slice(0, typedChar)}
-                <span className="animate-pulse">_</span>
-              </p>
-
-              {/* 3-step guide */}
-              <div className="space-y-3 mb-6">
+              {/* Quick-start guide */}
+              <div id="terminal-tutorial-steps" className="mb-6 space-y-3">
                 {[
-                  { icon: Eye, color: '#00E5FF', label: 'Read objectives', desc: 'Check the left panel for your mission goals' },
-                  { icon: Keyboard, color: '#C77DFF', label: 'Type commands', desc: 'Click the terminal and enter commands like ls, cd, cat' },
-                  { icon: Target, color: '#00FF88', label: 'Complete mission', desc: 'Finish all objectives to win and unlock the next level' },
+                  { icon: Eye, color: '#00E5FF', text: t('terminal.tutorial.step1') },
+                  { icon: Keyboard, color: '#C77DFF', text: t('terminal.tutorial.step2') },
+                  { icon: Target, color: '#00FF88', text: t('terminal.tutorial.step3') },
+                  { icon: Target, color: '#FFD166', text: t('terminal.tutorial.step4') },
                 ].map((item, i) => (
                   <motion.div
                     key={i}
@@ -110,16 +114,11 @@ export default function TutorialOverlay({ isVisible, onDismiss }: TutorialOverla
                       className="flex items-center justify-center w-9 h-9 rounded-md flex-shrink-0 mt-0.5"
                       style={{ backgroundColor: item.color + '15' }}
                     >
-                      <item.icon size={18} style={{ color: item.color }} />
+                      <item.icon size={18} style={{ color: item.color }} aria-hidden="true" />
                     </div>
-                    <div>
-                      <p className="font-jetbrains text-body font-semibold" style={{ color: 'var(--text-primary)' }}>
-                        {item.label}
-                      </p>
-                      <p className="font-inter text-body-sm" style={{ color: 'var(--text-secondary)' }}>
-                        {item.desc}
-                      </p>
-                    </div>
+                    <p className="font-inter text-body" style={{ color: 'var(--text-secondary)' }}>
+                      {item.text}
+                    </p>
                   </motion.div>
                 ))}
               </div>
@@ -132,16 +131,16 @@ export default function TutorialOverlay({ isVisible, onDismiss }: TutorialOverla
                 transition={{ delay: 0.8, duration: 0.4 }}
               >
                 <p className="font-jetbrains text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
-                  Common Commands Cheat Sheet
+                  {t('terminal.tutorial.cheatSheet')}
                 </p>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { cmd: 'ls', desc: 'List files' },
-                    { cmd: 'cd', desc: 'Change dir' },
-                    { cmd: 'pwd', desc: 'Show path' },
-                    { cmd: 'cat', desc: 'Read file' },
-                    { cmd: 'echo', desc: 'Print text' },
-                    { cmd: 'whoami', desc: 'Show user' },
+                    { cmd: 'ls', desc: t('terminal.tutorial.commands.ls') },
+                    { cmd: 'cd', desc: t('terminal.tutorial.commands.cd') },
+                    { cmd: 'pwd', desc: t('terminal.tutorial.commands.pwd') },
+                    { cmd: 'cat', desc: t('terminal.tutorial.commands.cat') },
+                    { cmd: 'echo', desc: t('terminal.tutorial.commands.echo') },
+                    { cmd: 'whoami', desc: t('terminal.tutorial.commands.whoami') },
                   ].map(item => (
                     <div
                       key={item.cmd}
@@ -157,8 +156,10 @@ export default function TutorialOverlay({ isVisible, onDismiss }: TutorialOverla
 
               {/* Start button */}
               <motion.button
+                ref={startButtonRef}
+                type="button"
                 onClick={onDismiss}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-md font-jetbrains text-body font-semibold transition-all"
+                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md py-3 font-jetbrains text-body font-semibold transition-all"
                 style={{
                   backgroundColor: 'var(--neon-green)',
                   color: '#0A0E14',
@@ -166,13 +167,13 @@ export default function TutorialOverlay({ isVisible, onDismiss }: TutorialOverla
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
               >
-                <Play size={16} />
-                Start Mission
-                <CornerDownLeft size={14} />
+                <Play size={16} aria-hidden="true" />
+                {t('terminal.tutorial.startButton')}
+                <CornerDownLeft size={14} aria-hidden="true" />
               </motion.button>
 
               <p className="font-jetbrains text-[10px] text-center mt-3" style={{ color: 'var(--text-muted)' }}>
-                Press any key to dismiss
+                {t('terminal.tutorial.dismissKey')}
               </p>
             </div>
           </motion.div>

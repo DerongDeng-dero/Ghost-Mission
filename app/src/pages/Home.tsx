@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { motion, useInView } from 'framer-motion'
+import { motion, useInView, useReducedMotion } from 'framer-motion'
 import {
   Terminal, Target, BookOpen, Search, User, Settings,
   Trophy, Clock, Calendar, ChevronRight, Zap, Crosshair,
@@ -13,25 +13,37 @@ import type { Skill, Chapter } from '@/store/gameStore'
 /* ------------------------------------------------------------------ */
 /*  useTypewriter hook                                                  */
 /* ------------------------------------------------------------------ */
-function useTypewriter(text: string, speed = 40, delay = 300) {
+function useTypewriter(text: string, speed = 40, delay = 300, reduceMotion = false) {
   const [displayed, setDisplayed] = useState('')
   const [done, setDone] = useState(false)
 
   useEffect(() => {
     let i = 0
+    let interval: ReturnType<typeof setInterval> | undefined
+    let doneTimer: ReturnType<typeof setTimeout> | undefined
     const timer = setTimeout(() => {
-      const interval = setInterval(() => {
+      if (reduceMotion) {
+        setDisplayed(text)
+        setDone(true)
+        return
+      }
+      setDisplayed('')
+      setDone(false)
+      interval = setInterval(() => {
         i++
         setDisplayed(text.slice(0, i))
         if (i >= text.length) {
           clearInterval(interval)
-          setTimeout(() => setDone(true), 500)
+          doneTimer = setTimeout(() => setDone(true), 500)
         }
       }, speed)
-      return () => clearInterval(interval)
-    }, delay)
-    return () => clearTimeout(timer)
-  }, [text, speed, delay])
+    }, reduceMotion ? 0 : delay)
+    return () => {
+      clearTimeout(timer)
+      if (interval) clearInterval(interval)
+      if (doneTimer) clearTimeout(doneTimer)
+    }
+  }, [text, speed, delay, reduceMotion])
 
   return { displayed, done }
 }
@@ -46,12 +58,17 @@ const easeBounce = [0.34, 1.56, 0.64, 1] as [number, number, number, number]
 /*  Skill Radar Chart (SVG)                                             */
 /* ------------------------------------------------------------------ */
 function SkillRadar({ skills }: { skills: Skill[] }) {
+  const { t } = useTranslation()
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true, amount: 0.3 })
   const size = 320
   const center = size / 2
   const maxRadius = 120
   const levels = 4
+
+  if (skills.length === 0) {
+    return <p className="font-inter text-body text-[#8B9EB0]">{t('home.noSkillData')}</p>
+  }
 
   const angleFor = (i: number) => (Math.PI * 2 * i) / skills.length - Math.PI / 2
   const pointFor = (i: number, value: number) => {
@@ -73,8 +90,16 @@ function SkillRadar({ skills }: { skills: Skill[] }) {
   const dataPath = dataPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ') + ' Z'
 
   return (
-    <div ref={ref} className="flex items-center justify-center">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <div ref={ref} className="flex w-full items-center justify-center">
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="h-auto w-full max-w-[320px]"
+        role="img"
+        aria-label={t('home.skillRadarLabel', { skills: skills.map((skill) => `${skill.name} ${skill.score}%`).join(', ') })}
+      >
+        <title>{t('home.skillMastery')}</title>
         {/* Grid polygons */}
         {gridPolygons.map((points, i) => (
           <polygon
@@ -198,6 +223,7 @@ function Section({
 /* ------------------------------------------------------------------ */
 export default function Home() {
   const { t, i18n } = useTranslation()
+  const reduceMotion = useReducedMotion() ?? false
   const isZh = i18n.language?.startsWith('zh') ?? true
 
   // Bilingual chapter names
@@ -225,7 +251,7 @@ export default function Home() {
     missionsCompleted, commandsLearned, currentStreak, dailyIncident,
   } = useGameStore()
 
-  const { displayed: welcomeText, done: typewriterDone } = useTypewriter(t('home.welcome'), 40, 300)
+  const { displayed: welcomeText, done: typewriterDone } = useTypewriter(t('home.welcome'), 40, 300, reduceMotion)
 
   const rankImages: Record<string, string> = {
     recruit: '/rank-recruit.png',
@@ -318,16 +344,19 @@ export default function Home() {
           }}
         />
         {/* Video overlay */}
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute inset-0 z-bg object-cover pointer-events-none"
-          style={{ opacity: 0.08 }}
-        >
-          <source src="/hero-loop.mp4" type="video/mp4" />
-        </video>
+        {!reduceMotion && (
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            aria-hidden="true"
+            className="absolute inset-0 z-bg object-cover pointer-events-none"
+            style={{ opacity: 0.08 }}
+          >
+            <source src="/hero-loop.mp4" type="video/mp4" />
+          </video>
+        )}
         {/* Gradient overlay */}
         <div
           className="absolute inset-0 z-bg"
@@ -338,6 +367,7 @@ export default function Home() {
         <div className="relative z-content flex flex-col items-center gap-space-4">
           {/* Welcome Text with Typewriter */}
           <motion.h1
+            aria-label={t('home.welcome')}
             className="font-jetbrains text-h2 text-[#E8EDF2] whitespace-pre-wrap"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -348,7 +378,7 @@ export default function Home() {
               <span className="text-[#00FF88]">Operative</span>
             )}
             {!typewriterDone && (
-              <span className="inline-block w-[2px] h-[1.2em] bg-[#00E5FF] ml-1 animate-pulse align-middle" />
+              <span aria-hidden="true" className="inline-block w-[2px] h-[1.2em] bg-[#00E5FF] ml-1 animate-pulse motion-reduce:animate-none align-middle" />
             )}
           </motion.h1>
 
@@ -429,7 +459,7 @@ export default function Home() {
             {[
               { label: t('home.stats.missionsCompleted'), value: String(missionsCompleted), icon: Trophy, color: '#00FF88' },
               { label: t('home.stats.commandsLearned'), value: String(commandsLearned), icon: Terminal, color: '#00E5FF' },
-              { label: t('home.stats.currentStreak'), value: `${currentStreak} days`, icon: TrendingUp, color: '#FFD166' },
+              { label: t('home.stats.currentStreak'), value: t('home.streakDays', { count: currentStreak }), icon: TrendingUp, color: '#FFD166' },
             ].map((stat, i) => (
               <motion.div
                 key={stat.label}
@@ -462,7 +492,7 @@ export default function Home() {
             </div>
             <Link
               to="/missions"
-              className="font-jetbrains text-body-sm text-[#00E5FF] hover:text-[#00FF88] transition-colors duration-fast flex items-center gap-space-1"
+              className="-mr-2 flex min-h-11 items-center gap-space-1 px-2 font-jetbrains text-body-sm text-[#00E5FF] transition-colors duration-fast hover:text-[#00FF88]"
             >
               {t('home.allMissions')}
               <ChevronRight size={14} />
@@ -474,9 +504,14 @@ export default function Home() {
               { title: isZh ? '霓虹商场渗透' : 'NeonMall Infiltration', type: t('home.progress.available'), progress: 0, color: '#00E5FF' },
               { title: isZh ? '日志猎人' : 'Log Hunter', type: t('home.progress.available'), progress: 0, color: '#FFD166' },
             ].map((mission, i) => (
-              <motion.div
+              <Link
                 key={mission.title}
-                className="relative rounded-radius-md p-space-4 cursor-pointer"
+                to="/missions"
+                className="rounded-radius-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+                aria-label={`${t('home.continue')}: ${mission.title}`}
+              >
+              <motion.article
+                className="relative rounded-radius-md p-space-4"
                 style={{
                   backgroundColor: '#0F1419',
                   border: '1px solid #1E2D3D',
@@ -515,7 +550,8 @@ export default function Home() {
                     <span className="font-jetbrains text-code-sm text-[#4A6072] mt-space-0.5 block">{mission.progress}% {t('common.complete')}</span>
                   </div>
                 )}
-              </motion.div>
+              </motion.article>
+              </Link>
             ))}
           </div>
         </div>
@@ -537,7 +573,7 @@ export default function Home() {
             </div>
             <Link
               to="/academy"
-              className="font-jetbrains text-body-sm text-[#00E5FF] hover:text-[#00FF88] transition-colors duration-fast flex items-center gap-space-1"
+              className="-mr-2 flex min-h-11 items-center gap-space-1 px-2 font-jetbrains text-body-sm text-[#00E5FF] transition-colors duration-fast hover:text-[#00FF88]"
             >
               {t('home.viewAll')}
               <ChevronRight size={14} />
@@ -549,7 +585,7 @@ export default function Home() {
             {trainingCards.map((card, i) => (
               <motion.div
                 key={card.title}
-                className="relative rounded-radius-md p-space-5 transition-all duration-fast cursor-pointer"
+                className="relative rounded-radius-md p-space-5 transition-all duration-fast"
                 style={{
                   backgroundColor: '#0F1419',
                   border: '1px solid #1E2D3D',
@@ -574,13 +610,14 @@ export default function Home() {
                 {/* Header */}
                 <div className="flex items-center justify-between mb-space-2">
                   <span className="font-jetbrains text-badge uppercase text-[#4A6072]">{card.type}</span>
-                  <div className="flex items-center gap-space-0.5">
+                  <div className="flex items-center gap-space-0.5" aria-label={t('missionBoard.difficultyStars', { count: card.difficulty })}>
                     {Array.from({ length: 5 }, (_, j) => (
                       <Star
                         key={j}
                         size={12}
                         fill={j < card.difficulty ? '#FFD166' : 'none'}
                         stroke={j < card.difficulty ? '#FFD166' : '#4A6072'}
+                        aria-hidden="true"
                       />
                     ))}
                   </div>
@@ -613,7 +650,15 @@ export default function Home() {
                 {/* Progress bar */}
                 {card.progress !== undefined && (
                   <div className="mb-space-3">
-                    <div className="h-1 w-full rounded-full" style={{ backgroundColor: '#1A2332' }}>
+                    <div
+                      className="h-1 w-full rounded-full"
+                      style={{ backgroundColor: '#1A2332' }}
+                      role="progressbar"
+                      aria-label={card.title}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={card.progress}
+                    >
                       <div
                         className="h-full rounded-full transition-all duration-slow"
                         style={{ width: `${card.progress}%`, backgroundColor: '#00FF88' }}
@@ -628,7 +673,7 @@ export default function Home() {
                 {/* CTA */}
                 <Link
                   to="/academy"
-                  className="inline-flex items-center gap-space-1 font-jetbrains text-body-sm font-semibold transition-colors duration-fast"
+                  className="-ml-2 inline-flex min-h-11 items-center gap-space-1 px-2 font-jetbrains text-body-sm font-semibold transition-colors duration-fast"
                   style={{ color: '#00FF88' }}
                 >
                   {card.cta}
@@ -753,7 +798,7 @@ export default function Home() {
                       <span className="font-jetbrains text-h4 text-[#E8EDF2]">{skill.name}</span>
                       <Link
                         to="/academy"
-                        className="font-jetbrains text-body-sm text-[#00E5FF] hover:text-[#00FF88] transition-colors duration-fast flex items-center gap-space-0.5"
+                        className="-mr-2 flex min-h-11 items-center gap-space-0.5 px-2 font-jetbrains text-body-sm text-[#00E5FF] transition-colors duration-fast hover:text-[#00FF88]"
                       >
                         {t('home.train')}
                         <ChevronRight size={12} />
@@ -820,10 +865,10 @@ export default function Home() {
                 {/* Center: Title + Description */}
                 <div className="flex-1 min-w-[200px]">
                   <h3 className="font-jetbrains text-h3 text-[#E8EDF2] mb-space-1">
-                    {dailyIncident.title}
+                    {t('home.dailyIncidentTitle')}
                   </h3>
                   <p className="font-inter text-body text-[#8B9EB0]">
-                    {dailyIncident.description}
+                    {t('home.dailyIncidentDesc')}
                   </p>
                 </div>
 
@@ -855,7 +900,7 @@ export default function Home() {
                 {/* CTA */}
                 <Link
                   to="/missions"
-                  className="px-space-4 py-space-2 rounded-radius-sm font-jetbrains text-body font-semibold transition-all duration-fast whitespace-nowrap"
+                  className="inline-flex min-h-11 items-center whitespace-nowrap rounded-radius-sm px-space-4 py-space-2 font-jetbrains text-body font-semibold transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
                   style={{
                     backgroundColor: 'rgba(0,255,136,0.15)',
                     border: '1px solid #00FF88',
@@ -923,7 +968,7 @@ export default function Home() {
 
               <Link
                 to="/profile"
-                className="inline-flex items-center gap-space-1 font-jetbrains text-body-sm text-[#00E5FF] hover:text-[#00FF88] transition-colors duration-fast mt-space-3"
+                className="-ml-2 mt-space-3 inline-flex min-h-11 items-center gap-space-1 px-2 font-jetbrains text-body-sm text-[#00E5FF] transition-colors duration-fast hover:text-[#00FF88]"
               >
                 {t('home.viewFullHistory')}
                 <ChevronRight size={14} />

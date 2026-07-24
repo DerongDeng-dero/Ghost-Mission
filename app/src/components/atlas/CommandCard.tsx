@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useId } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronDown,
@@ -11,6 +11,7 @@ import {
   Terminal,
 } from 'lucide-react';
 import type { CommandData } from '@/data/commands';
+import { useTranslation } from 'react-i18next';
 
 interface CommandCardProps {
   command: CommandData;
@@ -43,9 +44,11 @@ const domainColorMap: Record<string, string> = {
 };
 
 export default function CommandCard({ command, isLearned, index }: CommandCardProps) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const contentId = useId();
 
   const riskColor = riskColorMap[command.riskLevel] || '#00FF88';
   const domainColor = domainColorMap[command.domain] || '#8B9EB0';
@@ -69,7 +72,7 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
   };
 
   return (
-    <motion.div
+    <motion.article
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
@@ -77,27 +80,14 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
         delay: Math.min(index * 0.05, 0.5),
         ease: [0.16, 1, 0.3, 1] as [number, number, number, number],
       }}
+      whileHover={{ y: -2 }}
       className="relative group"
       style={{
         backgroundColor: '#0F1419',
         border: `1px solid ${expanded ? '#2A4365' : '#1E2D3D'}`,
         borderRadius: 'var(--radius-md)',
         borderLeft: isLearned && !expanded ? `3px solid ${riskColor}` : undefined,
-        transition: 'border-color 150ms, transform 150ms, box-shadow 150ms',
-      }}
-      onMouseEnter={(e) => {
-        const el = e.currentTarget;
-        el.style.borderColor = '#2A4365';
-        el.style.transform = 'translateY(-2px)';
-        el.style.boxShadow = '0 8px 32px rgba(0,0,0,0.5)';
-      }}
-      onMouseLeave={(e) => {
-        const el = e.currentTarget;
-        if (!expanded) {
-          el.style.borderColor = '#1E2D3D';
-        }
-        el.style.transform = 'translateY(0)';
-        el.style.boxShadow = '0 4px 24px rgba(0,0,0,0.4)';
+        transition: 'border-color 150ms, box-shadow 150ms',
       }}
     >
       {/* Risk stripe */}
@@ -108,7 +98,10 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
 
       {/* Card Header - Always visible */}
       <button
+        type="button"
         onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+        aria-controls={contentId}
         className="w-full text-left p-4 pt-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0E14] rounded-radius-md"
       >
         <div className="flex items-start justify-between gap-3">
@@ -125,7 +118,7 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
                   border: `1px solid ${domainColor}30`,
                 }}
               >
-                {command.domain}
+                {t(`commandAtlas.domains.${command.domain.toLowerCase()}`, { defaultValue: command.domain })}
               </span>
               {isLearned && (
                 <span
@@ -136,8 +129,8 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
                     border: '1px solid rgba(0, 255, 136, 0.2)',
                   }}
                 >
-                  <Check size={10} />
-                  Learned
+                  <Check size={10} aria-hidden="true" />
+                  {t('commandAtlas.learned')}
                 </span>
               )}
             </div>
@@ -157,10 +150,10 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
                 }}
               />
               <span
-                className="font-jetbrains text-body-sm hidden sm:inline capitalize"
+                className="sr-only font-jetbrains text-body-sm capitalize sm:not-sr-only"
                 style={{ color: riskColor }}
               >
-                {command.riskLevel}
+                {t(`commandAtlas.riskLevels.${command.riskLevel}`)}
               </span>
             </div>
 
@@ -186,7 +179,7 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
 
         {/* Flags preview (2-col) */}
         {!expanded && command.commonFlags.length > 0 && (
-          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1">
+          <div className="mt-3 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
             {command.commonFlags.slice(0, 4).map((f) => (
               <div key={f.flag} className="flex items-start gap-2 min-w-0">
                 <code
@@ -212,6 +205,7 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
       <AnimatePresence>
         {expanded && (
           <motion.div
+            id={contentId}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -219,12 +213,15 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
             className="overflow-hidden"
           >
             <div ref={contentRef} className="px-4 pb-4 space-y-4 border-t border-[#1E2D3D] pt-4">
+              <span className="sr-only" role="status" aria-live="polite">
+                {copiedId ? t('common.copied') : ''}
+              </span>
               {/* Full flags grid */}
               {command.commonFlags.length > 0 && (
                 <div>
                   <h4 className="font-jetbrains text-body-sm text-[#4A6072] uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Flag size={12} />
-                    Common Flags
+                    {t('commandAtlas.commonFlags')}
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {command.commonFlags.map((f) => (
@@ -257,7 +254,7 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
                 <div>
                   <h4 className="font-jetbrains text-body-sm text-[#4A6072] uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Terminal size={12} />
-                    Examples
+                    {t('commandAtlas.examples')}
                   </h4>
                   <div className="space-y-2">
                     {command.examples.map((ex, i) => (
@@ -271,11 +268,13 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
                             $ {ex.command}
                           </code>
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleCopy(ex.command, `ex-${command.id}-${i}`);
                             }}
-                            className="flex-shrink-0 p-1 rounded-sm transition-colors"
+                            aria-label={t('commandAtlas.copyExample', { command: ex.command })}
+                            className="flex min-h-11 min-w-11 flex-shrink-0 items-center justify-center rounded-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
                             style={{ color: copiedId === `ex-${command.id}-${i}` ? '#00FF88' : '#4A6072' }}
                           >
                             {copiedId === `ex-${command.id}-${i}` ? (
@@ -299,7 +298,7 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
                 <div>
                   <h4 className="font-jetbrains text-body-sm uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: '#FF4757' }}>
                     <AlertTriangle size={12} />
-                    Anti-Patterns
+                    {t('commandAtlas.antiPatterns')}
                   </h4>
                   <div className="space-y-2">
                     {command.antiPatterns.map((ap, i) => (
@@ -328,7 +327,7 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
                 <div>
                   <h4 className="font-jetbrains text-body-sm text-[#00FF88] uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Shield size={12} />
-                    Safe Patterns
+                    {t('commandAtlas.safePatterns')}
                   </h4>
                   <div className="space-y-1.5">
                     {command.safePatterns.map((sp, i) => (
@@ -354,7 +353,7 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
                 <div>
                   <h4 className="font-jetbrains text-body-sm text-[#4A6072] uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <BookOpen size={12} />
-                    Related Commands
+                    {t('commandAtlas.relatedCommands')}
                   </h4>
                   <div className="flex flex-wrap gap-2">
                     {command.related.map((rel) => (
@@ -379,7 +378,7 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
                 <div>
                   <h4 className="font-jetbrains text-body-sm text-[#4A6072] uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <BookOpen size={12} />
-                    Used in Missions
+                    {t('commandAtlas.usedInMissions')}
                   </h4>
                   <div className="flex flex-wrap gap-2">
                     {command.missions.map((m) => (
@@ -402,6 +401,6 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </motion.article>
   );
 }

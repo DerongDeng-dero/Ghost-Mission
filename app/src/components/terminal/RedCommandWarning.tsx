@@ -1,13 +1,15 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface RedCommandWarningProps {
   isActive: boolean
   command: string
 }
 
-export default function RedCommandWarning({ isActive, command: _command }: RedCommandWarningProps) {
-  void _command;
+export default function RedCommandWarning({ isActive, command }: RedCommandWarningProps) {
+  const { t } = useTranslation()
+  const warning = `${t('terminal.redWarning')} ${command}`
   return (
     <AnimatePresence>
       {isActive && (
@@ -31,6 +33,8 @@ export default function RedCommandWarning({ isActive, command: _command }: RedCo
             transition={{ duration: 3.6, times: [0, 0.14, 0.28, 0.42, 0.56, 0.7, 1] }}
           />
           <motion.div
+            role="alert"
+            aria-label={warning}
             className="absolute top-2 right-2 z-[46] pointer-events-none flex items-center gap-2 px-3 py-1.5 rounded-md"
             style={{
               backgroundColor: 'rgba(255, 71, 87, 0.15)',
@@ -43,7 +47,7 @@ export default function RedCommandWarning({ isActive, command: _command }: RedCo
           >
             <AlertTriangle size={14} style={{ color: 'var(--status-danger)' }} />
             <span className="font-jetbrains text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--status-danger)' }}>
-              Destructive Command
+              {warning}
             </span>
           </motion.div>
         </>

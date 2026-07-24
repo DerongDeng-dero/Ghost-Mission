@@ -11,7 +11,12 @@
     "atlas": "命令图谱",
     "profile": "档案",
     "settings": "设置",
-    "terminal": "终端"
+    "terminal": "终端",
+    "mainNavigation": "主导航",
+    "openMenu": "打开导航菜单",
+    "closeMenu": "关闭导航菜单",
+    "connectionStatus": "连接状态：{{status}}",
+    "rankProfile": "打开档案，等级 {{rank}}"
   },
   "rank": {
     "recruit": "新兵",
@@ -66,7 +71,10 @@
     "dailyIncidentDesc": "一个幽灵进程占用了3000端口。找到并终止它。",
     "difficultyEasy": "简单",
     "difficultyMedium": "中等",
-    "difficultyHard": "困难"
+    "difficultyHard": "困难",
+    "streakDays": "{{count}} 天",
+    "noSkillData": "暂无技能数据。",
+    "skillRadarLabel": "技能掌握雷达图：{{skills}}"
   },
   "missionBoard": {
     "title": "任务板",
@@ -84,7 +92,28 @@
       "difficulty": "难度",
       "status": "状态",
       "sortBy": "排序方式",
-      "search": "搜索任务..."
+      "search": "搜索任务...",
+      "mode": "任务模式",
+      "available": "可开始",
+      "inProgress": "进行中",
+      "completed": "已完成",
+      "skills": "技能",
+      "risk": "风险等级",
+      "difficultyLevel": "难度 {{level}}",
+      "riskLevel": "风险等级 {{level}}",
+      "searchLabel": "搜索任务",
+      "clearSearch": "清除任务搜索",
+      "sort": {
+        "recommended": "推荐",
+        "difficulty": "难度",
+        "newest": "最新",
+        "az": "A–Z"
+      },
+      "activeMode": "模式：{{value}}",
+      "activeStatus": "状态：{{value}}",
+      "activeDifficulty": "难度：{{value}}",
+      "activeRisk": "风险：{{value}}",
+      "activeSearch": "搜索：{{value}}"
     },
     "enter": "进入",
     "replay": "重玩",
@@ -103,7 +132,9 @@
     "filteredResults": "筛选结果",
     "clearFilters": "清除筛选",
     "noMissionsMatch": "没有任务匹配当前筛选条件。",
-    "continue": "继续"
+    "continue": "继续",
+    "riskLevel": "风险等级 {{level}}",
+    "missionProgress": "{{title}} 的任务进度"
   },
   "academy": {
     "title": "幽灵学院",
@@ -125,7 +156,9 @@
       "captainCat": "猫队长",
       "symlinkWraith": "符号链接幽灵",
       "diskHydra": "磁盘九头蛇",
-      "portMimic": "端口模仿者"
+      "portMimic": "端口模仿者",
+      "mergeConflictHydra": "合并冲突九头蛇",
+      "backgroundJobGhost": "后台作业幽灵"
     },
     "xp": "经验值",
     "drills": "演练",
@@ -135,7 +168,62 @@
     "totalXP": "总经验值",
     "chaptersDone": "已完成章节",
     "trainingTime": "训练时长",
-    "trainingTimeValue": "4小时32分"
+    "trainingTimeValue": "4小时32分",
+    "completePreviousDrills": "请先完成前置演练",
+    "boss": "首领",
+    "riskLevel": "风险：{{level}}",
+    "replay": "重玩",
+    "start": "开始",
+    "scoreComplete": "完成度 {{score}}%",
+    "chapterProgressLabel": "第 {{number}} 章，{{title}}：已完成 {{completed}}/{{total}} 个演练",
+    "scrollChaptersLeft": "向左滚动章节",
+    "scrollChaptersRight": "向右滚动章节",
+    "chapterNavigation": "章节导航",
+    "chapterBarLabel": "{{number}} 的进度",
+    "drillsProgress": "已完成 {{completed}}/{{total}} 个演练",
+    "drillSequence": "演练序列",
+    "drillStatus": {
+      "available": "可开始",
+      "in-progress": "进行中",
+      "completed": "已完成",
+      "locked": "已锁定"
+    },
+    "knowYourEnemies": "了解你的敌人",
+    "enemyGallerySubtitle": "这些习惯和陷阱甚至会困住经验丰富的操作员",
+    "portraitUnavailable": "{{name}} 的肖像暂不可用",
+    "enemyDescriptions": {
+      "pagerPhantom": "将操作员困在滚动的文本页面中。一旦进入，很少有人记得按 q 键。",
+      "vimTrapMonk": "一个沉默的守护者，将你锁定在各种模式中。许多人在尝试退出时倒下了。",
+      "resetDemon": "以丢失的提交和强制推送为食。它把你的 Git 历史变成一片荒地。",
+      "mergeConflictHydra": "每当你解决一个冲突，就会有另外两个出现在它的位置。",
+      "backgroundJobGhost": "在黑暗中消耗资源的静默进程。你永远看不到它们的到来。",
+      "captainCat": "在文件系统中散布随机名称的文件。混乱的猫科动物形态。",
+      "symlinkWraith": "创建通向虚无的幻影符号链接——或者通向灾难。",
+      "diskHydra": "九个吞噬磁盘空间的头。砍掉一个，两个重新长出来。",
+      "portMimic": "隐藏在随机非标准端口上。移动、闪避、让你的连接超时。"
+    },
+    "enemyChapters": {
+      "pagerPhantom": "第 04 章：分页器", "vimTrapMonk": "第 05 章：Vim 神庙", "resetDemon": "第 06 章：Git 迷宫", "mergeConflictHydra": "第 06 章：Git 迷宫", "backgroundJobGhost": "第 15 章：幽灵协议", "captainCat": "第 10 章：Shell 精通", "symlinkWraith": "第 15 章：幽灵协议", "diskHydra": "第 11 章：监控器", "portMimic": "第 12 章：红区"
+    },
+    "chapterDetails": {
+      "ch01": { "subtitle": "帮助与基础", "description": "你的旅程从这里开始。学会寻求帮助、在终端中导航，理解命令行的基础概念。" },
+      "ch02": { "subtitle": "ls, cd, pwd", "description": "文件系统是你的战场。学会查看、移动和理解目录结构。" },
+      "ch03": { "subtitle": "cat, cp, mv, rm", "description": "创建、复制、移动和删除文件。能力越大，责任越大。" },
+      "ch04": { "subtitle": "less, more, head, tail", "description": "不是所有文件都能一次性读完。学会翻页浏览内容，查看开头和结尾，永远不要被困住。" },
+      "ch05": { "subtitle": "编辑与生存", "description": "终端世界最令人畏惧的编辑器。进入神庙，学会各种模式，带着理智逃出来。" },
+      "ch06": { "subtitle": "版本控制", "description": "Git 是一个由分支、提交和合并组成的迷宫。在不丢失代码的情况下穿越迷宫。" },
+      "ch07": { "subtitle": "ps, top, kill", "description": "每个进程都会留下痕迹。学会追踪它们、监控它们，必要时终止它们。" },
+      "ch08": { "subtitle": "ping, curl, ssh", "description": "网络是一片黑暗的森林。学会探测它、连接它，在其中无声无息地穿行。" },
+      "ch09": { "subtitle": "容器", "description": "容器是部署的未来。学会构建、运行和管理它们。" },
+      "ch10": { "subtitle": "脚本与变量", "description": "Shell 不仅仅是一个命令解释器，它是一门编程语言。掌握变量、循环和条件语句。" },
+      "ch11": { "subtitle": "df, du, free", "description": "系统资源是有限的。监控磁盘使用、内存，了解系统何时处于压力之下。" },
+      "ch12": { "subtitle": "高级操作", "description": "危险地带。高级文件操作、权限管理和系统级命令。" },
+      "ch13": { "subtitle": "权限噩梦", "description": "777 博士是最危险的敌人。他们把所有权限设为 777。学会反击并恢复安全。" },
+      "ch14": { "subtitle": "逃离被困程序", "description": "每个操作员有时都会被困住。学会每个程序的通用退出序列。" },
+      "ch15": { "subtitle": "高级组合", "description": "将所有技能组合成复杂操作。幽灵操作员的真正考验是无缝地组合工具。" },
+      "ch16": { "subtitle": "最终考验", "description": "你所学到的一切。每项技能、每次演练、每个敌人——准备最终考试。" },
+      "ch17": { "subtitle": "tmux 精通", "description": "分割你的终端，管理会话，成为真正的多任务操作员。" }
+    }
   },
   "terminal": {
     "title": "终端驾驶舱",
@@ -185,9 +273,20 @@
       "step3": "完成目标来赚取经验值并提升等级。",
       "step4": "尝试不使用提示完成以获得完美的S级评价！",
       "startButton": "开始训练",
-      "dismissKey": "按任意键关闭"
+      "dismissKey": "按 Esc 关闭",
+      "close": "关闭终端教程",
+      "cheatSheet": "常用命令速查",
+      "commands": {
+        "ls": "列出文件",
+        "cd": "切换目录",
+        "pwd": "显示当前路径",
+        "cat": "读取文件",
+        "echo": "输出文本",
+        "whoami": "显示当前用户"
+      }
     },
     "helpTip": {
+      "input": "在这里输入命令",
       "text": "提示：使用Tab键自动补全命令，用上方向键查看历史。"
     }
   },
@@ -196,6 +295,7 @@
     "subtitle": "跨 {{domains}} 个领域的战术命令参考",
     "search": "搜索命令...",
     "domains": {
+      "all": "全部",
       "file": "文件",
       "text": "文本",
       "process": "进程",
@@ -236,7 +336,33 @@
     "results": "{{count}} 个结果",
     "resultsPlural": "{{count}} 个结果",
     "noCommandsMatch": "没有命令匹配你的搜索。",
-    "clearFilters": "清除筛选"
+    "clearFilters": "清除筛选",
+    "nodesLinks": "{{nodes}} 个节点 · {{links}} 条连接",
+    "expand": "展开图谱",
+    "collapse": "收起图谱",
+    "related": "相关命令",
+    "viewDetails": "查看命令详情",
+    "instructions": "拖动旋转 · 滚动缩放 · 选择节点查看详情",
+    "closeDetails": "关闭命令详情",
+    "graphLabel": "交互式命令关系图",
+    "domainFilterLabel": "命令领域",
+    "riskFilterLabel": "风险",
+    "typeFilterLabel": "类型",
+    "viewMode": "视图模式",
+    "listView": "列表",
+    "graphView": "图谱",
+    "searchLabel": "搜索命令、参数和模式",
+    "clearSearch": "清除命令搜索",
+    "noCommandsFound": "未找到命令",
+    "tryDifferentSearch": "请尝试其他关键词或清除筛选条件。",
+    "learned": "已学习",
+    "commonFlags": "常用参数",
+    "examples": "示例",
+    "antiPatterns": "反模式",
+    "safePatterns": "安全模式",
+    "relatedCommands": "相关命令",
+    "usedInMissions": "用于任务",
+    "copyExample": "复制示例命令：{{command}}"
   },
   "profile": {
     "title": "特工档案",
@@ -292,7 +418,19 @@
       "ghost": "幽灵"
     },
     "pass": "通过",
-    "fail": "失败"
+    "fail": "失败",
+    "activityHeatmapLabel": "365 天命令活动，共使用 {{count}} 条命令",
+    "less": "较少",
+    "more": "较多",
+    "noSkillData": "暂无技能数据。",
+    "skillRadarLabel": "技能雷达图：{{skills}}",
+    "skillMastery": "技能掌握",
+    "overall": "综合",
+    "missionsCleared": "已完成任务",
+    "commandsLearned": "已学命令",
+    "dayStreak": "连续天数",
+    "levelNumber": "等级 {{level}}",
+    "xpProgress": "距离下一等级的经验进度"
   },
   "debrief": {
     "title": "任务简报",
@@ -407,6 +545,7 @@
     "displayName": "显示名称",
     "exportProgress": "导出进度",
     "signOut": "退出登录",
+    "signOutUnavailable": "本地演示暂不支持退出登录",
     "fontSize": "字体大小",
     "fontFamily": "字体",
     "cursorStyle": "光标样式",
@@ -420,7 +559,34 @@
     "tagline": "终端幽灵行动",
     "builtWith": "使用 React + TypeScript + Vite 构建",
     "educational": "教育目的",
-    "version": "版本"
+    "version": "版本",
+    "sectionNavigation": "设置分区",
+    "themes": {
+      "dark": "标准",
+      "high-contrast": "高对比度",
+      "warm": "护眼"
+    }
+  },
+  "guide": {
+    "showTip": "显示幽灵提示",
+    "hideMessage": "隐藏幽灵消息",
+    "messages": {
+      "welcome": "欢迎来到终端幽灵行动！我是你的 AI 向导 Ghost。打开任务板，开始第一次行动。",
+      "missions": "选择一个可开始的任务。每个任务都会还原一个实用的终端场景。",
+      "academy": "学院课程从基础逐步进阶。完成训练，掌握 Shell。",
+      "atlas": "命令图谱展示命令之间的关系。切换到图谱视图，可以用 3D 方式探索。",
+      "terminal": "在终端中输入命令来完成目标。需要帮助时，请使用提示控件。"
+    },
+    "tips": {
+      "autocomplete": "提示：按 Tab 键可以自动补全命令。",
+      "interrupt": "提示：Ctrl+C 可以中断当前进程。",
+      "history": "提示：输入 history 查看执行过的命令。",
+      "previousCommand": "提示：按向上方向键可以复用上一条命令。",
+      "previousDirectory": "提示：cd - 可以快速切换到上一个目录。",
+      "hiddenFiles": "提示：ls -la 会显示隐藏文件。",
+      "recursiveSearch": "提示：grep -r 可以递归搜索目录。",
+      "scoreCost": "提示：使用提示会扣分，先尝试自行排查。"
+    }
   },
   "common": {
     "loading": "加载中...",
@@ -436,12 +602,19 @@
     "copy": "复制",
     "copied": "已复制！",
     "start": "开始",
-    "complete": "完成"
+    "complete": "完成",
+    "skipToContent": "跳到主要内容",
+    "unavailable": "此演示版本暂不可用",
+    "language": "语言",
+    "switchToEnglish": "切换为英文",
+    "switchToChinese": "切换为中文",
+    "removeFilter": "移除筛选条件 {{label}}"
   },
   "footer": {
     "documentation": "文档",
     "securityPolicy": "安全策略",
     "reportIssue": "报告问题",
-    "tagline": "终端幽灵行动 — 每一次潜入都是训练，每一次退出都是掌控。"
+    "tagline": "终端幽灵行动 — 每一次潜入都是训练，每一次退出都是掌控。",
+    "plannedResources": "计划中的资源"
   }
 }

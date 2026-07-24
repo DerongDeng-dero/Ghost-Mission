@@ -161,21 +161,23 @@ export default function Profile() {
 
       {/* Tab Navigation */}
       <div
-        className="sticky top-[52px] z-elevated w-full border-b"
+        className="sticky top-[52px] z-elevated w-full overflow-x-auto overscroll-x-contain border-b"
         style={{
           backgroundColor: '#0A0E14',
           borderColor: '#1E2D3D',
         }}
       >
-        <div className="max-w-[1200px] mx-auto px-space-4 flex items-center">
+        <div className="mx-auto flex w-max min-w-full max-w-[1200px] items-center px-space-4">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
+                type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className="relative flex items-center gap-2 px-6 py-3 font-jetbrains text-nav uppercase transition-colors duration-fast"
+                aria-pressed={isActive}
+                className="relative flex min-h-11 shrink-0 items-center gap-2 px-4 py-3 font-jetbrains text-nav uppercase transition-colors duration-fast sm:px-6"
                 style={{
                   color: isActive ? '#00E5FF' : '#8B9EB0',
                 }}

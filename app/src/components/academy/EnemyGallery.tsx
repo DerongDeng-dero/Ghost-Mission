@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { Skull } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 // EnemyGallery - enemy portrait gallery with skill tags
 import type { Enemy } from '@/data/academy'
 
@@ -26,21 +29,70 @@ const skillColorMap: Record<string, string> = {
   curl: '#00FF88',
 }
 
+const enemyKeyById: Record<string, string> = {
+  e001: 'pagerPhantom',
+  e002: 'vimTrapMonk',
+  e003: 'resetDemon',
+  e004: 'mergeConflictHydra',
+  e005: 'backgroundJobGhost',
+  e006: 'captainCat',
+  e007: 'symlinkWraith',
+  e008: 'diskHydra',
+  e009: 'portMimic',
+}
+
+function EnemyPortrait({ src, name, color }: { src: string; name: string; color: string }) {
+  const [failed, setFailed] = useState(false)
+  const { t } = useTranslation()
+
+  return (
+    <div
+      className="w-24 h-24 rounded-full flex items-center justify-center mb-space-3 border-2 overflow-hidden"
+      style={{ borderColor: `${color}40`, backgroundColor: `${color}10` }}
+    >
+      {failed ? (
+        <div role="img" aria-label={t('academy.portraitUnavailable', { name })} style={{ color }}>
+          <Skull size={32} aria-hidden="true" />
+        </div>
+      ) : (
+        <img
+          src={src}
+          alt={name}
+          width={96}
+          height={96}
+          loading="lazy"
+          className="w-full h-full object-cover"
+          style={{ filter: `drop-shadow(0 0 8px ${color}30)` }}
+          onError={() => setFailed(true)}
+        />
+      )}
+    </div>
+  )
+}
+
 export default function EnemyGallery({ enemies }: EnemyGalleryProps) {
+  const { t } = useTranslation()
   return (
     <div className="w-full py-space-8">
       {/* Section Header */}
       <div className="mb-space-6">
-        <h3 className="font-jetbrains text-h3 text-[#E8EDF2]">Know Your Enemies</h3>
+        <h3 className="font-jetbrains text-h3 text-[#E8EDF2]">{t('academy.knowYourEnemies')}</h3>
         <p className="font-inter text-body text-[#8B9EB0] mt-1">
-          These are the habits and traps that catch even experienced operators
+          {t('academy.enemyGallerySubtitle')}
         </p>
       </div>
 
       {/* Enemy Cards - Horizontal Scroll */}
-      <div className="flex gap-4 overflow-x-auto pb-space-2 scrollbar-thin">
-        {enemies.map((enemy, index) => (
-          <motion.div
+      <div
+        className="flex gap-4 overflow-x-auto pb-space-2 scrollbar-thin"
+        tabIndex={0}
+        aria-label={t('academy.enemies')}
+      >
+        {enemies.map((enemy, index) => {
+          const enemyKey = enemyKeyById[enemy.id]
+          const name = t(`academy.enemyNames.${enemyKey}`, { defaultValue: enemy.name })
+          return (
+          <motion.article
             key={enemy.id}
             initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
@@ -50,7 +102,7 @@ export default function EnemyGallery({ enemies }: EnemyGalleryProps) {
               ease: [0.4, 0, 0.2, 1] as [number, number, number, number],
             }}
             whileHover={{ y: -4, transition: { duration: 0.15 } }}
-            className="flex-shrink-0 flex flex-col items-center p-space-5 rounded-radius-md border cursor-pointer transition-shadow duration-fast"
+            className="flex-shrink-0 flex flex-col items-center p-space-5 rounded-radius-md border transition-shadow duration-fast"
             style={{
               backgroundColor: '#0F1419',
               borderColor: '#1E2D3D',
@@ -65,47 +117,19 @@ export default function EnemyGallery({ enemies }: EnemyGalleryProps) {
               e.currentTarget.style.boxShadow = 'none'
             }}
           >
-            {/* Portrait Placeholder */}
-            <div
-              className="w-24 h-24 rounded-full flex items-center justify-center mb-space-3 border-2 overflow-hidden"
-              style={{
-                borderColor: `${enemy.color}40`,
-                backgroundColor: `${enemy.color}10`,
-              }}
-            >
-              <img
-                src={enemy.portrait}
-                alt={enemy.name}
-                className="w-full h-full object-cover"
-                style={{
-                  filter: `drop-shadow(0 0 8px ${enemy.color}30)`,
-                }}
-                onError={(e) => {
-                  // Fallback if image fails to load
-                  const target = e.currentTarget
-                  target.style.display = 'none'
-                  const parent = target.parentElement
-                  if (parent) {
-                    const skull = document.createElement('div')
-                    skull.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><path d="M8 20v2h8v-2"/><path d="M12 2C7.5 2 4 5.5 4 10c0 2.5 1 4.5 2.5 6L8 20h8l1.5-4c1.5-1.5 2.5-3.5 2.5-6 0-4.5-3.5-8-8-8z"/></svg>'
-                    skull.firstElementChild?.setAttribute('color', enemy.color)
-                    parent.appendChild(skull.firstElementChild as Node)
-                  }
-                }}
-              />
-            </div>
+            <EnemyPortrait src={enemy.portrait} name={name} color={enemy.color} />
 
             {/* Enemy Name */}
             <h4
               className="font-jetbrains text-h4 text-center mb-1"
               style={{ color: enemy.color, fontSize: '0.875rem' }}
             >
-              {enemy.name}
+              {name}
             </h4>
 
             {/* Description */}
             <p className="font-inter text-body-sm text-[#8B9EB0] text-center line-clamp-2 mb-space-2">
-              {enemy.description}
+              {t(`academy.enemyDescriptions.${enemyKey}`, { defaultValue: enemy.description })}
             </p>
 
             {/* Skill Tags */}
@@ -126,10 +150,11 @@ export default function EnemyGallery({ enemies }: EnemyGalleryProps) {
 
             {/* Chapter */}
             <span className="font-fira text-code-sm text-[#4A6072] mt-space-2 text-center">
-              {enemy.chapter}
+              {t(`academy.enemyChapters.${enemyKey}`, { defaultValue: enemy.chapter })}
             </span>
-          </motion.div>
-        ))}
+          </motion.article>
+          )
+        })}
       </div>
     </div>
   )

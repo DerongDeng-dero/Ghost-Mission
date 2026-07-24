@@ -14,16 +14,21 @@ export interface VNode {
 export type PermissionMode = 'read' | 'write' | 'execute'
 
 function parsePermissions(perm: string): { owner: number; group: number; other: number } {
-  const match = perm.match(/^([rwx-]{3})([rwx-]{3})([rwx-]{3})$/)
-  if (!match) return { owner: 0, group: 0, other: 0 }
+  if (!/^[r-][w-][xsS-][r-][w-][xsS-][r-][w-][xtT-]$/.test(perm)) {
+    return { owner: 0, group: 0, other: 0 }
+  }
   const parseTriplet = (s: string) => {
     let v = 0
     if (s[0] === 'r') v |= 4
     if (s[1] === 'w') v |= 2
-    if (s[2] === 'x') v |= 1
+    if (s[2] === 'x' || s[2] === 's' || s[2] === 't') v |= 1
     return v
   }
-  return { owner: parseTriplet(match[1]), group: parseTriplet(match[2]), other: parseTriplet(match[3]) }
+  return {
+    owner: parseTriplet(perm.slice(0, 3)),
+    group: parseTriplet(perm.slice(3, 6)),
+    other: parseTriplet(perm.slice(6, 9)),
+  }
 }
 
 function permToString(n: number): string {
@@ -32,6 +37,25 @@ function permToString(n: number): string {
   s += n & 2 ? 'w' : '-'
   s += n & 1 ? 'x' : '-'
   return s
+}
+
+function formatPermissions(
+  owner: number,
+  group: number,
+  other: number,
+  special: { setuid: boolean; setgid: boolean; sticky: boolean },
+): string {
+  const triplets = [permToString(owner), permToString(group), permToString(other)]
+  if (special.setuid) {
+    triplets[0] = triplets[0].slice(0, 2) + (owner & 1 ? 's' : 'S')
+  }
+  if (special.setgid) {
+    triplets[1] = triplets[1].slice(0, 2) + (group & 1 ? 's' : 'S')
+  }
+  if (special.sticky) {
+    triplets[2] = triplets[2].slice(0, 2) + (other & 1 ? 't' : 'T')
+  }
+  return triplets.join('')
 }
 
 export function createVNode(opts: Partial<VNode> & Pick<VNode, 'name' | 'type'>): VNode {
@@ -66,14 +90,26 @@ export class VFS {
   }
 
   private buildInitialFilesystem() {
-    const dirs = [
-      '/bin', '/etc', '/home', '/home/ghost', '/home/ghost/projects',
-      '/srv', '/srv/neonmall', '/srv/neonmall/logs', '/srv/neonmall/src',
-      '/tmp', '/var', '/var/log', '/var/www',
-      '/usr', '/usr/bin', '/usr/local',
+    const dirs: [string, string, string, string][] = [
+      ['/bin', 'root', 'root', 'rwxr-xr-x'],
+      ['/etc', 'root', 'root', 'rwxr-xr-x'],
+      ['/home', 'root', 'root', 'rwxr-xr-x'],
+      ['/home/ghost', 'ghost', 'ghost', 'rwxr-xr-x'],
+      ['/home/ghost/projects', 'ghost', 'ghost', 'rwxr-xr-x'],
+      ['/srv', 'root', 'root', 'rwxr-xr-x'],
+      ['/srv/neonmall', 'ghost', 'ghost', 'rwxr-xr-x'],
+      ['/srv/neonmall/logs', 'ghost', 'ghost', 'rwxr-xr-x'],
+      ['/srv/neonmall/src', 'ghost', 'ghost', 'rwxr-xr-x'],
+      ['/tmp', 'root', 'root', 'rwxrwxrwt'],
+      ['/var', 'root', 'root', 'rwxr-xr-x'],
+      ['/var/log', 'root', 'root', 'rwxr-xr-x'],
+      ['/var/www', 'www-data', 'www-data', 'rwxr-xr-x'],
+      ['/usr', 'root', 'root', 'rwxr-xr-x'],
+      ['/usr/bin', 'root', 'root', 'rwxr-xr-x'],
+      ['/usr/local', 'root', 'root', 'rwxr-xr-x'],
     ]
-    for (const d of dirs) {
-      this.mkdirp(d, 'root', 'root', 'rwxr-xr-x')
+    for (const [path, owner, group, permissions] of dirs) {
+      this.mkdirp(path, owner, group, permissions)
     }
 
     const files: [string, string, string, string, string][] = [
@@ -129,27 +165,56 @@ export class VFS {
     return result
   }
 
-  private getNode(parts: string[]): { node: VNode | null; parent: VNode | null; name: string } {
+  private getNode(
+    parts: string[],
+    seen = new Set<VNode>(),
+  ): { node: VNode | null; parent: VNode | null; name: string; denied?: boolean } {
     if (parts.length === 0) return { node: this.root, parent: null, name: '' }
+    const name = parts[parts.length - 1]
     let parent: VNode = this.root
-    for (let i = 0; i < parts.length - 1; i++) {
-      const p = parts[i]
-      if (!parent.children) return { node: null, parent: null, name: parts[parts.length - 1] }
-      const next = parent.children.get(p)
-      if (!next || next.type !== 'directory') return { node: null, parent: null, name: parts[parts.length - 1] }
+    for (let i = 0; i < parts.length; i++) {
+      if (parent.type !== 'directory' || !parent.children) {
+        return { node: null, parent: null, name }
+      }
+      if (!this.checkPerm(parent, this.currentUser, 'execute')) {
+        return { node: null, parent: null, name, denied: true }
+      }
+
+      const next = parent.children.get(parts[i])
+      if (!next) {
+        return { node: null, parent: i === parts.length - 1 ? parent : null, name }
+      }
+      if (i === parts.length - 1) return { node: next, parent, name }
+
+      if (next.type === 'symlink') {
+        if (!next.target || seen.has(next)) return { node: null, parent: null, name }
+        seen.add(next)
+        const context = next.target.startsWith('/') ? [] : parts.slice(0, i)
+        const targetParts = next.target.startsWith('/')
+          ? next.target.slice(1).split('/').filter(Boolean)
+          : next.target.split('/').filter(Boolean)
+        return this.getNode(
+          [...this.resolve(targetParts, context), ...parts.slice(i + 1)],
+          seen,
+        )
+      }
+      if (next.type !== 'directory') return { node: null, parent: null, name }
       parent = next
     }
-    const name = parts[parts.length - 1]
-    const node = parent.children?.get(name) ?? null
-    return { node, parent, name }
+    return { node: null, parent: null, name }
   }
 
-  private followSymlink(node: VNode | null): VNode | null {
+  private followSymlink(node: VNode | null, linkParts: string[], seen = new Set<VNode>()): VNode | null {
     if (!node) return null
     if (node.type === 'symlink' && node.target) {
-      const parts = node.target.startsWith('/') ? node.target.slice(1).split('/') : node.target.split('/')
-      const resolved = this.resolve(parts, [])
-      return this.getNode(resolved).node
+      if (seen.has(node)) return null
+      seen.add(node)
+      const context = node.target.startsWith('/') ? [] : linkParts.slice(0, -1)
+      const targetParts = node.target.startsWith('/')
+        ? node.target.slice(1).split('/').filter(Boolean)
+        : node.target.split('/').filter(Boolean)
+      const resolved = this.resolve(targetParts, context)
+      return this.followSymlink(this.getNode(resolved, seen).node, resolved, seen)
     }
     return node
   }
@@ -168,8 +233,22 @@ export class VFS {
     return (perm.other & mask) !== 0
   }
 
+  private canRemove(parent: VNode, node: VNode): boolean {
+    if (!this.checkPerm(parent, this.currentUser, 'write')) return false
+    const sticky = parent.permissions[8] === 't' || parent.permissions[8] === 'T'
+    if (!sticky || this.currentUser === 'root') return true
+    return parent.owner === this.currentUser || node.owner === this.currentUser
+  }
+
   getCurrentUser(): string { return this.currentUser }
   setCurrentUser(u: string) { this.currentUser = u }
+
+  hasPermission(path: string, cwd: string[], mode: PermissionMode): boolean {
+    const parts = this.resolvePath(path, cwd)
+    const { node } = this.getNode(parts)
+    const resolved = this.followSymlink(node, parts)
+    return Boolean(resolved && this.checkPerm(resolved, this.currentUser, mode))
+  }
 
   resolvePath(path: string, cwd: string[]): string[] {
     if (path.startsWith('/')) return this.resolve(path.slice(1).split('/').filter(Boolean), [])
@@ -179,13 +258,14 @@ export class VFS {
   resolveLink(path: string, cwd: string[]): VNode | null {
     const parts = this.resolvePath(path, cwd)
     const { node } = this.getNode(parts)
-    return this.followSymlink(node)
+    return this.followSymlink(node, parts)
   }
 
   readFile(path: string, cwd: string[]): { content: string; error?: string } {
     const parts = this.resolvePath(path, cwd)
-    const { node } = this.getNode(parts)
-    const resolved = this.followSymlink(node)
+    const { node, denied } = this.getNode(parts)
+    if (denied) return { content: '', error: `cat: ${path}: Permission denied` }
+    const resolved = this.followSymlink(node, parts)
     if (!resolved) return { content: '', error: `cat: ${path}: No such file or directory` }
     if (resolved.type === 'directory') return { content: '', error: `cat: ${path}: Is a directory` }
     if (!this.checkPerm(resolved, this.currentUser, 'read')) return { content: '', error: `cat: ${path}: Permission denied` }
@@ -194,16 +274,19 @@ export class VFS {
 
   writeFile(path: string, cwd: string[], content: string, append = false): { error?: string } {
     const parts = this.resolvePath(path, cwd)
-    const { node, parent, name } = this.getNode(parts)
+    const { node, parent, name, denied } = this.getNode(parts)
+    if (denied) return { error: `${path}: Permission denied` }
     if (!parent) return { error: `Cannot write to root` }
-    if (!this.checkPerm(parent, this.currentUser, 'write')) return { error: `mkdir: cannot create directory '${path}': Permission denied` }
     if (node) {
-      if (node.type === 'directory') return { error: `${path}: Is a directory` }
-      if (!this.checkPerm(node, this.currentUser, 'write')) return { error: `${path}: Permission denied` }
-      node.content = append ? (node.content ?? '') + content : content
-      node.size = node.content.length
-      node.mtime = new Date()
+      const resolved = this.followSymlink(node, parts)
+      if (!resolved) return { error: `${path}: No such file or directory` }
+      if (resolved.type === 'directory') return { error: `${path}: Is a directory` }
+      if (!this.checkPerm(resolved, this.currentUser, 'write')) return { error: `${path}: Permission denied` }
+      resolved.content = append ? (resolved.content ?? '') + content : content
+      resolved.size = resolved.content.length
+      resolved.mtime = new Date()
     } else {
+      if (!this.checkPerm(parent, this.currentUser, 'write')) return { error: `${path}: Permission denied` }
       parent.children!.set(name, createVNode({ name, type: 'file', content, owner: this.currentUser, group: this.currentUser }))
     }
     return {}
@@ -215,10 +298,11 @@ export class VFS {
 
   deleteFile(path: string, cwd: string[]): { error?: string } {
     const parts = this.resolvePath(path, cwd)
-    const { node, parent, name } = this.getNode(parts)
+    const { node, parent, name, denied } = this.getNode(parts)
+    if (denied) return { error: `rm: cannot remove '${path}': Permission denied` }
     if (!node) return { error: `rm: cannot remove '${path}': No such file or directory` }
     if (!parent) return { error: `rm: cannot remove '${path}': Is a directory` }
-    if (!this.checkPerm(parent, this.currentUser, 'write')) return { error: `rm: cannot remove '${path}': Permission denied` }
+    if (!this.canRemove(parent, node)) return { error: `rm: cannot remove '${path}': Permission denied` }
     if (node.type === 'directory') return { error: `rm: cannot remove '${path}': Is a directory` }
     parent.children!.delete(name)
     return {}
@@ -226,7 +310,8 @@ export class VFS {
 
   createDirectory(path: string, cwd: string[]): { error?: string } {
     const parts = this.resolvePath(path, cwd)
-    const { node, parent, name } = this.getNode(parts)
+    const { node, parent, name, denied } = this.getNode(parts)
+    if (denied) return { error: `mkdir: cannot create directory '${path}': Permission denied` }
     if (!parent) return { error: `mkdir: cannot create directory '${path}': Permission denied` }
     if (node) return { error: `mkdir: cannot create directory '${path}': File exists` }
     if (!this.checkPerm(parent, this.currentUser, 'write')) return { error: `mkdir: cannot create directory '${path}': Permission denied` }
@@ -236,19 +321,22 @@ export class VFS {
 
   deleteDirectory(path: string, cwd: string[], recursive = false): { error?: string } {
     const parts = this.resolvePath(path, cwd)
-    const { node, parent, name } = this.getNode(parts)
+    const { node, parent, name, denied } = this.getNode(parts)
+    if (denied) return { error: `rm: cannot remove '${path}': Permission denied` }
     if (!node) return { error: `rm: cannot remove '${path}': No such file or directory` }
     if (node.type !== 'directory') return { error: `rm: cannot remove '${path}': Not a directory` }
-    if (!this.checkPerm(parent!, this.currentUser, 'write')) return { error: `rm: cannot remove '${path}': Permission denied` }
+    if (!parent) return { error: `rm: cannot remove '${path}': Permission denied` }
+    if (!this.canRemove(parent, node)) return { error: `rm: cannot remove '${path}': Permission denied` }
     if (!recursive && node.children!.size > 0) return { error: `rm: cannot remove '${path}': Directory not empty` }
-    parent!.children!.delete(name)
+    parent.children!.delete(name)
     return {}
   }
 
   listDirectory(path: string, cwd: string[]): { entries: VNode[]; error?: string } {
     const parts = this.resolvePath(path, cwd)
-    const { node } = this.getNode(parts)
-    const resolved = this.followSymlink(node)
+    const { node, denied } = this.getNode(parts)
+    if (denied) return { entries: [], error: `ls: cannot access '${path}': Permission denied` }
+    const resolved = this.followSymlink(node, parts)
     if (!resolved) return { entries: [], error: `ls: cannot access '${path}': No such file or directory` }
     if (resolved.type === 'file') return { entries: [resolved], error: undefined }
     if (!this.checkPerm(resolved, this.currentUser, 'read')) return { entries: [], error: `ls: cannot open directory '${path}': Permission denied` }
@@ -262,44 +350,104 @@ export class VFS {
 
   stat(path: string, cwd: string[]): { node: VNode | null; error?: string } {
     const parts = this.resolvePath(path, cwd)
-    const { node } = this.getNode(parts)
-    return { node: this.followSymlink(node) }
+    const { node, denied } = this.getNode(parts)
+    if (denied) return { node: null, error: `${path}: Permission denied` }
+    return { node: this.followSymlink(node, parts) }
+  }
+
+  lstat(path: string, cwd: string[]): { node: VNode | null; error?: string } {
+    const parts = this.resolvePath(path, cwd)
+    const { node, denied } = this.getNode(parts)
+    return denied ? { node: null, error: `${path}: Permission denied` } : { node }
   }
 
   chmod(path: string, cwd: string[], mode: string): { error?: string } {
     const parts = this.resolvePath(path, cwd)
-    const { node } = this.getNode(parts)
-    const resolved = this.followSymlink(node)
+    const { node, denied } = this.getNode(parts)
+    if (denied) return { error: `chmod: cannot access '${path}': Permission denied` }
+    const resolved = this.followSymlink(node, parts)
     if (!resolved) return { error: `chmod: cannot access '${path}': No such file or directory` }
-    let perm = resolved.permissions
+    if (this.currentUser !== 'root' && resolved.owner !== this.currentUser) {
+      return { error: `chmod: changing permissions of '${path}': Operation not permitted` }
+    }
+    const current = parsePermissions(resolved.permissions)
+    const special = {
+      setuid: resolved.permissions[2] === 's' || resolved.permissions[2] === 'S',
+      setgid: resolved.permissions[5] === 's' || resolved.permissions[5] === 'S',
+      sticky: resolved.permissions[8] === 't' || resolved.permissions[8] === 'T',
+    }
+    let owner = current.owner
+    let group = current.group
+    let other = current.other
     if (/^[0-7]{3,4}$/.test(mode)) {
       const m = parseInt(mode, 8)
-      const o = (m & 0o700) >> 6
-      const g = (m & 0o070) >> 3
-      const ot = m & 0o007
-      perm = permToString(o) + permToString(g) + permToString(ot)
+      owner = (m & 0o700) >> 6
+      group = (m & 0o070) >> 3
+      other = m & 0o007
+      special.setuid = Boolean(m & 0o4000)
+      special.setgid = Boolean(m & 0o2000)
+      special.sticky = Boolean(m & 0o1000)
     } else {
-      const match = mode.match(/^([ugoa]+)([+-=])([rwx]+)$/)
+      const match = mode.match(/^([ugoa]*)([+-=])([rwxst]+)$/)
       if (!match) return { error: `chmod: invalid mode: '${mode}'` }
+      const who = match[1] || 'a'
+      const operation = match[2]
+      const requested = match[3]
+      let mask = 0
+      if (requested.includes('r')) mask |= 4
+      if (requested.includes('w')) mask |= 2
+      if (requested.includes('x')) mask |= 1
+      const apply = (value: number) => {
+        if (operation === '+') return value | mask
+        if (operation === '-') return value & ~mask
+        return mask
+      }
+      if (who.includes('u') || who.includes('a')) owner = apply(owner)
+      if (who.includes('g') || who.includes('a')) group = apply(group)
+      if (who.includes('o') || who.includes('a')) other = apply(other)
+      if (requested.includes('s')) {
+        if (who.includes('u') || who.includes('a')) special.setuid = operation !== '-'
+        if (who.includes('g') || who.includes('a')) special.setgid = operation !== '-'
+      } else if (operation === '=' && (who.includes('u') || who.includes('a'))) {
+        special.setuid = false
+      }
+      if (operation === '=' && (who.includes('g') || who.includes('a'))) special.setgid = false
+      if (requested.includes('t') && (who.includes('o') || who.includes('a'))) {
+        special.sticky = operation !== '-'
+      } else if (operation === '=' && (who.includes('o') || who.includes('a'))) {
+        special.sticky = false
+      }
     }
-    resolved.permissions = perm
+    resolved.permissions = formatPermissions(owner, group, other, special)
     return {}
   }
 
   chown(path: string, cwd: string[], owner: string): { error?: string } {
     const parts = this.resolvePath(path, cwd)
-    const { node } = this.getNode(parts)
-    const resolved = this.followSymlink(node)
+    const { node, denied } = this.getNode(parts)
+    if (denied) return { error: `chown: cannot access '${path}': Permission denied` }
+    const resolved = this.followSymlink(node, parts)
     if (!resolved) return { error: `chown: cannot access '${path}': No such file or directory` }
-    resolved.owner = owner
+    if (this.currentUser !== 'root') {
+      return { error: `chown: changing ownership of '${path}': Operation not permitted` }
+    }
+    const [ownerName, groupName] = owner.split(':')
+    if (!this.users.has(ownerName)) return { error: `chown: invalid user: '${ownerName}'` }
+    if (groupName && !Array.from(this.users.values()).some(user => user.groups.includes(groupName))) {
+      return { error: `chown: invalid group: '${groupName}'` }
+    }
+    resolved.owner = ownerName
+    if (groupName) resolved.group = groupName
     return {}
   }
 
   symlink(target: string, linkPath: string, cwd: string[]): { error?: string } {
     const parts = this.resolvePath(linkPath, cwd)
-    const { parent, name } = this.getNode(parts)
+    const { parent, name, denied } = this.getNode(parts)
+    if (denied) return { error: `ln: failed to create symbolic link '${linkPath}': Permission denied` }
     if (!parent) return { error: `ln: failed to create symbolic link '${linkPath}': Permission denied` }
     if (parent.children!.has(name)) return { error: `ln: failed to create symbolic link '${linkPath}': File exists` }
+    if (!this.checkPerm(parent, this.currentUser, 'write')) return { error: `ln: failed to create symbolic link '${linkPath}': Permission denied` }
     parent.children!.set(name, createVNode({ name, type: 'symlink', target, owner: this.currentUser, group: this.currentUser, permissions: 'rwxrwxrwx' }))
     return {}
   }
@@ -307,32 +455,64 @@ export class VFS {
   copy(src: string, dst: string, cwd: string[], recursive = false): { error?: string } {
     const srcParts = this.resolvePath(src, cwd)
     const dstParts = this.resolvePath(dst, cwd)
-    const { node: srcNode } = this.getNode(srcParts)
+    const { node: srcNode, denied: srcDenied } = this.getNode(srcParts)
+    if (srcDenied) return { error: `cp: cannot stat '${src}': Permission denied` }
     if (!srcNode) return { error: `cp: cannot stat '${src}': No such file or directory` }
-    const { node: dstNode, parent: dstParent, name: dstName } = this.getNode(dstParts)
+    const { node: dstNode, parent: dstParent, name: dstName, denied: dstDenied } = this.getNode(dstParts)
+    if (dstDenied) return { error: `cp: cannot create regular file '${dst}': Permission denied` }
     if (!dstParent) return { error: `cp: cannot create regular file '${dst}': Permission denied` }
+    const resolvedDstNode = dstNode?.type === 'symlink' ? this.followSymlink(dstNode, dstParts) : dstNode
 
     if (srcNode.type === 'directory') {
       if (!recursive) return { error: `cp: -r not specified; omitting directory '${src}'` }
-      const mkdirRes = this.createDirectory(dst, cwd)
-      if (mkdirRes.error && !dstNode) return mkdirRes
+      if (!this.checkPerm(srcNode, this.currentUser, 'read') || !this.checkPerm(srcNode, this.currentUser, 'execute')) {
+        return { error: `cp: cannot open directory '${src}': Permission denied` }
+      }
+      const targetParts = resolvedDstNode?.type === 'directory' ? [...dstParts, srcNode.name] : dstParts
+      if (
+        targetParts.length > srcParts.length &&
+        srcParts.every((part, index) => targetParts[index] === part)
+      ) {
+        return { error: `cp: cannot copy a directory, '${src}', into itself, '${dst}'` }
+      }
+      const targetPath = `/${targetParts.join('/')}`
+      const target = this.getNode(targetParts).node
+      if (target && target.type !== 'directory') return { error: `cp: cannot overwrite non-directory '${dst}' with directory '${src}'` }
+      if (!target) {
+        const mkdirRes = this.createDirectory(targetPath, [])
+        if (mkdirRes.error) return mkdirRes
+      }
       for (const childName of srcNode.children!.keys()) {
-        this.copy(srcParts.concat(childName).join('/'), dstParts.concat(childName).join('/'), cwd, true)
+        const childResult = this.copy(
+          `/${[...srcParts, childName].join('/')}`,
+          targetPath,
+          [],
+          true,
+        )
+        if (childResult.error) return childResult
       }
       return {}
     }
 
-    const resolved = this.followSymlink(srcNode)
+    const resolved = this.followSymlink(srcNode, srcParts)
+    if (!resolved) return { error: `cp: cannot stat '${src}': No such file or directory` }
+    if (!this.checkPerm(resolved, this.currentUser, 'read')) return { error: `cp: cannot open '${src}' for reading: Permission denied` }
     const content = resolved?.content ?? srcNode.content ?? ''
+    if (dstNode?.type === 'symlink' && resolvedDstNode?.type !== 'directory') {
+      const written = this.writeFile(dst, cwd, content)
+      return written.error ? { error: `cp: cannot create regular file '${dst}': ${written.error}` } : {}
+    }
     let actualDstParent = dstParent
     let actualDstName = dstName
-    if (dstNode && dstNode.type === 'directory') {
-      actualDstParent = dstNode
+    if (resolvedDstNode?.type === 'directory') {
+      actualDstParent = resolvedDstNode
       actualDstName = srcNode.name
     }
     if (!this.checkPerm(actualDstParent, this.currentUser, 'write')) return { error: `cp: cannot create regular file '${dst}': Permission denied` }
     const existing = actualDstParent.children!.get(actualDstName)
+    if (existing && existing.type === 'directory') return { error: `cp: cannot overwrite directory '${dst}' with non-directory '${src}'` }
     if (existing && existing.type === 'file') {
+      if (!this.checkPerm(existing, this.currentUser, 'write')) return { error: `cp: cannot create regular file '${dst}': Permission denied` }
       existing.content = content
       existing.size = content.length
       existing.mtime = new Date()
@@ -345,25 +525,41 @@ export class VFS {
   move(src: string, dst: string, cwd: string[]): { error?: string } {
     const srcParts = this.resolvePath(src, cwd)
     const dstParts = this.resolvePath(dst, cwd)
-    const { node: srcNode, parent: srcParent, name: srcName } = this.getNode(srcParts)
+    const { node: srcNode, parent: srcParent, name: srcName, denied: srcDenied } = this.getNode(srcParts)
+    if (srcDenied) return { error: `mv: cannot stat '${src}': Permission denied` }
     if (!srcNode) return { error: `mv: cannot stat '${src}': No such file or directory` }
     if (!srcParent) return { error: `mv: cannot move '${src}': Permission denied` }
-    const { parent: dstParent, name: dstName } = this.getNode(dstParts)
+    const { node: dstNode, parent: dstParent, name: dstName, denied: dstDenied } = this.getNode(dstParts)
+    if (dstDenied) return { error: `mv: cannot move to '${dst}': Permission denied` }
     if (!dstParent) return { error: `mv: cannot move to '${dst}': Permission denied` }
+    const resolvedDstNode = dstNode?.type === 'symlink' ? this.followSymlink(dstNode, dstParts) : dstNode
 
     let actualDstParent = dstParent
     let actualDstName = dstName
-    const dstNode = dstParent.children!.get(dstName)
-    if (dstNode && dstNode.type === 'directory') {
-      actualDstParent = dstNode
+    if (resolvedDstNode?.type === 'directory') {
+      actualDstParent = resolvedDstNode
       actualDstName = srcName
     }
-    if (!this.checkPerm(srcParent, this.currentUser, 'write')) return { error: `mv: cannot move '${src}': Permission denied` }
+    const actualDstParts = resolvedDstNode?.type === 'directory' ? [...dstParts, srcName] : dstParts
+    if (
+      srcNode.type === 'directory' &&
+      actualDstParts.length > srcParts.length &&
+      srcParts.every((part, index) => actualDstParts[index] === part)
+    ) {
+      return { error: `mv: cannot move '${src}' to a subdirectory of itself, '${dst}'` }
+    }
+    if (!this.canRemove(srcParent, srcNode)) return { error: `mv: cannot move '${src}': Permission denied` }
     if (!this.checkPerm(actualDstParent, this.currentUser, 'write')) return { error: `mv: cannot move to '${dst}': Permission denied` }
 
-    srcParent.children!.delete(srcName)
     const existing = actualDstParent.children!.get(actualDstName)
+    if (existing === srcNode) return {}
+    if (existing && !this.canRemove(actualDstParent, existing)) return { error: `mv: cannot move to '${dst}': Permission denied` }
+    if (existing?.type === 'directory' && srcNode.type !== 'directory') return { error: `mv: cannot overwrite directory '${dst}' with non-directory` }
+    if (existing && existing.type !== 'directory' && srcNode.type === 'directory') return { error: `mv: cannot overwrite non-directory '${dst}' with directory` }
+    if (existing?.type === 'directory' && existing.children!.size > 0) return { error: `mv: cannot overwrite '${dst}': Directory not empty` }
+    srcParent.children!.delete(srcName)
     if (existing) actualDstParent.children!.delete(actualDstName)
+    srcNode.name = actualDstName
     actualDstParent.children!.set(actualDstName, srcNode)
     return {}
   }

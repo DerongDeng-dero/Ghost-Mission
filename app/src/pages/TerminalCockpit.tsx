@@ -2,16 +2,15 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { HelpCircle, ArrowLeft, Timer, Trophy } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { VFS, type VNode } from '@/engine/vfs'
 import { ShellEngine } from '@/engine/shell'
-import { createGitState } from '@/engine/git'
 import { getLevelById } from '@/engine/levels'
-import type { GitState } from '@/engine/git'
 import { validateMission, calculateScore, isMissionComplete, type ValidationResult, type MissionState } from '@/engine/validator'
 import { createHintState, revealHint, getTotalPenalty } from '@/engine/hints'
 
-import TerminalEmulator from '@/components/terminal/TerminalEmulator'
+import TerminalEmulator, { type TerminalAction } from '@/components/terminal/TerminalEmulator'
 import ObjectivesPanel from '@/components/terminal/ObjectivesPanel'
 import ModeHUD from '@/components/terminal/ModeHUD'
 import HintPanel from '@/components/terminal/HintPanel'
@@ -44,6 +43,29 @@ interface CockpitState {
   showTerminalHelp: boolean
 }
 
+function createInitialCockpitState(phase: CockpitState['phase'] = 'loading'): CockpitState {
+  return {
+    phase,
+    mode: 'shell',
+    score: 0,
+    timerSeconds: 0,
+    commandCount: 0,
+    redCommandsUsed: [],
+    commandHistory: [],
+    completedObjectiveIds: new Set(),
+    hintsRevealed: new Set(),
+    hintState: createHintState(),
+    hudHintMode: 'contextual',
+    isHintPanelOpen: false,
+    isObjectivesCollapsed: false,
+    successPulse: false,
+    lastRedCommand: '',
+    showRedWarning: false,
+    showTutorial: false,
+    showTerminalHelp: true,
+  }
+}
+
 const TYPE_COLORS: Record<string, string> = {
   academy: '#00FF88',
   operation: '#00E5FF',
@@ -60,19 +82,66 @@ const TYPE_LABELS: Record<string, string> = {
   redzone: 'RED ZONE',
 }
 
+function consumeFirstRunTutorial(): boolean {
+  const key = 'ghostops_tutorial_seen'
+  try {
+    if (localStorage.getItem(key) === 'true') return false
+    localStorage.setItem(key, 'true')
+    return true
+  } catch {
+    // Storage may be unavailable in a hardened browser. Showing the tutorial
+    // again is safer than blocking mission start.
+    return true
+  }
+}
+
 export default function TerminalCockpit() {
   const { missionId } = useParams<{ missionId: string }>()
   const navigate = useNavigate()
+  const { i18n } = useTranslation()
+  const language: 'en' | 'zh' = i18n.resolvedLanguage?.startsWith('zh') ? 'zh' : 'en'
+  const labels = language === 'zh'
+    ? {
+        dashboard: '控制台',
+        missionNotFound: '未找到任务',
+        returnToMissions: '返回任务面板',
+        connected: '已连接',
+        hints: '切换提示面板',
+        expandObjectives: '展开任务目标',
+        missionComplete: '任务完成',
+        time: '用时',
+        score: '得分',
+        commandsUsed: '使用命令数',
+        requiredObjectives: '必需目标',
+        viewDebrief: '查看复盘',
+        replay: '重新挑战',
+      }
+    : {
+        dashboard: 'Dashboard',
+        missionNotFound: 'Mission Not Found',
+        returnToMissions: 'Return to Mission Board',
+        connected: 'Connected',
+        hints: 'Toggle hint panel',
+        expandObjectives: 'Expand objectives',
+        missionComplete: 'Mission Complete',
+        time: 'Time',
+        score: 'Score',
+        commandsUsed: 'Commands Used',
+        requiredObjectives: 'Required Objectives',
+        viewDebrief: 'View Debrief',
+        replay: 'Replay',
+      }
   const level = useMemo(() => getLevelById(missionId || ''), [missionId])
 
   const vfsRef = useRef(new VFS())
   const shellRef = useRef<ShellEngine | null>(null)
-  const gitStateRef = useRef<GitState>(createGitState())
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const redWarningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const validationResultsRef = useRef<ValidationResult[]>([])
   const validationTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
   const missionCompleteRef = useRef(false)
+  const successfulActionHistoryRef = useRef<string[]>([])
+  const attemptedActionHistoryRef = useRef<string[]>([])
 
   function getVfsStateSnapshot(): Record<string, string> {
     try {
@@ -98,32 +167,20 @@ export default function TerminalCockpit() {
     }
   }
 
-  const [state, setState] = useState<CockpitState>({
-    phase: 'loading',
-    mode: 'shell',
-    score: 0,
-    timerSeconds: 0,
-    commandCount: 0,
-    redCommandsUsed: [],
-    commandHistory: [],
-    completedObjectiveIds: new Set(),
-    hintsRevealed: new Set(),
-    hintState: createHintState(),
-    hudHintMode: 'contextual',
-    isHintPanelOpen: false,
-    isObjectivesCollapsed: false,
-    successPulse: false,
-    lastRedCommand: '',
-    showRedWarning: false,
-    showTutorial: false,
-     showTerminalHelp: true,
-  })
+  const [state, setState] = useState<CockpitState>(() => createInitialCockpitState())
+  const stateRef = useRef(state)
   const [shell, setShell] = useState<ShellEngine | null>(null)
+  const [runVersion, setRunVersion] = useState(0)
+
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
 
   // Initialize shell and load level
   useEffect(() => {
     if (!level) return
-    const vfs = vfsRef.current
+    const vfs = new VFS()
+    vfsRef.current = vfs
     const nextShell = new ShellEngine(vfs, undefined, (cmd) => {
       setState(s => {
         if (s.redCommandsUsed.includes(cmd)) return s
@@ -149,13 +206,21 @@ export default function TerminalCockpit() {
     if (level.startingState?.env) {
       Object.assign(nextShell.state.env, level.startingState.env)
    }
+    // Git lessons model work inside an existing repository. Initialize that
+    // repository silently so the first taught command (for example `git status`)
+    // can succeed without requiring an undocumented prerequisite.
+    if (level.chapter_skill.toLowerCase() === 'git') {
+      nextShell.execute('git init', 0, false)
+    }
 
     // Populate VFS files from starting state
     // (VFS already initialized with default files)
 
-    setState(s => ({ ...s, phase: 'briefing' }))
+    setState(createInitialCockpitState('briefing'))
     missionCompleteRef.current = false
     validationResultsRef.current = []
+    successfulActionHistoryRef.current = []
+    attemptedActionHistoryRef.current = []
     validationTimersRef.current.forEach(t => clearTimeout(t))
     validationTimersRef.current = []
 
@@ -167,7 +232,7 @@ export default function TerminalCockpit() {
       timerRef.current = null
       redWarningTimeoutRef.current = null
    }
- }, [level])
+  }, [level, runVersion])
 
   // Timer
   useEffect(() => {
@@ -181,11 +246,17 @@ export default function TerminalCockpit() {
    }
  }, [state.phase])
 
-  const handleCommandExecuted = useCallback((cmd: string) => {
+  const handleCommandExecuted = useCallback((action: TerminalAction) => {
+    const { command, exitCode } = action
+    attemptedActionHistoryRef.current = [...attemptedActionHistoryRef.current, command]
+    if (exitCode === 0) {
+      successfulActionHistoryRef.current = [...successfulActionHistoryRef.current, command]
+    }
+
     // Step 1: Update command history immediately
     setState(s => ({
       ...s,
-      commandHistory: [...s.commandHistory, cmd],
+      commandHistory: [...attemptedActionHistoryRef.current],
       commandCount: s.commandCount + 1,
       showTerminalHelp: false,
       showTutorial: false,
@@ -196,32 +267,29 @@ export default function TerminalCockpit() {
       if (!level || !shellRef.current) return
 
       // Build mission state from CURRENT refs
-      const currentCmdHistory = [...(shellRef.current?.state.history || [])]
+      const currentCmdHistory = [...successfulActionHistoryRef.current]
       const missionState: MissionState = {
         commandHistory: currentCmdHistory,
-        gitState: gitStateRef.current,
+        attemptedCommandHistory: [...attemptedActionHistoryRef.current],
+        gitState: shellRef.current.gitState,
         vfs: { files: getVfsStateSnapshot() },
         redCommandsUsed: [],
         hintsUsed: 0,
         objectivesCompleted: new Set(),
       }
 
-      // Get current state for scoring
-      let currentTimerSeconds = 0
-      let currentCommandCount = 0
-      setState(s => {
-        currentTimerSeconds = s.timerSeconds
-        currentCommandCount = s.commandCount
-        missionState.redCommandsUsed = s.redCommandsUsed
-        missionState.hintsUsed = s.hintsRevealed.size
-        missionState.objectivesCompleted = s.completedObjectiveIds
-        return s  // no change, just reading
-      })
+      const currentState = stateRef.current
+      const currentTimerSeconds = currentState.timerSeconds
+      const currentCommandCount = attemptedActionHistoryRef.current.length
+      missionState.redCommandsUsed = [...currentState.redCommandsUsed]
+      missionState.hintsUsed = currentState.hintsRevealed.size
+      missionState.objectivesCompleted = new Set(currentState.completedObjectiveIds)
 
       try {
         const results = validateMission(level, missionState)
         validationResultsRef.current = results
         const completedIds = new Set(results.filter(r => r.completed).map(r => r.objectiveId))
+        missionState.objectivesCompleted = completedIds
 
         // Step 3: Update completed objectives and pulse
         setState(s => ({ ...s, completedObjectiveIds: completedIds, successPulse: true }))
@@ -230,15 +298,17 @@ export default function TerminalCockpit() {
         if (isMissionComplete(level, results) && !missionCompleteRef.current) {
           missionCompleteRef.current = true
           const scoreResult = calculateScore(level, results, missionState, currentTimerSeconds, currentCommandCount)
-          setTimeout(() => {
+          const completionTimer = setTimeout(() => {
             setState(s2 => ({ ...s2, phase: 'completed', score: scoreResult.total }))
           }, 500)
+          validationTimersRef.current.push(completionTimer)
         }
 
         // Step 5: Clear success pulse
-        setTimeout(() => {
+        const pulseTimer = setTimeout(() => {
           setState(s => ({ ...s, successPulse: false }))
         }, 600)
+        validationTimersRef.current.push(pulseTimer)
       } catch (err) {
         console.error('Validation error:', err)
       }
@@ -249,15 +319,32 @@ export default function TerminalCockpit() {
 
   const handleModeChange = useCallback((mode: string) => {
     setState(s => ({ ...s, mode }))
- }, [])
+  }, [])
 
   const handleStartMission = useCallback(() => {
-    setState(s => ({ ...s, phase: 'active', showTutorial: true }))
- }, [])
+    const showTutorial = consumeFirstRunTutorial()
+    setState(s => ({ ...s, phase: 'active', showTutorial }))
+    if (!showTutorial) {
+      requestAnimationFrame(() => {
+        document.querySelector<HTMLElement>('[aria-label="Terminal input"]')?.focus()
+      })
+    }
+  }, [])
 
   const handleCloseBriefing = useCallback(() => {
     navigate('/missions')
- }, [navigate])
+  }, [navigate])
+
+  const handleDismissTutorial = useCallback(() => {
+    setState(s => ({ ...s, showTutorial: false }))
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('[aria-label="Terminal input"]')?.focus()
+    })
+  }, [])
+
+  const handleReplay = useCallback(() => {
+    setRunVersion(version => version + 1)
+  }, [])
 
   const handleToggleHintPanel = useCallback(() => {
     setState(s => ({ ...s, isHintPanelOpen: !s.isHintPanelOpen }))
@@ -293,13 +380,15 @@ export default function TerminalCockpit() {
     return (
       <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: 'var(--bg-primary)' }}>
         <div className="text-center">
-          <p className="font-jetbrains text-h3 mb-4" style={{ color: 'var(--text-primary)' }}>Mission Not Found</p>
+          <h1 className="font-jetbrains text-h3 mb-4" style={{ color: 'var(--text-primary)' }}>
+            {labels.missionNotFound}
+          </h1>
           <button
             onClick={() => navigate('/missions')}
             className="px-4 py-2 rounded-md font-jetbrains text-body transition-colors"
             style={{ backgroundColor: 'var(--neon-cyan)', color: '#0A0E14' }}
           >
-            Return to Mission Board
+            {labels.returnToMissions}
           </button>
         </div>
       </div>
@@ -313,27 +402,29 @@ export default function TerminalCockpit() {
   const requiredProgress = completedRequiredCount / Math.max(1, requiredObjectives.length)
 
   const cwd = shell ? '/' + shell.state.cwd.join('/') : '/home/ghost'
-  // Git commands are not connected to the terminal yet, so the HUD should not
-  // pretend there is a live branch or dirty working tree.
-  const gitBranch = null
-  const gitDirty = false
+  const gitBranch = shell?.gitState.initialized ? shell.gitState.currentBranch : null
+  const gitDirty = Boolean(
+    shell?.gitState.initialized
+    && (shell.gitState.workingDirectory.size > 0 || shell.gitState.stagingArea.size > 0),
+  )
 
   return (
     <div className="flex flex-col h-[calc(100dvh-52px)]" style={{ backgroundColor: 'var(--bg-primary)' }}>
+      <h1 className="sr-only">{level.getTitle(language)}</h1>
       {/* Cockpit Header */}
       <div
-        className="flex items-center gap-4 px-4 h-10 flex-shrink-0 border-b"
+        className="flex items-center gap-2 sm:gap-4 px-2 sm:px-4 h-12 flex-shrink-0 border-b"
         style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-subtle)' }}
       >
         <button
           onClick={() => navigate('/')}
-          className="flex items-center gap-1 font-jetbrains text-code-sm transition-colors"
+          className="min-h-11 flex items-center gap-1 px-2 font-jetbrains text-code-sm transition-colors"
           style={{ color: 'var(--text-secondary)' }}
           onMouseEnter={e => { e.currentTarget.style.color = 'var(--neon-cyan)' }}
           onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)' }}
         >
           <ArrowLeft size={14} />
-          <span className="hidden sm:inline">Dashboard</span>
+          <span className="hidden sm:inline">{labels.dashboard}</span>
         </button>
 
         <span
@@ -346,9 +437,9 @@ export default function TerminalCockpit() {
         <span
           className="font-jetbrains text-code-sm truncate max-w-[200px]"
           style={{ color: 'var(--text-primary)' }}
-          title={level.getTitle('en')}
+          title={level.getTitle(language)}
         >
-          {level.getTitle('en')}
+          {level.getTitle(language)}
         </span>
 
         <div className="flex-1" />
@@ -386,21 +477,22 @@ export default function TerminalCockpit() {
         </motion.div>
 
         {/* Connection status */}
-        <div className="flex items-center gap-1.5" title="Connected">
+        <div className="hidden sm:flex items-center gap-1.5" title={labels.connected}>
           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#00FF88' }} />
-          <span className="hidden md:inline font-jetbrains text-[10px]" style={{ color: 'var(--text-muted)' }}>Connected</span>
+          <span className="hidden md:inline font-jetbrains text-[10px]" style={{ color: 'var(--text-muted)' }}>{labels.connected}</span>
         </div>
 
         {/* Hint button */}
         <button
           onClick={handleToggleHintPanel}
-          className="relative p-1.5 rounded-md transition-all"
+          className="relative min-h-11 min-w-11 inline-flex items-center justify-center rounded-md transition-all"
           style={{
             backgroundColor: state.isHintPanelOpen ? 'var(--bg-hover)' : 'var(--bg-input)',
             border: `1px solid ${state.isHintPanelOpen ? 'var(--neon-cyan)' : 'var(--border-subtle)'}`,
             color: state.isHintPanelOpen ? 'var(--neon-cyan)' : 'var(--text-muted)',
          }}
-          aria-label="Toggle hint panel"
+          aria-label={labels.hints}
+          aria-expanded={state.isHintPanelOpen}
         >
           <HelpCircle size={16} />
           {state.hintsRevealed.size === 0 && (
@@ -424,12 +516,12 @@ export default function TerminalCockpit() {
         {state.isObjectivesCollapsed && (
           <div
             className="flex flex-col items-center py-4 gap-4 border-r"
-            style={{ width: 40, minWidth: 40, backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-subtle)' }}
+            style={{ width: 44, minWidth: 44, backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-subtle)' }}
           >
             <button
               onClick={handleToggleObjectives}
-              className="text-[var(--text-muted)] hover:text-[var(--neon-cyan)] transition-colors"
-              aria-label="Expand objectives"
+              className="min-h-11 min-w-11 inline-flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--neon-cyan)] transition-colors"
+              aria-label={labels.expandObjectives}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6" />
@@ -445,18 +537,6 @@ export default function TerminalCockpit() {
               <TerminalEmulator
                 shell={shell}
                 onModeChange={handleModeChange}
-                onRedCommand={(cmd: string) => {
-                  try {
-                    setState(s => {
-                      if (s.redCommandsUsed.includes(cmd)) return { ...s, showRedWarning: true, lastRedCommand: cmd }
-                      return { ...s, showRedWarning: true, lastRedCommand: cmd, redCommandsUsed: [...s.redCommandsUsed, cmd] }
-                    })
-                    if (redWarningTimeoutRef.current) clearTimeout(redWarningTimeoutRef.current)
-                    redWarningTimeoutRef.current = setTimeout(() => setState(s => ({ ...s, showRedWarning: false })), 4000)
-                  } catch (e) {
-                    console.error('Red command handler error:', e)
-                  }
-                }}
                 onCommandExecuted={handleCommandExecuted}
                 successPulse={state.successPulse}
               />
@@ -505,7 +585,7 @@ export default function TerminalCockpit() {
       {/* Tutorial Overlay - shown when mission starts */}
       <TutorialOverlay
         isVisible={state.showTutorial}
-        onDismiss={() => setState(s => ({ ...s, showTutorial: false }))}
+        onDismiss={handleDismissTutorial}
       />
 
       {/* Terminal Help Tip - shown until first command */}
@@ -524,6 +604,9 @@ export default function TerminalCockpit() {
             <motion.div
               className="w-full max-w-[480px] rounded-lg p-8"
               style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="mission-complete-title"
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] as [number, number, number, number] }}
@@ -535,15 +618,19 @@ export default function TerminalCockpit() {
                   </svg>
                 </div>
               </div>
-              <h2 className="font-jetbrains text-h1 text-center mb-1" style={{ color: 'var(--neon-green)' }}>Mission Complete</h2>
-              <p className="font-jetbrains text-h3 text-center mb-6" style={{ color: 'var(--text-primary)' }}>{level.getTitle('en')}</p>
+              <h2 id="mission-complete-title" className="font-jetbrains text-h1 text-center mb-1" style={{ color: 'var(--neon-green)' }}>
+                {labels.missionComplete}
+              </h2>
+              <p className="font-jetbrains text-h3 text-center mb-6" style={{ color: 'var(--text-primary)' }}>
+                {level.getTitle(language)}
+              </p>
 
               <div className="grid grid-cols-2 gap-4 mb-6">
                 {[
-                  { label: 'Time', value: formatTime(state.timerSeconds) },
-                  { label: 'Score', value: `${state.score} / 100` },
-                  { label: 'Commands Used', value: String(state.commandCount) },
-                  { label: 'Required Objectives', value: `${completedRequiredCount}/${requiredObjectives.length}` },
+                  { label: labels.time, value: formatTime(state.timerSeconds) },
+                  { label: labels.score, value: `${state.score} / 100` },
+                  { label: labels.commandsUsed, value: String(state.commandCount) },
+                  { label: labels.requiredObjectives, value: `${completedRequiredCount}/${requiredObjectives.length}` },
                 ].map((stat, i) => (
                   <motion.div
                     key={stat.label}
@@ -562,17 +649,18 @@ export default function TerminalCockpit() {
               <div className="flex justify-center gap-3">
                 <button
                   onClick={() => navigate(`/debrief/${missionId}`)}
-                  className="px-5 py-2.5 rounded-md font-jetbrains text-body font-semibold transition-all"
+                  className="min-h-11 px-5 py-2.5 rounded-md font-jetbrains text-body font-semibold transition-all"
                   style={{ backgroundColor: 'var(--neon-green)', color: '#0A0E14' }}
+                  autoFocus
                 >
-                  View Debrief &rarr;
+                  {labels.viewDebrief} &rarr;
                 </button>
                 <button
-                  onClick={() => window.location.reload()}
-                  className="px-4 py-2.5 rounded-md font-jetbrains text-body transition-colors"
+                  onClick={handleReplay}
+                  className="min-h-11 px-4 py-2.5 rounded-md font-jetbrains text-body transition-colors"
                   style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' }}
                 >
-                  Replay
+                  {labels.replay}
                 </button>
               </div>
             </motion.div>

@@ -1,11 +1,13 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { CornerDownLeft } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface TerminalHelpTipProps {
   visible: boolean
 }
 
 export default function TerminalHelpTip({ visible }: TerminalHelpTipProps) {
+  const { t } = useTranslation()
   return (
     <AnimatePresence>
       {visible && (
@@ -32,9 +34,9 @@ export default function TerminalHelpTip({ visible }: TerminalHelpTipProps) {
             }}
           >
             <span className="font-jetbrains text-[11px] font-semibold" style={{ color: 'var(--neon-green)' }}>
-              Type commands here
+              {t('terminal.helpTip.input')}
             </span>
-            <CornerDownLeft size={12} style={{ color: 'var(--neon-green)' }} />
+            <CornerDownLeft size={12} style={{ color: 'var(--neon-green)' }} aria-hidden="true" />
           </div>
         </motion.div>
       )}

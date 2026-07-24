@@ -1,39 +1,51 @@
-import { useEffect, useRef, useCallback, useState } from 'react'
-import type { Terminal as XTermType } from 'xterm'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Terminal as XTermType } from '@xterm/xterm'
 import type { FitAddon as FitAddonType } from '@xterm/addon-fit'
 import type { ShellEngine } from '@/engine/shell'
+
+export interface TerminalAction {
+  command: string
+  exitCode: number
+  kind: 'command' | 'interaction'
+}
 
 interface TerminalEmulatorProps {
   shell: ShellEngine
   onModeChange: (mode: string) => void
-  onRedCommand?: (cmd: string) => void
-  onCommandExecuted: (cmd: string) => void
+  onCommandExecuted: (action: TerminalAction) => void
   successPulse: boolean
 }
 
 const MAX_OUTPUT = 5000
+const REPL_MODES = ['node', 'python', 'psql', 'sqlite'] as const
 
 function safeWrite(term: XTermType, data: string) {
-  try { term.write(data) } catch { /* ignore write errors on dead terminal */ }
-}
-function safeWriteLn(term: XTermType, data: string) {
-  try { term.writeln(data) } catch { /* ignore write errors on dead terminal */ }
+  try { term.write(data) } catch { /* The terminal may already be disposed. */ }
 }
 
-export default function TerminalEmulator({ shell, onModeChange, onCommandExecuted, successPulse }: TerminalEmulatorProps) {
+function safeWriteLn(term: XTermType, data: string) {
+  try { term.writeln(data) } catch { /* The terminal may already be disposed. */ }
+}
+
+export default function TerminalEmulator({
+  shell,
+  onModeChange,
+  onCommandExecuted,
+  successPulse,
+}: TerminalEmulatorProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<XTermType | null>(null)
   const fitRef = useRef<FitAddonType | null>(null)
   const inputBufferRef = useRef('')
   const currentModeRef = useRef('shell')
+  const tmuxPrefixRef = useRef(false)
   const shellRef = useRef(shell)
   shellRef.current = shell
 
-  // Stabilize callbacks in refs so the useEffect doesn't re-run when they change
+  // Callback refs keep the xterm instance stable while still using fresh props.
   const onModeChangeRef = useRef(onModeChange)
   const onCommandExecutedRef = useRef(onCommandExecuted)
   const writePromptRef = useRef<((term: XTermType) => void) | null>(null)
-
   onModeChangeRef.current = onModeChange
   onCommandExecutedRef.current = onCommandExecuted
 
@@ -41,17 +53,18 @@ export default function TerminalEmulator({ shell, onModeChange, onCommandExecute
   const [loading, setLoading] = useState(true)
 
   const writePrompt = useCallback((term: XTermType) => {
-    safeWrite(term, '\r\n' + shellRef.current.getPrompt())
+    safeWrite(term, `\r\n${shellRef.current.getPrompt()}`)
   }, [])
-
-  // Keep the writePrompt ref in sync
   writePromptRef.current = writePrompt
 
   useEffect(() => {
     let disposed = false
     let cleanupFn: (() => void) | null = null
+    setLoading(true)
+    inputBufferRef.current = ''
+    currentModeRef.current = 'shell'
+    tmuxPrefixRef.current = false
 
-    // Local ref copies so the closures below always see the latest
     const cbRef = {
       get onModeChange() { return onModeChangeRef.current },
       get onCommandExecuted() { return onCommandExecutedRef.current },
@@ -59,17 +72,15 @@ export default function TerminalEmulator({ shell, onModeChange, onCommandExecute
     }
 
     async function initTerminal() {
-      // Dynamically import xterm and addons
       const [{ Terminal }, { FitAddon }, { WebLinksAddon }] = await Promise.all([
-        import('xterm'),
+        import('@xterm/xterm'),
         import('@xterm/addon-fit'),
         import('@xterm/addon-web-links'),
       ])
-
-      // Load CSS
-      await import('xterm/css/xterm.css')
+      await import('@xterm/xterm/css/xterm.css')
 
       if (disposed || !containerRef.current) return
+      const container = containerRef.current
 
       const term = new Terminal({
         fontFamily: '"Fira Code", monospace',
@@ -101,14 +112,12 @@ export default function TerminalEmulator({ shell, onModeChange, onCommandExecute
         cursorStyle: 'block',
         scrollback: 5000,
         convertEol: true,
-        windowsMode: false,
       })
 
       const fitAddon = new FitAddon()
       term.loadAddon(fitAddon)
       term.loadAddon(new WebLinksAddon())
-
-      term.open(containerRef.current)
+      term.open(container)
       fitAddon.fit()
 
       safeWriteLn(term, '\x1b[2J\x1b[H')
@@ -117,220 +126,391 @@ export default function TerminalEmulator({ shell, onModeChange, onCommandExecute
       safeWriteLn(term, '')
       cbRef.writePrompt(term)
 
-      term.onData((data: string) => {
+      const setMode = (mode: string) => {
+        currentModeRef.current = mode
+        cbRef.onModeChange(mode)
+      }
+
+      const recordAction = (action: string) => {
+        cbRef.onCommandExecuted({ command: action, exitCode: 0, kind: 'interaction' })
+      }
+
+      const writeBoundedOutput = (output: string, color = '') => {
+        if (!output) return
+        const bounded = output.length > MAX_OUTPUT
+          ? `${output.slice(0, MAX_OUTPUT)}\n\x1b[38;5;3m... output truncated (${output.length} chars total)\x1b[0m`
+          : output
+        safeWrite(term, color ? `${color}${bounded}\x1b[0m` : bounded)
+        if (!bounded.endsWith('\n')) safeWriteLn(term, '')
+      }
+
+      const returnToShell = (action?: string) => {
+        if (action) recordAction(action)
+        inputBufferRef.current = ''
+        tmuxPrefixRef.current = false
+        setMode('shell')
+        cbRef.writePrompt(term)
+      }
+
+      const showInteractiveMode = (mode: string, stdout: string) => {
+        if (mode === 'less' || mode === 'man') {
+          setMode('less')
+          safeWriteLn(term, '')
+          safeWriteLn(term, '\x1b[38;5;3m--- less pager --- Press q to quit ---\x1b[0m')
+          const bounded = stdout.length > MAX_OUTPUT
+            ? `${stdout.slice(0, MAX_OUTPUT)}\n... output truncated (${stdout.length} chars total)`
+            : stdout
+          bounded.split('\n').slice(0, 24).forEach(line => safeWriteLn(term, line))
+          safeWriteLn(term, '\x1b[38;5;3m(END)\x1b[0m')
+          return
+        }
+
+        if (mode === 'vim' || mode === 'vim:normal') {
+          setMode('vim:normal')
+          safeWriteLn(term, '')
+          safeWriteLn(term, '\x1b[38;5;5m=== VIM - NORMAL MODE ===\x1b[0m')
+          safeWriteLn(term, '')
+          safeWriteLn(term, '\x1b[38;5;8mType :q and press Enter to quit\x1b[0m')
+          safeWriteLn(term, '')
+          safeWriteLn(term, '\x1b[38;5;5m~\x1b[0m')
+          safeWriteLn(term, '\x1b[38;5;5m~\x1b[0m')
+          return
+        }
+
+        if (mode === 'nano') {
+          setMode('nano')
+          safeWriteLn(term, '')
+          safeWriteLn(term, '\x1b[48;5;4m\x1b[38;5;15m  GNU nano 6.2                    New Buffer                    \x1b[0m')
+          safeWriteLn(term, '')
+          safeWriteLn(term, '\x1b[38;5;8m^O Write Out  ^X Exit\x1b[0m')
+          return
+        }
+
+        if (mode === 'tmux') {
+          setMode('tmux')
+          safeWriteLn(term, '')
+          safeWriteLn(term, '\x1b[38;5;6m[tmux] session attached. Use Ctrl-b d to detach.\x1b[0m')
+          cbRef.writePrompt(term)
+          return
+        }
+
+        if (mode === 'node') {
+          setMode('node')
+          safeWriteLn(term, '\x1b[38;5;10mWelcome to Node.js v18.17.0\x1b[0m')
+          safeWriteLn(term, 'Type .exit or Ctrl+D to quit')
+          safeWrite(term, '\x1b[38;5;10m> \x1b[0m')
+          return
+        }
+
+        if (mode === 'python') {
+          setMode('python')
+          safeWriteLn(term, 'Python 3.10.12 (default, Jun  1 2024)')
+          safeWriteLn(term, 'Type "exit()" or Ctrl+D to quit')
+          safeWrite(term, '\x1b[38;5;10m>>> \x1b[0m')
+          return
+        }
+
+        if (mode === 'psql') {
+          setMode('psql')
+          safeWriteLn(term, 'psql (14.9)')
+          safeWriteLn(term, 'Type "\\q" to quit.')
+          safeWrite(term, 'postgres=# ')
+          return
+        }
+
+        if (mode === 'sqlite') {
+          setMode('sqlite')
+          safeWriteLn(term, 'SQLite version 3.37.2')
+          safeWriteLn(term, 'Enter ".help" for usage hints.')
+          safeWrite(term, 'sqlite> ')
+        }
+      }
+
+      const executeShellLine = (line: string, stayInTmux = false) => {
+        safeWriteLn(term, '')
+        if (!line) {
+          cbRef.writePrompt(term)
+          return
+        }
+
+        const result = shellRef.current.execute(line)
+        cbRef.onCommandExecuted({ command: line, exitCode: result.exitCode, kind: 'command' })
+        if (result.mode) {
+          showInteractiveMode(result.mode, result.stdout)
+          return
+        }
+
+        writeBoundedOutput(result.stdout)
+        writeBoundedOutput(result.stderr, '\x1b[38;5;9m')
+        setMode(stayInTmux ? 'tmux' : 'shell')
+        cbRef.writePrompt(term)
+      }
+
+      const writeReplPrompt = (mode: string) => {
+        if (mode === 'node') safeWrite(term, '\x1b[38;5;10m> \x1b[0m')
+        else if (mode === 'python') safeWrite(term, '\x1b[38;5;10m>>> \x1b[0m')
+        else if (mode === 'psql') safeWrite(term, 'postgres=# ')
+        else if (mode === 'sqlite') safeWrite(term, 'sqlite> ')
+      }
+
+      const handleTerminalData = (data: string) => {
         try {
+          // xterm reports Alt-. as an escape-prefixed sequence.
+          if (data === '\x1b.') {
+            recordAction('Alt-.')
+            return
+          }
+          // Arrow/function-key escape sequences are handled by xterm itself.
+          if (data.startsWith('\x1b[')) return
+          // Pasted text may arrive as one chunk; process it like typed input.
+          if (data.length > 1) {
+            for (const character of data) handleTerminalData(character)
+            return
+          }
+
           const code = data.charCodeAt(0)
+          const mode = currentModeRef.current
+
+          if (mode === 'less') {
+            if (data === 'q' || data === 'Q') {
+              returnToShell('q')
+            } else if (data === '/' || data === '?') {
+              recordAction(data)
+              inputBufferRef.current = ''
+              setMode('less:search')
+              safeWrite(term, data)
+            }
+            return
+          }
+
+          if (mode === 'less:search') {
+            if (data === '\x1b') {
+              inputBufferRef.current = ''
+              setMode('less')
+              safeWriteLn(term, '')
+              return
+            }
+            if (data === '\r') {
+              inputBufferRef.current = ''
+              safeWriteLn(term, '')
+              setMode('less')
+              return
+            }
+            if (data === '\x7f') {
+              if (inputBufferRef.current.length > 0) {
+                inputBufferRef.current = inputBufferRef.current.slice(0, -1)
+                safeWrite(term, '\b \b')
+              }
+              return
+            }
+            if (code >= 32) {
+              inputBufferRef.current += data
+              safeWrite(term, data)
+            }
+            return
+          }
+
+          if (mode.startsWith('vim')) {
+            if (data === '\x1b') {
+              recordAction('Esc')
+              inputBufferRef.current = ''
+              setMode('vim:normal')
+              return
+            }
+            if (data === ':' && !inputBufferRef.current) {
+              inputBufferRef.current = ':'
+              setMode('vim:command')
+              safeWrite(term, ':')
+              return
+            }
+            if (data === '\r') {
+              const command = inputBufferRef.current.trim()
+              inputBufferRef.current = ''
+              safeWriteLn(term, '')
+              if (command) recordAction(command)
+              if ([':q', ':q!', ':wq'].includes(command)) returnToShell()
+              else setMode('vim:normal')
+              return
+            }
+            if (data === '\x7f' && inputBufferRef.current.length > 1) {
+              inputBufferRef.current = inputBufferRef.current.slice(0, -1)
+              safeWrite(term, '\b \b')
+              return
+            }
+            if (inputBufferRef.current.startsWith(':') && code >= 32) {
+              inputBufferRef.current += data
+              safeWrite(term, data)
+            }
+            return
+          }
+
+          if (mode === 'nano') {
+            if (code === 15) {
+              recordAction('Ctrl-O')
+              safeWriteLn(term, '')
+              safeWriteLn(term, '\x1b[38;5;10m[ Wrote buffer ]\x1b[0m')
+            } else if (code === 24) {
+              safeWriteLn(term, '')
+              returnToShell('Ctrl-X')
+            }
+            return
+          }
+
+          if (REPL_MODES.includes(mode as typeof REPL_MODES[number])) {
+            if (code === 4) {
+              safeWrite(term, '^D')
+              returnToShell('Ctrl-D')
+              return
+            }
+            if (code === 3) {
+              recordAction('Ctrl-C')
+              inputBufferRef.current = ''
+              safeWriteLn(term, '^C')
+              writeReplPrompt(mode)
+              return
+            }
+            if (data === '\x7f') {
+              if (inputBufferRef.current.length > 0) {
+                inputBufferRef.current = inputBufferRef.current.slice(0, -1)
+                safeWrite(term, '\b \b')
+              }
+              return
+            }
+            if (data === '\r') {
+              const line = inputBufferRef.current.trim()
+              inputBufferRef.current = ''
+              safeWriteLn(term, '')
+              if (line) {
+                recordAction(line)
+                const shouldExit = (
+                  (mode === 'node' && line === '.exit')
+                  || (mode === 'python' && ['exit()', 'quit()'].includes(line))
+                  || (mode === 'psql' && line === '\\q')
+                  || (mode === 'sqlite' && ['.exit', '.quit'].includes(line))
+                )
+                if (shouldExit) {
+                  returnToShell()
+                  return
+                }
+              }
+              writeReplPrompt(mode)
+              return
+            }
+            if (code >= 32) {
+              inputBufferRef.current += data
+              safeWrite(term, data)
+            }
+            return
+          }
+
+          if (mode === 'tmux' && code === 2) {
+            tmuxPrefixRef.current = true
+            return
+          }
+          if (mode === 'tmux' && tmuxPrefixRef.current) {
+            tmuxPrefixRef.current = false
+            if (data.toLowerCase() === 'd') {
+              safeWriteLn(term, '')
+              returnToShell('Ctrl-b d')
+            }
+            return
+          }
+
+          if (data === '\x1b') {
+            recordAction('Esc')
+            return
+          }
+
+          const controlActions: Record<number, string> = {
+            3: 'Ctrl-C',
+            4: 'Ctrl-D',
+            7: 'Ctrl-G',
+            11: 'Ctrl-K',
+            17: 'Ctrl-Q',
+            18: 'Ctrl-R',
+            19: 'Ctrl-S',
+            21: 'Ctrl-U',
+            26: 'Ctrl-Z',
+          }
+          const controlAction = controlActions[code]
+          if (controlAction) {
+            recordAction(controlAction)
+            if (code === 3 || code === 4 || code === 26) {
+              safeWrite(term, code === 3 ? '^C' : code === 4 ? '^D' : '^Z')
+              inputBufferRef.current = ''
+              cbRef.writePrompt(term)
+            } else if (code === 21) {
+              while (inputBufferRef.current.length > 0) {
+                safeWrite(term, '\b \b')
+                inputBufferRef.current = inputBufferRef.current.slice(0, -1)
+              }
+            }
+            return
+          }
 
           if (data === '\r') {
             const line = inputBufferRef.current.trim()
-            safeWriteLn(term, '')
-            if (line) {
-              cbRef.onCommandExecuted(line)
-              const result = shellRef.current.execute(line)
-
-              if (result.mode === 'less' || result.mode === 'man') {
-                currentModeRef.current = 'less'
-                cbRef.onModeChange('less')
-                safeWriteLn(term, '')
-                safeWriteLn(term, '\x1b[38;5;3m--- less pager --- Press q to quit ---\x1b[0m')
-                if (line.includes(' ')) {
-                  const file = line.split(' ').slice(1).join(' ')
-                  const res = shellRef.current.execute(`cat ${file}`)
-                  let output = res.stdout
-                  if (output.length > MAX_OUTPUT) {
-                    output = output.slice(0, MAX_OUTPUT) + '\n\x1b[38;5;3m... output truncated (' + res.stdout.length + ' chars total)\x1b[0m'
-                  }
-                  const lines = output.split('\n').slice(0, 24)
-                  lines.forEach(l => safeWriteLn(term, l))
-                }
-                safeWriteLn(term, '\x1b[38;5;3m(END)\x1b[0m')
-              } else if (result.mode === 'vim' || result.mode === 'vim:normal') {
-                currentModeRef.current = 'vim:normal'
-                cbRef.onModeChange('vim:normal')
-                safeWriteLn(term, '')
-                safeWriteLn(term, '\x1b[38;5;5m=== VIM - NORMAL MODE ===\x1b[0m')
-                safeWriteLn(term, '')
-                safeWriteLn(term, '\x1b[38;5;8mType :q and press Enter to quit\x1b[0m')
-                safeWriteLn(term, '')
-                safeWriteLn(term, '\x1b[38;5;5m~\x1b[0m')
-                safeWriteLn(term, '\x1b[38;5;5m~\x1b[0m')
-                safeWriteLn(term, '')
-                safeWrite(term, '\x1b[38;5;5m:\x1b[0m')
-              } else if (result.mode === 'nano') {
-                currentModeRef.current = 'nano'
-                cbRef.onModeChange('nano')
-                safeWriteLn(term, '')
-                safeWriteLn(term, '\x1b[48;5;4m\x1b[38;5;15m  GNU nano 6.2                    New Buffer                    \x1b[0m')
-                safeWriteLn(term, '')
-                safeWriteLn(term, '\x1b[38;5;8m^O Write Out  ^X Exit\x1b[0m')
-              } else if (result.mode === 'tmux') {
-                currentModeRef.current = 'tmux'
-                cbRef.onModeChange('tmux')
-                safeWriteLn(term, '')
-                safeWriteLn(term, '\x1b[38;5;6m[tmux] session attached. Use Ctrl-b d to detach.\x1b[0m')
-                cbRef.writePrompt(term)
-              } else if (result.mode === 'node') {
-                currentModeRef.current = 'node'
-                cbRef.onModeChange('node')
-                safeWriteLn(term, '\x1b[38;5;10m> \x1b[0mWelcome to Node.js v18.17.0')
-                safeWriteLn(term, '\x1b[38;5;10m> \x1b[0mType .exit or Ctrl+D to quit')
-                safeWrite(term, '\x1b[38;5;10m> \x1b[0m')
-              } else if (result.mode === 'python') {
-                currentModeRef.current = 'python'
-                cbRef.onModeChange('python')
-                safeWriteLn(term, 'Python 3.10.12 (default, Jun  1 2024)')
-                safeWriteLn(term, 'Type "exit()" or Ctrl+D to quit')
-                safeWrite(term, '\x1b[38;5;10m>>> \x1b[0m')
-              } else if (result.mode === 'psql') {
-                currentModeRef.current = 'psql'
-                cbRef.onModeChange('psql')
-                safeWriteLn(term, 'psql (14.9)')
-                safeWriteLn(term, 'Type "\\q" to quit.')
-                safeWrite(term, 'postgres=# ')
-              } else if (result.mode === 'sqlite') {
-                currentModeRef.current = 'sqlite'
-                cbRef.onModeChange('sqlite')
-                safeWriteLn(term, 'SQLite version 3.37.2')
-                safeWriteLn(term, 'Enter ".help" for usage hints.')
-                safeWrite(term, 'sqlite> ')
-              } else {
-                let output = result.stdout
-                if (output && output.length > MAX_OUTPUT) {
-                  output = output.slice(0, MAX_OUTPUT) + '\n\x1b[38;5;3m... output truncated (' + result.stdout.length + ' chars total)\x1b[0m'
-                }
-                if (output) safeWrite(term, output)
-                if (result.stderr) safeWrite(term, '\x1b[38;5;9m' + result.stderr + '\x1b[0m')
-                currentModeRef.current = 'shell'
-                cbRef.onModeChange('shell')
-                cbRef.writePrompt(term)
-              }
-            } else {
-              cbRef.writePrompt(term)
-            }
             inputBufferRef.current = ''
+            executeShellLine(line, mode === 'tmux')
           } else if (data === '\x7f') {
             if (inputBufferRef.current.length > 0) {
               inputBufferRef.current = inputBufferRef.current.slice(0, -1)
               safeWrite(term, '\b \b')
             }
-          } else if (code === 3) {
-            safeWrite(term, '^C')
-            inputBufferRef.current = ''
-            cbRef.writePrompt(term)
-          } else if (code === 4) {
-            safeWrite(term, '^D')
-            inputBufferRef.current = ''
-            if (currentModeRef.current !== 'shell') {
-              currentModeRef.current = 'shell'
-              cbRef.onModeChange('shell')
-              cbRef.writePrompt(term)
-            }
-          } else if (code < 32) {
-            // ignore other control chars
-          } else if (currentModeRef.current === 'less' && (data === 'q' || data === 'Q')) {
-            currentModeRef.current = 'shell'
-            cbRef.onModeChange('shell')
-            cbRef.writePrompt(term)
-          } else if (currentModeRef.current === 'less') {
-            // Ignore all other keys in less mode
-          } else if (currentModeRef.current === 'vim:normal' && data === ':') {
-            safeWrite(term, ':')
-            inputBufferRef.current = ':'
-          } else if (currentModeRef.current.startsWith('vim') && data === '\x1b') {
-            currentModeRef.current = 'vim:normal'
-            cbRef.onModeChange('vim:normal')
-            inputBufferRef.current = ''
-          } else if (currentModeRef.current.startsWith('vim')) {
-            // In vim modes, only handle specific keys, ignore text input
-            if (data === 'q' && inputBufferRef.current === ':') {
-              currentModeRef.current = 'shell'
-              cbRef.onModeChange('shell')
-              cbRef.writePrompt(term)
-              inputBufferRef.current = ''
-            } else if (currentModeRef.current === 'vim:command' || inputBufferRef.current.startsWith(':')) {
-              inputBufferRef.current += data
-              safeWrite(term, data)
-              if (data === '\r') {
-                const cmd = inputBufferRef.current.slice(1).trim()
-                if (cmd === 'q' || cmd === 'q!' || cmd === 'wq') {
-                  currentModeRef.current = 'shell'
-                  cbRef.onModeChange('shell')
-                }
-                inputBufferRef.current = ''
-                cbRef.writePrompt(term)
-              }
-            }
-            // Ignore other text input in vim
-          } else if (currentModeRef.current === 'nano') {
-            if (data === '\x03') { // Ctrl+X to exit
-              currentModeRef.current = 'shell'
-              cbRef.onModeChange('shell')
-              cbRef.writePrompt(term)
-            }
-            // Ignore all other keys in nano
-          } else if (['node', 'python', 'psql', 'sqlite'].includes(currentModeRef.current)) {
-            if (data === '\x04') { // Ctrl+D to exit
-              currentModeRef.current = 'shell'
-              cbRef.onModeChange('shell')
-              cbRef.writePrompt(term)
-            } else {
-              // Accept input in REPL modes
-              inputBufferRef.current += data
-              safeWrite(term, data)
-              if (data === '\r') {
-                const line = inputBufferRef.current.trim()
-                // Simple REPL responses
-                if (currentModeRef.current === 'node' && line === '.exit') {
-                  currentModeRef.current = 'shell'
-                  cbRef.onModeChange('shell')
-                  cbRef.writePrompt(term)
-                } else if (currentModeRef.current === 'python' && line === 'exit()') {
-                  currentModeRef.current = 'shell'
-                  cbRef.onModeChange('shell')
-                  cbRef.writePrompt(term)
-                } else if (currentModeRef.current === 'psql' && line === '\\q') {
-                  currentModeRef.current = 'shell'
-                  cbRef.onModeChange('shell')
-                  cbRef.writePrompt(term)
-                } else if (currentModeRef.current === 'sqlite' && line === '.quit') {
-                  currentModeRef.current = 'shell'
-                  cbRef.onModeChange('shell')
-                  cbRef.writePrompt(term)
-                } else {
-                  // Show REPL prompt for continuing input
-                  if (currentModeRef.current === 'node') safeWrite(term, '\x1b[38;5;10m> \x1b[0m')
-                  else if (currentModeRef.current === 'python') safeWrite(term, '\x1b[38;5;10m>>> \x1b[0m')
-                  else if (currentModeRef.current === 'psql') safeWrite(term, 'postgres=# ')
-                  else if (currentModeRef.current === 'sqlite') safeWrite(term, 'sqlite> ')
-                }
-                inputBufferRef.current = ''
-              }
-            }
-          } else {
-            // Normal shell mode — accumulate input
+          } else if (code >= 32) {
             inputBufferRef.current += data
             safeWrite(term, data)
           }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
           safeWriteLn(term, '')
-          safeWriteLn(term, '\x1b[38;5;9m[terminal error: ' + msg + ']\x1b[0m')
+          safeWriteLn(term, `\x1b[38;5;9m[terminal error: ${message}]\x1b[0m`)
           inputBufferRef.current = ''
-          try { cbRef.writePrompt(term) } catch { /* ignore */ }
+          try { cbRef.writePrompt(term) } catch { /* The terminal may be gone. */ }
         }
-      })
+      }
 
-      term.onKey(({ key: _key, domEvent }: { key: string; domEvent: KeyboardEvent }) => {
-        void _key;
-        if (domEvent.ctrlKey && domEvent.key === 'l') {
+      term.onData(handleTerminalData)
+      const handleControlKeyDown = (event: KeyboardEvent) => {
+        if (event.type !== 'keydown') return true
+        const key = event.key.toLowerCase()
+
+        if (event.ctrlKey && key === 'l') {
+          event.preventDefault()
+          event.stopPropagation()
           term.clear()
           cbRef.writePrompt(term)
+          return
         }
-        if (domEvent.ctrlKey && domEvent.key === 'c') {
-          inputBufferRef.current = ''
-          cbRef.writePrompt(term)
+
+        const controlCodes: Record<string, number> = {
+          b: 2,
+          c: 3,
+          d: 4,
+          g: 7,
+          k: 11,
+          o: 15,
+          q: 17,
+          r: 18,
+          s: 19,
+          u: 21,
+          x: 24,
+          z: 26,
         }
-      })
+        if (event.ctrlKey && controlCodes[key]) {
+          event.preventDefault()
+          event.stopPropagation()
+          handleTerminalData(String.fromCharCode(controlCodes[key]))
+          return
+        }
+
+        if (event.altKey && key === '.') {
+          event.preventDefault()
+          event.stopPropagation()
+          handleTerminalData('\x1b.')
+        }
+      }
+      container.addEventListener('keydown', handleControlKeyDown, true)
 
       termRef.current = term
       fitRef.current = fitAddon
@@ -338,45 +518,43 @@ export default function TerminalEmulator({ shell, onModeChange, onCommandExecute
       setLoading(false)
 
       const handleResize = () => {
-        try { fitAddon?.fit() } catch { /* ignore */ }
+        try { fitAddon.fit() } catch { /* Ignore a resize during disposal. */ }
       }
       window.addEventListener('resize', handleResize)
 
       const handleFocus = () => setHasFocus(true)
       const handleBlur = () => setHasFocus(false)
-      containerRef.current.addEventListener('focusin', handleFocus)
-      containerRef.current.addEventListener('focusout', handleBlur)
+      container.addEventListener('focusin', handleFocus)
+      container.addEventListener('focusout', handleBlur)
 
       cleanupFn = () => {
         try {
           window.removeEventListener('resize', handleResize)
-          containerRef.current?.removeEventListener('focusin', handleFocus)
-          containerRef.current?.removeEventListener('focusout', handleBlur)
-        } catch { /* ignore cleanup errors */ }
-        try {
-          term.dispose()
-        } catch { /* ignore double-dispose */ }
+          container.removeEventListener('keydown', handleControlKeyDown, true)
+          container.removeEventListener('focusin', handleFocus)
+          container.removeEventListener('focusout', handleBlur)
+        } catch { /* The container may already be gone. */ }
+        try { term.dispose() } catch { /* Avoid a double-dispose crash. */ }
         termRef.current = null
+        fitRef.current = null
       }
     }
 
-    initTerminal()
+    void initTerminal()
 
     return () => {
       disposed = true
       if (cleanupFn) cleanupFn()
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [shell, writePrompt])
 
   useEffect(() => {
-    if (successPulse && containerRef.current) {
-      containerRef.current.style.boxShadow = 'inset 0 0 0 2px rgba(0, 255, 136, 0.4)'
-      const timer = setTimeout(() => {
-        if (containerRef.current) containerRef.current.style.boxShadow = 'none'
-      }, 400)
-      return () => clearTimeout(timer)
-    }
+    if (!successPulse || !containerRef.current) return
+    containerRef.current.style.boxShadow = 'inset 0 0 0 2px rgba(0, 255, 136, 0.4)'
+    const timer = setTimeout(() => {
+      if (containerRef.current) containerRef.current.style.boxShadow = 'none'
+    }, 400)
+    return () => clearTimeout(timer)
   }, [successPulse])
 
   const focusStyle: React.CSSProperties = hasFocus
