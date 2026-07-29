@@ -223,10 +223,7 @@ export class VFS {
     const userInfo = this.users.get(user) ?? { uid: 9999, groups: [] }
     const perm = parsePermissions(node.permissions)
     if (user === 'root') return true
-    let mask = 0
-    if (mode === 'read') mask = 4
-    else if (mode === 'write') mask = 2
-    else mask = 1
+    const mask = mode === 'read' ? 4 : mode === 'write' ? 2 : 1
 
     if (node.owner === user) return (perm.owner & mask) !== 0
     if (userInfo.groups.includes(node.group)) return (perm.group & mask) !== 0
@@ -242,6 +239,44 @@ export class VFS {
 
   getCurrentUser(): string { return this.currentUser }
   setCurrentUser(u: string) { this.currentUser = u }
+
+  canWriteFile(path: string, cwd: string[], followedLinks = new Set<VNode>()): { error?: string } {
+    const parts = this.resolvePath(path, cwd)
+    const { node, parent, denied } = this.getNode(parts)
+    if (denied) return { error: `${path}: Permission denied` }
+    if (!parent) return { error: 'Cannot write to root' }
+    if (!node) {
+      return this.checkPerm(parent, this.currentUser, 'write')
+        ? {}
+        : { error: `${path}: Permission denied` }
+    }
+    const resolved = this.followSymlink(node, parts)
+    if (!resolved && node.type === 'symlink' && node.target) {
+      if (followedLinks.has(node)) return { error: `${path}: Too many levels of symbolic links` }
+      followedLinks.add(node)
+      const context = node.target.startsWith('/') ? [] : parts.slice(0, -1)
+      const targetParts = node.target.startsWith('/')
+        ? node.target.slice(1).split('/').filter(Boolean)
+        : node.target.split('/').filter(Boolean)
+      return this.canWriteFile(`/${this.resolve(targetParts, context).join('/')}`, [], followedLinks)
+    }
+    if (!resolved) return { error: `${path}: No such file or directory` }
+    if (resolved.type === 'directory') return { error: `${path}: Is a directory` }
+    return this.checkPerm(resolved, this.currentUser, 'write')
+      ? {}
+      : { error: `${path}: Permission denied` }
+  }
+
+  canDeleteFile(path: string, cwd: string[]): { error?: string } {
+    const parts = this.resolvePath(path, cwd)
+    const { node, parent, denied } = this.getNode(parts)
+    if (denied) return { error: `rm: cannot remove '${path}': Permission denied` }
+    if (!node) return { error: `rm: cannot remove '${path}': No such file or directory` }
+    if (!parent) return { error: `rm: cannot remove '${path}': Is a directory` }
+    if (!this.canRemove(parent, node)) return { error: `rm: cannot remove '${path}': Permission denied` }
+    if (node.type === 'directory') return { error: `rm: cannot remove '${path}': Is a directory` }
+    return {}
+  }
 
   hasPermission(path: string, cwd: string[], mode: PermissionMode): boolean {
     const parts = this.resolvePath(path, cwd)
@@ -272,13 +307,23 @@ export class VFS {
     return { content: resolved.content ?? '' }
   }
 
-  writeFile(path: string, cwd: string[], content: string, append = false): { error?: string } {
+  writeFile(path: string, cwd: string[], content: string, append = false, followedLinks = new Set<VNode>()): { error?: string } {
     const parts = this.resolvePath(path, cwd)
     const { node, parent, name, denied } = this.getNode(parts)
     if (denied) return { error: `${path}: Permission denied` }
     if (!parent) return { error: `Cannot write to root` }
     if (node) {
       const resolved = this.followSymlink(node, parts)
+      if (!resolved && node.type === 'symlink' && node.target) {
+        if (followedLinks.has(node)) return { error: `${path}: Too many levels of symbolic links` }
+        followedLinks.add(node)
+        const context = node.target.startsWith('/') ? [] : parts.slice(0, -1)
+        const targetParts = node.target.startsWith('/')
+          ? node.target.slice(1).split('/').filter(Boolean)
+          : node.target.split('/').filter(Boolean)
+        const target = `/${this.resolve(targetParts, context).join('/')}`
+        return this.writeFile(target, [], content, append, followedLinks)
+      }
       if (!resolved) return { error: `${path}: No such file or directory` }
       if (resolved.type === 'directory') return { error: `${path}: Is a directory` }
       if (!this.checkPerm(resolved, this.currentUser, 'write')) return { error: `${path}: Permission denied` }
@@ -294,6 +339,23 @@ export class VFS {
 
   createFile(path: string, cwd: string[], content = ''): { error?: string } {
     return this.writeFile(path, cwd, content)
+  }
+
+  touch(path: string, cwd: string[], mtime = new Date()): { error?: string } {
+    const parts = this.resolvePath(path, cwd)
+    const { node, denied } = this.getNode(parts)
+    if (denied) return { error: `touch: cannot touch '${path}': Permission denied` }
+    const resolved = this.followSymlink(node, parts)
+    if (!resolved) return { error: `touch: cannot touch '${path}': No such file or directory` }
+    if (
+      this.currentUser !== 'root'
+      && resolved.owner !== this.currentUser
+      && !this.checkPerm(resolved, this.currentUser, 'write')
+    ) {
+      return { error: `touch: cannot touch '${path}': Permission denied` }
+    }
+    resolved.mtime = new Date(mtime)
+    return {}
   }
 
   deleteFile(path: string, cwd: string[]): { error?: string } {
@@ -338,9 +400,11 @@ export class VFS {
     if (denied) return { entries: [], error: `ls: cannot access '${path}': Permission denied` }
     const resolved = this.followSymlink(node, parts)
     if (!resolved) return { entries: [], error: `ls: cannot access '${path}': No such file or directory` }
-    if (resolved.type === 'file') return { entries: [resolved], error: undefined }
+    if (resolved.type === 'file') {
+      return { entries: [{ ...resolved, name: parts.at(-1) ?? resolved.name }], error: undefined }
+    }
     if (!this.checkPerm(resolved, this.currentUser, 'read')) return { entries: [], error: `ls: cannot open directory '${path}': Permission denied` }
-    const entries = Array.from(resolved.children!.values()).sort((a, b) => {
+    const entries = Array.from(resolved.children!, ([name, child]) => ({ ...child, name })).sort((a, b) => {
       if (a.type === 'directory' && b.type !== 'directory') return -1
       if (a.type !== 'directory' && b.type === 'directory') return 1
       return a.name.localeCompare(b.name)
@@ -452,7 +516,25 @@ export class VFS {
     return {}
   }
 
-  copy(src: string, dst: string, cwd: string[], recursive = false): { error?: string } {
+  hardlink(target: string, linkPath: string, cwd: string[]): { error?: string } {
+    const targetParts = this.resolvePath(target, cwd)
+    const targetResult = this.getNode(targetParts)
+    if (targetResult.denied) return { error: `ln: failed to access '${target}': Permission denied` }
+    if (!targetResult.node) return { error: `ln: failed to access '${target}': No such file or directory` }
+    if (targetResult.node.type !== 'file') return { error: `ln: ${target}: hard link not allowed for this node type` }
+    const linkParts = this.resolvePath(linkPath, cwd)
+    const { parent, name, denied } = this.getNode(linkParts)
+    if (denied || !parent || !this.checkPerm(parent, this.currentUser, 'write')) {
+      return { error: `ln: failed to create hard link '${linkPath}': Permission denied` }
+    }
+    if (parent.children!.has(name)) return { error: `ln: failed to create hard link '${linkPath}': File exists` }
+    // Directory entries intentionally share the same file node: content,
+    // ownership, permissions, size, and mtime therefore change together.
+    parent.children!.set(name, targetResult.node)
+    return {}
+  }
+
+  copy(src: string, dst: string, cwd: string[], recursive = false, preserve = false): { error?: string } {
     const srcParts = this.resolvePath(src, cwd)
     const dstParts = this.resolvePath(dst, cwd)
     const { node: srcNode, denied: srcDenied } = this.getNode(srcParts)
@@ -468,7 +550,8 @@ export class VFS {
       if (!this.checkPerm(srcNode, this.currentUser, 'read') || !this.checkPerm(srcNode, this.currentUser, 'execute')) {
         return { error: `cp: cannot open directory '${src}': Permission denied` }
       }
-      const targetParts = resolvedDstNode?.type === 'directory' ? [...dstParts, srcNode.name] : dstParts
+      const sourceName = srcParts.at(-1) ?? srcNode.name
+      const targetParts = resolvedDstNode?.type === 'directory' ? [...dstParts, sourceName] : dstParts
       if (
         targetParts.length > srcParts.length &&
         srcParts.every((part, index) => targetParts[index] === part)
@@ -488,8 +571,19 @@ export class VFS {
           targetPath,
           [],
           true,
+          preserve,
         )
         if (childResult.error) return childResult
+      }
+      if (preserve) {
+        const copiedDirectory = this.getNode(targetParts).node
+        if (!copiedDirectory) return { error: `cp: cannot preserve metadata for '${targetPath}'` }
+        copiedDirectory.permissions = srcNode.permissions
+        if (this.currentUser === 'root') {
+          copiedDirectory.owner = srcNode.owner
+          copiedDirectory.group = srcNode.group
+        }
+        copiedDirectory.mtime = new Date(srcNode.mtime)
       }
       return {}
     }
@@ -500,13 +594,24 @@ export class VFS {
     const content = resolved?.content ?? srcNode.content ?? ''
     if (dstNode?.type === 'symlink' && resolvedDstNode?.type !== 'directory') {
       const written = this.writeFile(dst, cwd, content)
-      return written.error ? { error: `cp: cannot create regular file '${dst}': ${written.error}` } : {}
+      if (written.error) return { error: `cp: cannot create regular file '${dst}': ${written.error}` }
+      if (preserve) {
+        const copied = this.stat(dst, cwd).node
+        if (!copied) return { error: `cp: cannot preserve metadata for '${dst}'` }
+        copied.permissions = resolved.permissions
+        if (this.currentUser === 'root') {
+          copied.owner = resolved.owner
+          copied.group = resolved.group
+        }
+        copied.mtime = new Date(resolved.mtime)
+      }
+      return {}
     }
     let actualDstParent = dstParent
     let actualDstName = dstName
     if (resolvedDstNode?.type === 'directory') {
       actualDstParent = resolvedDstNode
-      actualDstName = srcNode.name
+      actualDstName = srcParts.at(-1) ?? srcNode.name
     }
     if (!this.checkPerm(actualDstParent, this.currentUser, 'write')) return { error: `cp: cannot create regular file '${dst}': Permission denied` }
     const existing = actualDstParent.children!.get(actualDstName)
@@ -518,6 +623,16 @@ export class VFS {
       existing.mtime = new Date()
     } else {
       actualDstParent.children!.set(actualDstName, createVNode({ name: actualDstName, type: 'file', content, owner: this.currentUser, group: this.currentUser }))
+    }
+    if (preserve) {
+      const copied = actualDstParent.children!.get(actualDstName)
+      if (!copied) return { error: `cp: cannot preserve metadata for '${dst}'` }
+      copied.permissions = resolved.permissions
+      if (this.currentUser === 'root') {
+        copied.owner = resolved.owner
+        copied.group = resolved.group
+      }
+      copied.mtime = new Date(resolved.mtime)
     }
     return {}
   }
@@ -557,11 +672,25 @@ export class VFS {
     if (existing?.type === 'directory' && srcNode.type !== 'directory') return { error: `mv: cannot overwrite directory '${dst}' with non-directory` }
     if (existing && existing.type !== 'directory' && srcNode.type === 'directory') return { error: `mv: cannot overwrite non-directory '${dst}' with directory` }
     if (existing?.type === 'directory' && existing.children!.size > 0) return { error: `mv: cannot overwrite '${dst}': Directory not empty` }
+    const referencesBeforeMove = this.countNodeReferences(srcNode)
     srcParent.children!.delete(srcName)
     if (existing) actualDstParent.children!.delete(actualDstName)
-    srcNode.name = actualDstName
+    if (referencesBeforeMove <= 1) srcNode.name = actualDstName
     actualDstParent.children!.set(actualDstName, srcNode)
     return {}
+  }
+
+  private countNodeReferences(target: VNode): number {
+    let count = 0
+    const visit = (node: VNode) => {
+      if (node.type !== 'directory') return
+      for (const child of node.children!.values()) {
+        if (child === target) count += 1
+        if (child.type === 'directory') visit(child)
+      }
+    }
+    visit(this.root)
+    return count
   }
 
   getRoot(): VNode { return this.root }

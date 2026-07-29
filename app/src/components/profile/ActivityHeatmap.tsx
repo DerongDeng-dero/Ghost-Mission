@@ -88,7 +88,7 @@ export default function ActivityHeatmap({ data }: ActivityHeatmapProps) {
           {monthLabels.map((m) => (
             <span
               key={m}
-              className="flex-1 font-jetbrains text-xs text-[#4A6072] uppercase"
+              className="flex-1 font-jetbrains text-xs text-[#788DA1] uppercase"
             >
               {m}
             </span>
@@ -101,7 +101,7 @@ export default function ActivityHeatmap({ data }: ActivityHeatmapProps) {
             {dayLabels.filter((_, i) => i % 2 === 0).map((d) => (
               <span
                 key={d}
-                className="font-jetbrains text-xs text-[#4A6072] h-3 flex items-center"
+                className="font-jetbrains text-xs text-[#788DA1] h-3 flex items-center"
                 style={{ width: '28px' }}
               >
                 {d}
@@ -136,7 +136,7 @@ export default function ActivityHeatmap({ data }: ActivityHeatmapProps) {
 
         {/* Legend */}
         <div className="flex items-center gap-2 mt-3 ml-9">
-          <span className="font-jetbrains text-xs text-[#4A6072]">{t('profile.less')}</span>
+          <span className="font-jetbrains text-xs text-[#788DA1]">{t('profile.less')}</span>
           {[0, 2, 4, 7, 10].map((count) => (
             <div
               key={count}
@@ -144,7 +144,7 @@ export default function ActivityHeatmap({ data }: ActivityHeatmapProps) {
               style={{ backgroundColor: getIntensityColor(count) }}
             />
           ))}
-          <span className="font-jetbrains text-xs text-[#4A6072]">{t('profile.more')}</span>
+          <span className="font-jetbrains text-xs text-[#788DA1]">{t('profile.more')}</span>
         </div>
       </div>
     </div>

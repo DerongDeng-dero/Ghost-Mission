@@ -10,7 +10,11 @@ export function LanguageSwitcher() {
     if (i18n.language !== lang) {
       void i18n.changeLanguage(lang)
       // Persist manually to ensure it sticks
-      localStorage.setItem('i18nextLng', lang)
+      try {
+        window.localStorage.setItem('i18nextLng', lang)
+      } catch {
+        // Language switching still works when persistence is unavailable.
+      }
     }
   }
 

@@ -9,6 +9,13 @@ import {
 import { useTranslation } from 'react-i18next'
 import { useGameStore } from '@/store/gameStore'
 import type { Skill, Chapter } from '@/store/gameStore'
+import chapterSummaries from '@/data/chapter_summaries.json'
+import { publicAssetUrl } from '@/lib/publicAsset'
+
+const chapterNames = chapterSummaries.map(chapter => ({
+  zh: chapter.title_zh,
+  en: chapter.title_en,
+}))
 
 /* ------------------------------------------------------------------ */
 /*  useTypewriter hook                                                  */
@@ -226,26 +233,6 @@ export default function Home() {
   const reduceMotion = useReducedMotion() ?? false
   const isZh = i18n.language?.startsWith('zh') ?? true
 
-  // Bilingual chapter names
-  const chapterNames = [
-    { zh: '系统启动', en: 'System Boot' },
-    { zh: '文件系统基础', en: 'Filesystem' },
-    { zh: '文件操作', en: 'File Ops' },
-    { zh: '分页器', en: 'Pager' },
-    { zh: 'Vim神庙', en: 'Vim Temple' },
-    { zh: 'Git迷宫', en: 'Git Maze' },
-    { zh: '进程追踪', en: 'Process Hunt' },
-    { zh: '暗影网络', en: 'Dark Net' },
-    { zh: 'Docker港湾', en: 'Docker Bay' },
-    { zh: 'Shell精通', en: 'Shell Mastery' },
-    { zh: '监控器', en: 'Monitor' },
-    { zh: '红区', en: 'Red Zone' },
-    { zh: '777博士', en: 'Dr. 777' },
-    { zh: '逃脱', en: 'Escape' },
-    { zh: '幽灵协议', en: 'Ghost Protocol' },
-    { zh: '终极终端', en: 'Final Terminal' },
-    { zh: '多路复用器', en: 'Multiplexer' },
-  ]
   const {
     callsign, rank, skills, activities, chapters, currentChapter,
     missionsCompleted, commandsLearned, currentStreak, dailyIncident,
@@ -254,9 +241,9 @@ export default function Home() {
   const { displayed: welcomeText, done: typewriterDone } = useTypewriter(t('home.welcome'), 40, 300, reduceMotion)
 
   const rankImages: Record<string, string> = {
-    recruit: '/rank-recruit.png',
-    operator: '/rank-operator.png',
-    ghost: '/rank-ghost.png',
+    recruit: publicAssetUrl('rank-recruit.png'),
+    operator: publicAssetUrl('rank-operator.png'),
+    ghost: publicAssetUrl('rank-ghost.png'),
   }
 
   const rankLabels: Record<string, string> = {
@@ -337,7 +324,7 @@ export default function Home() {
         <div
           className="absolute inset-0 z-bg"
           style={{
-            backgroundImage: 'url(/hero-bg.jpg)',
+            backgroundImage: `url("${publicAssetUrl('hero-bg.jpg')}")`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             opacity: 0.4,
@@ -354,7 +341,7 @@ export default function Home() {
             className="absolute inset-0 z-bg object-cover pointer-events-none"
             style={{ opacity: 0.08 }}
           >
-            <source src="/hero-loop.mp4" type="video/mp4" />
+            <source src={publicAssetUrl('hero-loop.mp4')} type="video/mp4" />
           </video>
         )}
         {/* Gradient overlay */}
@@ -463,7 +450,7 @@ export default function Home() {
             ].map((stat, i) => (
               <motion.div
                 key={stat.label}
-                className="flex items-center gap-space-1.5 font-jetbrains text-body-sm text-[#4A6072]"
+                className="flex items-center gap-space-1.5 font-jetbrains text-body-sm text-[#788DA1]"
                 initial={{ opacity: 0, y: 8 }}
                 animate={typewriterDone ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
                 transition={{ duration: 0.3, delay: 0.6 + i * 0.1 }}
@@ -536,7 +523,7 @@ export default function Home() {
                   >
                     {mission.type}
                   </span>
-                  <ChevronRight size={14} className="text-[#4A6072]" />
+                  <ChevronRight size={14} className="text-[#788DA1]" />
                 </div>
                 <h3 className="font-jetbrains text-body text-[#E8EDF2] truncate">{mission.title}</h3>
                 {mission.progress > 0 && (
@@ -547,7 +534,7 @@ export default function Home() {
                         style={{ width: `${mission.progress}%`, backgroundColor: mission.color }}
                       />
                     </div>
-                    <span className="font-jetbrains text-code-sm text-[#4A6072] mt-space-0.5 block">{mission.progress}% {t('common.complete')}</span>
+                    <span className="font-jetbrains text-code-sm text-[#788DA1] mt-space-0.5 block">{mission.progress}% {t('common.complete')}</span>
                   </div>
                 )}
               </motion.article>
@@ -609,14 +596,14 @@ export default function Home() {
 
                 {/* Header */}
                 <div className="flex items-center justify-between mb-space-2">
-                  <span className="font-jetbrains text-badge uppercase text-[#4A6072]">{card.type}</span>
+                  <span className="font-jetbrains text-badge uppercase text-[#788DA1]">{card.type}</span>
                   <div className="flex items-center gap-space-0.5" aria-label={t('missionBoard.difficultyStars', { count: card.difficulty })}>
                     {Array.from({ length: 5 }, (_, j) => (
                       <Star
                         key={j}
                         size={12}
                         fill={j < card.difficulty ? '#FFD166' : 'none'}
-                        stroke={j < card.difficulty ? '#FFD166' : '#4A6072'}
+                        stroke={j < card.difficulty ? '#FFD166' : '#788DA1'}
                         aria-hidden="true"
                       />
                     ))}
@@ -628,7 +615,7 @@ export default function Home() {
 
                 {/* Meta */}
                 <div className="flex items-center gap-space-3 mb-space-3">
-                  <span className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#4A6072]">
+                  <span className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#788DA1]">
                     <Clock size={12} />
                     {card.time}
                   </span>
@@ -664,7 +651,7 @@ export default function Home() {
                         style={{ width: `${card.progress}%`, backgroundColor: '#00FF88' }}
                       />
                     </div>
-                    <span className="font-jetbrains text-code-sm text-[#4A6072] mt-space-1 block">
+                    <span className="font-jetbrains text-code-sm text-[#788DA1] mt-space-1 block">
                       {card.progress}% {t('common.complete')}
                     </span>
                   </div>
@@ -719,7 +706,7 @@ export default function Home() {
                             ? '#00FF88'
                             : chapter.status === 'current'
                               ? '#00E5FF'
-                              : '#4A6072',
+                              : '#788DA1',
                       }}
                     >
                       {chapterNames[i]?.[isZh ? 'zh' : 'en'] || chapter.title}
@@ -819,7 +806,7 @@ export default function Home() {
                       <span className="font-jetbrains text-code-sm" style={{ color: skill.color }}>
                         {skill.score}%
                       </span>
-                      <span className="font-inter text-body-sm text-[#4A6072]">
+                      <span className="font-inter text-body-sm text-[#788DA1]">
                         {t('home.lastPracticed', { days: 3 + i })}
                       </span>
                     </div>
@@ -874,11 +861,11 @@ export default function Home() {
 
                 {/* Meta */}
                 <div className="flex flex-wrap items-center gap-space-3">
-                  <span className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#4A6072]">
+                  <span className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#788DA1]">
                     <Clock size={14} />
                     {dailyIncident.estimatedTime}
                   </span>
-                  <span className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#4A6072]">
+                  <span className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#788DA1]">
                     <Star size={14} />
                     {dailyIncident.difficulty}
                   </span>
@@ -959,7 +946,7 @@ export default function Home() {
                         {activity.description}
                       </p>
                     </div>
-                    <span className="font-jetbrains text-body-sm text-[#4A6072] shrink-0">
+                    <span className="font-jetbrains text-body-sm text-[#788DA1] shrink-0">
                       {activity.timestamp}
                     </span>
                   </motion.div>
@@ -997,8 +984,8 @@ export default function Home() {
                           aspectRatio: '1',
                         }}
                       >
-                        <Lock size={20} className="text-[#4A6072]" />
-                        <span className="font-jetbrains text-body-sm text-[#4A6072] text-center leading-tight">
+                        <Lock size={20} className="text-[#788DA1]" />
+                        <span className="font-jetbrains text-body-sm text-[#788DA1] text-center leading-tight">
                           {action.label}
                         </span>
                       </div>

@@ -118,7 +118,21 @@ async function collectReferences(filePath) {
     referencedAssets.set(resolved, { reference, source: filePath })
     if (resolved.startsWith(path.resolve(appRoot, 'public') + path.sep)) {
       referencedPublicFiles.add(resolved)
+      if (reference.startsWith('/') && filePath.startsWith(path.resolve(appRoot, 'src'))) {
+        failures.push(
+          'Root-absolute public asset ' + reference + ' in ' +
+            path.relative(appRoot, filePath) + ' bypasses Vite BASE_URL',
+        )
+      }
     }
+  }
+
+  const publicAssetPattern = /publicAssetUrl\(\s*['"]([^'"]+\.(?:png|jpe?g|gif|webp|svg|mp4|webm))['"]\s*\)/gim
+  while ((match = publicAssetPattern.exec(text)) !== null) {
+    const reference = decodeURIComponent(match[1])
+    const resolved = path.resolve(appRoot, 'public', reference.replace(/^\/+/, ''))
+    referencedAssets.set(resolved, { reference, source: filePath })
+    referencedPublicFiles.add(resolved)
   }
 }
 

@@ -20,6 +20,9 @@ import CommandTimeline from '@/components/debrief/CommandTimeline'
 import type { TimelineEntry } from '@/components/debrief/CommandTimeline'
 import PerformanceCard from '@/components/debrief/PerformanceCard'
 import MissionReport from '@/components/debrief/MissionReport'
+import { ALL_LEVELS, getLevelById } from '@/engine/levels'
+import { loadMissionRunReport } from '@/engine/runReport'
+import type { MissionRunAction } from '@/engine/runReport'
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -36,6 +39,11 @@ interface ObjectiveReview {
   completed: boolean
   evidence: string
   points: number
+}
+
+function isRunActionRed(action: MissionRunAction, fallbackRedCommands: string[]): boolean {
+  if (action.redCommands) return action.redCommands.length > 0
+  return fallbackRedCommands.some(command => action.command.includes(command))
 }
 
 interface LearnedSkill {
@@ -147,7 +155,7 @@ function AnimatedScore({ value, color }: { value: number; color: string }) {
         <span className="font-jetbrains text-h1" style={{ color, fontSize: '32px' }}>
           {display}
         </span>
-        <span className="font-jetbrains text-code-sm text-[#4A6072]">/100</span>
+        <span className="font-jetbrains text-code-sm text-[#788DA1]">/100</span>
       </div>
     </div>
   )
@@ -201,7 +209,7 @@ function ObjectivesReview({ objectives }: { objectives: ObjectiveReview[] }) {
             </div>
             <span
               className="font-fira text-code-sm flex-shrink-0"
-              style={{ color: obj.completed ? '#00FF88' : '#4A6072' }}
+              style={{ color: obj.completed ? '#00FF88' : '#788DA1' }}
             >
               {obj.completed ? `+${obj.points} ${t('debrief.points')}` : `0 ${t('debrief.points')}`}
             </span>
@@ -409,226 +417,26 @@ function RecommendedSteps({ recommendations }: { recommendations: Recommendation
   )
 }
 
-// ─── Demo Data ──────────────────────────────────────────────────────
-
-const DEMO_CATEGORIES: ScoreCategory[] = [
-  { name: 'Objectives Complete', maxPoints: 40, earned: 35, detail: 'Most primary objectives met' },
-  { name: 'Safe Operations', maxPoints: 20, earned: 18, detail: 'Used safe commands throughout' },
-  { name: 'Verification', maxPoints: 15, earned: 12, detail: 'Tests passed successfully' },
-  { name: 'Command Efficiency', maxPoints: 10, earned: 8, detail: 'Minimal unnecessary commands' },
-  { name: 'Keyboard Mastery', maxPoints: 5, earned: 5, detail: 'Used shortcuts effectively' },
-  { name: 'No Hints Bonus', maxPoints: 5, earned: 5, detail: 'Completed without hints' },
-  { name: 'Debrief Quality', maxPoints: 5, earned: 4, detail: 'Thorough review completed' },
-]
-
-const DEMO_TIMELINE: TimelineEntry[] = [
-  {
-    id: '1',
-    timestamp: '00:14',
-    command: 'ls -la /srv/neonmall',
-    exitCode: 0,
-    cwd: '/srv/neonmall',
-    mode: 'shell',
-    risk: 'green',
-    praise: 'Good first step \u2014 scoped the directory before diving in',
-    output: 'total 48\ndrwxr-xr-x 5 root root 4096 Jan 15 08:30 .\ndrwxr-xr-x 12 root root 4096 Jan 15 08:00 ..\n-rw-r--r-- 1 root root  982 Jan 15 08:30 package.json\n-rw-r--r--r-- 1 root root  15K Jan 15 08:30 app.log',
-  },
-  {
-    id: '2',
-    timestamp: '00:42',
-    command: 'cat app.log',
-    exitCode: 0,
-    cwd: '/srv/neonmall',
-    mode: 'shell',
-    risk: 'green',
-    warning: 'Large file \u2014 consider using less or grep for files larger than 1KB',
-    output: '[2024-01-15T08:25:01Z] INFO: Server starting on port 3000...',
-  },
-  {
-    id: '3',
-    timestamp: '01:23',
-    command: 'grep "ERROR" app.log',
-    exitCode: 0,
-    cwd: '/srv/neonmall',
-    mode: 'shell',
-    risk: 'green',
-    praise: 'Switched to grep \u2014 efficient way to find errors in logs',
-    output: '[2024-01-15T08:27:42Z] ERROR: Cannot find module \'express\'\n[2024-01-15T08:28:10Z] ERROR: start script failed with code 1',
-  },
-  {
-    id: '4',
-    timestamp: '01:45',
-    command: 'less app.log',
-    exitCode: 0,
-    cwd: '/srv/neonmall',
-    mode: 'less',
-    risk: 'purple',
-    praise: 'Correctly used less to browse the full log file',
-  },
-  {
-    id: '5',
-    timestamp: '02:10',
-    command: 'cat package.json | grep "start"',
-    exitCode: 0,
-    cwd: '/srv/neonmall',
-    mode: 'shell',
-    risk: 'green',
-    output: '    "start": "node srver.js",',
-  },
-  {
-    id: '6',
-    timestamp: '02:35',
-    command: "sed -i 's/srver.js/server.js/' package.json",
-    exitCode: 0,
-    cwd: '/srv/neonmall',
-    mode: 'shell',
-    risk: 'yellow',
-    output: '',
-  },
-  {
-    id: '7',
-    timestamp: '03:01',
-    command: 'npm test',
-    exitCode: 0,
-    cwd: '/srv/neonmall',
-    mode: 'shell',
-    risk: 'green',
-    praise: 'Ran verification tests \u2014 excellent practice',
-    output: '\u2713 all tests passed (3/3)',
-  },
-  {
-    id: '8',
-    timestamp: '03:45',
-    command: 'git add -A && git commit -m "fix: correct start script path"',
-    exitCode: 0,
-    cwd: '/srv/neonmall',
-    mode: 'shell',
-    risk: 'green',
-    praise: 'Clean commit with descriptive message',
-    output: '[main 7a3f2c1] fix: correct start script path\n 1 file changed, 1 insertion(1), 1 deletion(-)',
-  },
-  {
-    id: '9',
-    timestamp: '04:02',
-    command: 'rm -rf node_modules',
-    exitCode: 0,
-    cwd: '/srv/neonmall',
-    mode: 'shell',
-    risk: 'red',
-    warning: 'Destructive command \u2014 ensure backups exist before removal',
-  },
-  {
-    id: '10',
-    timestamp: '04:30',
-    command: 'npm install',
-    exitCode: 0,
-    cwd: '/srv/neonmall',
-    mode: 'shell',
-    risk: 'yellow',
-    output: 'added 142 packages in 2.3s',
-  },
-]
-
-const DEMO_OBJECTIVES: ObjectiveReview[] = [
-  {
-    id: '1',
-    description: 'Find the error in the logs',
-    completed: true,
-    evidence: 'grep "ERROR" app.log',
-    points: 15,
-  },
-  {
-    id: '2',
-    description: 'Fix package.json start script',
-    completed: true,
-    evidence: 'File modified, tests passed',
-    points: 10,
-  },
-  {
-    id: '3',
-    description: 'Run verification tests',
-    completed: true,
-    evidence: 'npm test \u2713',
-    points: 10,
-  },
-  {
-    id: '4',
-    description: 'Submit a clean Git commit',
-    completed: true,
-    evidence: 'git commit -m "fix: correct start script path"',
-    points: 5,
-  },
-  {
-    id: '5',
-    description: 'Avoid using cat on large files',
-    completed: false,
-    evidence: 'cat app.log (50MB file)',
-    points: 0,
-  },
-]
-
-const DEMO_SKILLS: LearnedSkill[] = [
-  { command: 'less', description: 'You used this for the first time to search log files efficiently.' },
-  { command: 'sed -i', description: 'In-place file editing \u2014 a powerful pattern you applied correctly.' },
-]
-
-const DEMO_WARNINGS: Warning[] = [
-  {
-    message: "You used 'cat' on a 50MB log file.",
-    suggestion: "'less' or 'grep' would be more efficient for large files.",
-  },
-  {
-    message: "You used 'rm -rf node_modules' without checking git status first.",
-    suggestion: "Always verify your changes are committed before destructive operations.",
-  },
-]
-
-const DEMO_RECOMMENDATIONS: Recommendation[] = [
-  {
-    id: 'r1',
-    title: 'Log Analysis Drill',
-    type: 'skill gap',
-    difficulty: 2,
-    skills: ['grep', 'less', 'journalctl'],
-  },
-  {
-    id: 'r2',
-    title: 'NeonMall: Part II',
-    type: 'next story',
-    difficulty: 3,
-    skills: ['npm', 'git', 'sed'],
-  },
-  {
-    id: 'r3',
-    title: 'Package Recovery',
-    type: 'challenge',
-    difficulty: 4,
-    skills: ['Docker', 'npm'],
-  },
-  {
-    id: 'r4',
-    title: 'Safe File Handling',
-    type: 'review',
-    difficulty: 1,
-    skills: ['Filesystem'],
-  },
-]
-
 // ─── Main Debrief Page ──────────────────────────────────────────────
 
 export default function Debrief() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { missionId } = useParams<{ missionId: string }>()
   const headerRef = useRef<HTMLDivElement>(null)
   const headerInView = useInView(headerRef, { once: true })
+  const report = useMemo(() => missionId ? loadMissionRunReport(missionId) : null, [missionId])
+  const level = missionId ? getLevelById(missionId) : undefined
+  const language = i18n.resolvedLanguage?.startsWith('zh') ? 'zh' : 'en'
 
-  // Demo values (in real app, derive from mission state)
-  const missionTitle = missionId === 'midnight-pager' ? 'Midnight Pager' : 'NeonMall Restoration'
-  const completed = true
-  const totalScore = 87
-  const timeTaken = '08:14'
-  const completedDate = '2024-01-15 08:42 UTC'
-  const missionType = t('debrief.missionType.operation')
+  const completed = report?.completed ?? false
+  const totalScore = report?.scoreResult.total ?? 0
+  const elapsedSeconds = report?.elapsedSeconds ?? 0
+  const timeTaken = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, '0')}:${String(elapsedSeconds % 60).padStart(2, '0')}`
+  const completedDate = report
+    ? new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(report.completedAt))
+    : ''
+  const missionTitle = level?.getTitle(language) ?? missionId ?? t('debrief.title')
+  const missionType = level?.mode.toUpperCase() ?? ''
   const grade = getGrade(totalScore)
 
   const handleShare = () => {
@@ -639,20 +447,113 @@ export default function Debrief() {
   const performanceStats = useMemo(
     () => [
       { label: t('terminal.hud.timer'), value: timeTaken, icon: Clock, color: '#00E5FF' },
-      { label: t('debrief.metadata.commandsUsed'), value: '10', icon: Terminal, color: '#00FF88' },
-      { label: t('debrief.stats.uniqueCommands'), value: '6', icon: Zap, color: '#FFD166' },
-      { label: t('debrief.stats.errorsMade'), value: '2', icon: AlertTriangle, color: '#FF4757' },
-      { label: t('debrief.metadata.hintsUsed'), value: '0', icon: Eye, color: '#C77DFF' },
-      { label: t('debrief.stats.safeOps'), value: '7/10', icon: ShieldCheck, color: '#00FF88' },
+      { label: t('debrief.metadata.commandsUsed'), value: String(report?.attemptedActions.length ?? 0), icon: Terminal, color: '#00FF88' },
+      {
+        label: t('debrief.stats.uniqueCommands'),
+        value: String(new Set(report?.attemptedActions.map(action => action.command.trim().split(/\s+/, 1)[0]) ?? []).size),
+        icon: Zap,
+        color: '#FFD166',
+      },
+      { label: t('debrief.stats.errorsMade'), value: String(report?.attemptedActions.filter(action => action.exitCode !== 0).length ?? 0), icon: AlertTriangle, color: '#FF4757' },
+      { label: t('debrief.metadata.hintsUsed'), value: String(report?.hintsUsed ?? 0), icon: Eye, color: '#C77DFF' },
+      {
+        label: t('debrief.stats.safeOps'),
+        value: `${report?.attemptedActions.filter(action => !isRunActionRed(action, report.redCommandsUsed)).length ?? 0}/${report?.attemptedActions.length ?? 0}`,
+        icon: ShieldCheck,
+        color: '#00FF88',
+      },
     ],
-    [t, timeTaken]
+    [report, t, timeTaken]
   )
 
-  const missionReport = `You restored the NeonMall service in ${timeTaken}. You correctly used less to search for ERROR in the logs and exited with q. You fixed the package.json start script and ran npm test to verify. Your Git commit was clean.
+  const scoreCategoryLabels: Record<string, string> = {
+    objectives: 'Objectives Complete',
+    safety: 'Safe Operations',
+    verification: 'State Verification',
+    efficiency: 'Time & Action Efficiency',
+    shortcuts: 'Keyboard Mastery',
+    noHints: 'No Hints Bonus',
+  }
+  const categories: ScoreCategory[] = report
+    ? Object.entries(report.scoreResult.breakdownMax).map(([name, maxPoints]) => ({
+        name: scoreCategoryLabels[name] ?? name,
+        maxPoints,
+        earned: report.scoreResult.breakdown[name] ?? 0,
+        detail: name === 'efficiency'
+          ? 'Measured from configured action and time budgets'
+          : 'Backed by recorded mission evidence',
+      }))
+    : []
+  const objectivePoints = level
+    ? Math.max(1, Math.round(level.scoring.objectives_weight / Math.max(1, level.objectives.filter(objective => objective.required).length)))
+    : 0
+  const objectives: ObjectiveReview[] = level && report
+    ? level.objectives.filter(objective => objective.required).map(objective => {
+        const result = report.validationResults.find(candidate => candidate.objectiveId === objective.id)
+        const expected = objective.label_en.match(/^Master the use of (.+)$/i)?.[1]
+        const evidence = expected
+          ? report.successfulActions.find(action => action.toLowerCase().includes(expected.toLowerCase()))
+          : undefined
+        return {
+          id: objective.id,
+          description: objective.getLabel(language),
+          completed: result?.completed === true,
+          evidence: evidence ?? (result?.completed ? 'Validated by the mission contract' : 'No matching evidence recorded'),
+          points: result?.completed ? objectivePoints : 0,
+        }
+      })
+    : []
+  const timeline: TimelineEntry[] = report
+    ? report.attemptedActions.map(action => {
+        const red = isRunActionRed(action, report.redCommandsUsed)
+        return {
+          id: action.id,
+          timestamp: `${String(Math.floor(action.timestampSeconds / 60)).padStart(2, '0')}:${String(action.timestampSeconds % 60).padStart(2, '0')}`,
+          command: action.command,
+          exitCode: action.exitCode,
+          cwd: action.cwd,
+          mode: action.mode,
+          risk: red ? 'red' : action.kind === 'interaction' ? 'purple' : action.exitCode === 0 ? 'green' : 'yellow',
+          warning: red ? 'The simulator classified this as a red command.' : action.exitCode !== 0 ? 'This action returned a non-zero exit code.' : undefined,
+        }
+      })
+    : []
+  const learnedSkills: LearnedSkill[] = level
+    ? level.skills.map(command => ({ command, description: 'Practiced or reinforced by this mission contract.' }))
+    : []
+  const warnings: Warning[] = report
+    ? [
+        ...report.redCommandsUsed.map(command => ({ message: `Red command recorded: ${command}`, suggestion: 'Confirm the target and mission authorization before destructive operations.' })),
+        ...(report.hintsUsed > 0 ? [{ message: `${report.hintsUsed} hint${report.hintsUsed === 1 ? '' : 's'} used.`, suggestion: 'Replay the mission without hints to reclaim the no-hints bonus.' }] : []),
+        ...report.scoreResult.excludedCategories.map(category => ({ message: `${category} was not scored.`, suggestion: 'This category had no observable evidence and was excluded rather than awarded automatically.' })),
+      ]
+    : []
+  const recommendations: Recommendation[] = level
+    ? ALL_LEVELS.filter(candidate => candidate.chapter_id === level.chapter_id && candidate.id !== level.id)
+        .slice(0, 4)
+        .map(candidate => ({ id: candidate.id, title: candidate.getTitle(language), type: candidate.mode, difficulty: candidate.difficulty, skills: candidate.skills.slice(0, 3) }))
+    : []
+  const verificationApplicable = report?.scoreResult.breakdownMax.verification !== undefined
+  const verificationPassed = verificationApplicable
+    ? report!.scoreResult.breakdown.verification === report!.scoreResult.breakdownMax.verification
+    : null
+  const missionReport = report && level
+    ? `${missionTitle} completed in ${timeTaken} with ${report.attemptedActions.length} recorded action${report.attemptedActions.length === 1 ? '' : 's'}. ${report.validationResults.filter(result => result.completed && level.objectives.find(objective => objective.id === result.objectiveId)?.required).length}/${level.objectives.filter(objective => objective.required).length} required objectives were validated. The ${totalScore}/100 score is normalized only across evidence-bearing categories. Unsupported categories excluded from scoring: ${report.scoreResult.excludedCategories.join(', ') || 'none'}.`
+    : ''
 
-Areas for improvement: You used cat on the log file once before switching to less. Consider using less first for files larger than 1KB.
-
-Recommended next: Practice journalctl -u for service log filtering.`
+  if (!report || !level) {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center px-4" style={{ backgroundColor: '#0A0E14' }}>
+        <div className="max-w-[560px] text-center p-8 rounded-lg border" style={{ backgroundColor: '#0F1419', borderColor: '#1E2D3D' }}>
+          <h1 className="font-jetbrains text-h1 text-[#E8EDF2]">No run report available</h1>
+          <p className="font-inter text-body text-[#8B9EB0] mt-3">Complete this mission in the current browser session to generate an evidence-backed debrief.</p>
+          <Link to={`/terminal/${missionId ?? ''}`} className="inline-flex mt-6 px-5 py-3 rounded-md font-jetbrains" style={{ backgroundColor: '#00FF88', color: '#0A0E14' }}>
+            Start mission
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-[100dvh]" style={{ backgroundColor: '#0A0E14' }}>
@@ -713,8 +614,8 @@ Recommended next: Practice journalctl -u for service log filtering.`
                 >
                   {missionType}
                 </span>
-                <span className="font-jetbrains text-body-sm text-[#4A6072]">{completedDate}</span>
-                <span className="font-jetbrains text-body-sm text-[#4A6072] flex items-center gap-1">
+                <span className="font-jetbrains text-body-sm text-[#788DA1]">{completedDate}</span>
+                <span className="font-jetbrains text-body-sm text-[#788DA1] flex items-center gap-1">
                   <Clock size={12} />
                   {timeTaken}
                 </span>
@@ -741,7 +642,7 @@ Recommended next: Practice journalctl -u for service log filtering.`
               animate={headerInView ? { opacity: 1, scale: 1 } : {}}
               transition={{ delay: 0.8, duration: 0.4 }}
             >
-              {grade.letter} \u2014 {t(grade.label)}
+              {grade.letter} — {t(grade.label)}
             </motion.div>
           </motion.div>
 
@@ -813,26 +714,26 @@ Recommended next: Practice journalctl -u for service log filtering.`
         <MissionReport
           report={missionReport}
           metadata={{
-            commandsUsed: 10,
-            hintsUsed: 0,
-            redCommandsAvoided: false,
-            verificationPassed: true,
+            commandsUsed: report.attemptedActions.length,
+            hintsUsed: report.hintsUsed,
+            redCommandsAvoided: report.redCommandsUsed.length === 0,
+            verificationPassed,
           }}
         />
 
-        <ScoreBreakdown categories={DEMO_CATEGORIES} totalScore={totalScore} />
+        <ScoreBreakdown categories={categories} totalScore={totalScore} />
 
         <PerformanceCard stats={performanceStats} />
 
-        <ObjectivesReview objectives={DEMO_OBJECTIVES} />
+        <ObjectivesReview objectives={objectives} />
 
-        <CommandTimeline entries={DEMO_TIMELINE} />
+        <CommandTimeline entries={timeline} />
 
-        <WhatYouLearned skills={DEMO_SKILLS} />
+        <WhatYouLearned skills={learnedSkills} />
 
-        <WarningsSection warnings={DEMO_WARNINGS} />
+        <WarningsSection warnings={warnings} />
 
-        <RecommendedSteps recommendations={DEMO_RECOMMENDATIONS} />
+        <RecommendedSteps recommendations={recommendations} />
       </div>
     </div>
   )

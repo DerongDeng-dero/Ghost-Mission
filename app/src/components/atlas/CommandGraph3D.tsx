@@ -127,7 +127,7 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
     const svg = d3.select(svgRef.current)
     svg.selectAll('*').remove()
     svg
-      .attr('role', 'img')
+      .attr('role', 'group')
       .attr('aria-label', t('commandAtlas.graphLabel'))
     svg.append('title').text(t('commandAtlas.graphLabel'))
     svg.append('desc').text(t('commandAtlas.instructions'))
@@ -179,7 +179,7 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
       .join('g')
       .style('cursor', 'pointer')
       .attr('role', 'button')
-      .attr('tabindex', 0)
+      .attr('tabindex', (_d, index) => index === 0 ? 0 : -1)
       .attr('aria-label', d => `${d.name}: ${d.summary}`)
 
     const dragBehavior = d3.drag<SVGGElement, CommandNode>()
@@ -238,7 +238,7 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
       const hoveredGroup = d3.select<SVGGElement, CommandNode>(element)
 
       node.transition().duration(150)
-        .style('opacity', n => connected.has(n.id) ? 1 : 0.15)
+        .style('opacity', n => connected.has(n.id) ? 1 : 0.6)
 
       link.transition().duration(150)
         .attr('stroke-opacity', l => {
@@ -306,11 +306,40 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
       event.stopPropagation()
       setSelectedNode(d)
     })
-    node.on('keydown', (event: KeyboardEvent, d: CommandNode) => {
-      if (event.key !== 'Enter' && event.key !== ' ') return
+    node.on('keydown', function(event: KeyboardEvent, d: CommandNode) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        event.stopPropagation()
+        setSelectedNode(d)
+        return
+      }
+
+      const currentIndex = nodes.findIndex(candidate => candidate.id === d.id)
+      const lastIndex = nodes.length - 1
+      let nextIndex = currentIndex
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+        nextIndex = currentIndex === lastIndex ? 0 : currentIndex + 1
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+        nextIndex = currentIndex === 0 ? lastIndex : currentIndex - 1
+      } else if (event.key === 'Home') {
+        nextIndex = 0
+      } else if (event.key === 'End') {
+        nextIndex = lastIndex
+      } else {
+        return
+      }
+
       event.preventDefault()
       event.stopPropagation()
-      setSelectedNode(d)
+      node.attr('tabindex', -1)
+      const nextNode = node.filter(candidate => candidate.id === nodes[nextIndex]?.id)
+      nextNode.attr('tabindex', 0)
+      nextNode.node()?.focus()
+    })
+
+    node.on('focus.roving-tabindex', function() {
+      node.attr('tabindex', -1)
+      d3.select(this).attr('tabindex', 0)
     })
 
     // Click background to deselect
@@ -440,7 +469,7 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
                   <button
                     type="button"
                     key={cmd.id}
-                    className="font-jetbrains text-[10px] min-h-9 px-2 py-1 rounded cursor-pointer hover:opacity-80 transition-opacity"
+                    className="font-jetbrains text-[10px] min-h-9 px-2 py-1 rounded cursor-pointer transition-[filter] hover:brightness-125"
                     style={{
                       backgroundColor: `${DOMAIN_COLORS[cmd.domain] || '#8B9EB0'}15`,
                       color: DOMAIN_COLORS[cmd.domain] || '#8B9EB0',
@@ -463,7 +492,7 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
           {onCommandSelect && (
             <button
               onClick={() => onCommandSelect(selectedNode.name)}
-              className="mt-3 w-full py-1.5 rounded font-jetbrains text-body-sm transition-opacity hover:opacity-80"
+              className="mt-3 w-full py-1.5 rounded font-jetbrains text-body-sm transition-[filter] hover:brightness-125"
               style={{
                 backgroundColor: `${selectedNode.color}20`,
                 color: selectedNode.color,

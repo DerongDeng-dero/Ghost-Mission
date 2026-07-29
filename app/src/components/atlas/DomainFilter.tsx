@@ -56,7 +56,7 @@ export default function DomainFilter({
                 <span
                   className="ml-1.5 font-jetbrains text-badge px-1.5 py-0.5 rounded-full"
                   style={{
-                    color: isActive ? '#00E5FF' : '#4A6072',
+                    color: isActive ? '#00E5FF' : '#788DA1',
                     backgroundColor: isActive ? 'rgba(0, 229, 255, 0.12)' : 'rgba(30, 45, 61, 0.5)',
                   }}
                 >
@@ -80,7 +80,7 @@ export default function DomainFilter({
       <div className="flex flex-wrap items-center gap-3">
         {/* Risk level toggles */}
         <div className="flex items-center gap-2 flex-wrap" role="group" aria-label={t('commandAtlas.riskFilterLabel')}>
-          <span className="font-jetbrains text-body-sm text-[#4A6072] mr-1">{t('commandAtlas.riskFilterLabel')}:</span>
+          <span className="font-jetbrains text-body-sm text-[#788DA1] mr-1">{t('commandAtlas.riskFilterLabel')}:</span>
           {riskLevels.map(({ level, color }) => {
             const isActive = activeRisks.has(level);
             const label = t(`commandAtlas.riskLevels.${level}`);
@@ -106,7 +106,7 @@ export default function DomainFilter({
                 />
                 <span
                   className="sr-only font-jetbrains text-body-sm sm:not-sr-only"
-                  style={{ color: isActive ? color : '#4A6072' }}
+                  style={{ color: isActive ? color : '#788DA1' }}
                 >
                   {label}
                 </span>
@@ -117,7 +117,7 @@ export default function DomainFilter({
             <button
               type="button"
               onClick={() => { activeRisks.forEach(r => onRiskToggle(r)); }}
-              className="ml-1 min-h-11 rounded-radius-sm px-2 font-jetbrains text-body-sm text-[#4A6072] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+              className="ml-1 min-h-11 rounded-radius-sm px-2 font-jetbrains text-body-sm text-[#788DA1] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
             >
               {t('commandAtlas.clearFilters')}
             </button>
@@ -128,7 +128,7 @@ export default function DomainFilter({
 
         {/* Type filters */}
         <div className="flex items-center gap-2 flex-wrap" role="group" aria-label={t('commandAtlas.typeFilterLabel')}>
-          <span className="font-jetbrains text-body-sm text-[#4A6072] mr-1">{t('commandAtlas.typeFilterLabel')}:</span>
+          <span className="font-jetbrains text-body-sm text-[#788DA1] mr-1">{t('commandAtlas.typeFilterLabel')}:</span>
           {commandTypes.map(({ type }) => {
             const isActive = activeTypes.has(type);
             return (
@@ -139,7 +139,7 @@ export default function DomainFilter({
                 aria-pressed={isActive}
                 className="min-h-11 rounded-radius-sm px-2.5 font-jetbrains text-body-sm transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
                 style={{
-                  color: isActive ? '#00E5FF' : '#4A6072',
+                  color: isActive ? '#00E5FF' : '#788DA1',
                   border: `1px solid ${isActive ? '#00E5FF' : '#1E2D3D'}`,
                   backgroundColor: isActive ? 'rgba(0, 229, 255, 0.08)' : 'transparent',
                 }}
@@ -152,7 +152,7 @@ export default function DomainFilter({
             <button
               type="button"
               onClick={() => { activeTypes.forEach(t => onTypeToggle(t)); }}
-              className="ml-1 min-h-11 rounded-radius-sm px-2 font-jetbrains text-body-sm text-[#4A6072] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+              className="ml-1 min-h-11 rounded-radius-sm px-2 font-jetbrains text-body-sm text-[#788DA1] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
             >
               {t('commandAtlas.clearFilters')}
             </button>

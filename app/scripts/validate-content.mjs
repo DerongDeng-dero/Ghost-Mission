@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises'
+import { capabilityMetrics } from './report-capabilities.mjs'
 
 const catalogUrl = new URL('../src/data/all_levels.json', import.meta.url)
+const chapterSummariesUrl = new URL('../src/data/chapter_summaries.json', import.meta.url)
 const allowedModes = new Set(['academy', 'operation', 'boss', 'nightmare'])
 const allowedRiskLevels = new Set(['green', 'blue', 'yellow', 'red', 'purple', 'black'])
 const allowedCheckTypes = new Set([
@@ -38,6 +40,10 @@ const penaltyKeys = [
   'kill_critical',
   'excessive_perms',
 ]
+const redCommandNames = new Set([
+  'apt', 'chmod', 'chown', 'dd', 'dnf', 'docker', 'fdisk', 'kill', 'kubectl', 'mkfs',
+  'pacman', 'pkill', 'reboot', 'rm', 'shred', 'shutdown', 'systemctl', 'yum',
+])
 
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -52,8 +58,10 @@ function describeLevel(level, index) {
 }
 
 let levels
+let chapterSummaries
 try {
   levels = JSON.parse(await readFile(catalogUrl, 'utf8'))
+  chapterSummaries = JSON.parse(await readFile(chapterSummariesUrl, 'utf8'))
 } catch (error) {
   console.error(`Content validation failed: ${error instanceof Error ? error.message : String(error)}`)
   process.exit(1)
@@ -62,6 +70,7 @@ try {
 const failures = []
 const levelIds = new Set()
 const chapterContracts = new Map()
+const chapterLevelCounts = new Map()
 let objectiveCount = 0
 let requiredObjectiveCount = 0
 let checkCount = 0
@@ -94,6 +103,7 @@ if (!Array.isArray(levels) || levels.length === 0) {
     }
 
     if (isNonEmptyString(level.chapter_id)) {
+      chapterLevelCounts.set(level.chapter_id, (chapterLevelCounts.get(level.chapter_id) ?? 0) + 1)
       const chapterContract = `${level.chapter_title_en}\u0000${level.chapter_title_zh}\u0000${level.chapter_skill}`
       const existingContract = chapterContracts.get(level.chapter_id)
       if (existingContract && existingContract !== chapterContract) {
@@ -198,6 +208,25 @@ if (!Array.isArray(levels) || levels.length === 0) {
       }
     }
 
+    const requiredSkillObjectives = requiredObjectives.filter(objective => /^obj-\d+$/.test(objective.id))
+    let legacyObjectiveIndex = 0
+    for (const check of checks) {
+      if (!isRecord(check) || check.type === 'no_red_command_used') continue
+      const objective = check.objectiveId
+        ? objectives.find(candidate => candidate.id === check.objectiveId)
+        : requiredSkillObjectives[legacyObjectiveIndex++]
+      if (check.type !== 'command_used' || !isNonEmptyString(check.pattern)) continue
+      let effectivePattern = check.pattern.trim()
+      const expected = objective?.label_en?.match(/^Master the use of (.+)$/i)?.[1]?.trim()
+      if (expected && expected.toLowerCase().startsWith(`${effectivePattern.toLowerCase()} `)) {
+        effectivePattern = expected
+      }
+      const tokens = effectivePattern.split(/\s+/)
+      if (redCommandNames.has(tokens[0]) && tokens.length === 1) {
+        failures.push(`${context}: dangerous command objective ${tokens[0]} must name an exact safe invocation`)
+      }
+    }
+
     const hintLevels = []
     for (const [hintIndex, hint] of hints.entries()) {
       if (!isRecord(hint)) {
@@ -239,6 +268,33 @@ if (!Array.isArray(levels) || levels.length === 0) {
       }
     }
   })
+}
+
+if (chapterContracts.size !== 17) {
+  failures.push(`catalog must contain exactly 17 chapters, found ${chapterContracts.size}`)
+}
+for (const [chapterId, levelCount] of chapterLevelCounts) {
+  if (levelCount !== 13) failures.push(`${chapterId}: expected 13 levels, found ${levelCount}`)
+}
+
+if (!Array.isArray(chapterSummaries) || chapterSummaries.length !== chapterContracts.size) {
+  failures.push('chapter_summaries.json must contain exactly one row per catalog chapter')
+} else {
+  const summariesById = new Map(chapterSummaries.map(summary => [summary.id, summary]))
+  for (const [chapterId, contract] of chapterContracts) {
+    const [titleEn, titleZh, skill] = contract.split('\u0000')
+    const summary = summariesById.get(chapterId)
+    if (!summary || summary.title_en !== titleEn || summary.title_zh !== titleZh || summary.skill !== skill) {
+      failures.push(`${chapterId}: chapter_summaries.json disagrees with the mission catalog`)
+    }
+  }
+}
+
+if (capabilityMetrics.blockedLevels > 0) {
+  failures.push(
+    `capability registry has ${capabilityMetrics.blockedLevels} unmapped level(s) ` +
+      `and ${capabilityMetrics.unsupportedChecks} unsupported command check(s)`,
+  )
 }
 
 if (failures.length > 0) {

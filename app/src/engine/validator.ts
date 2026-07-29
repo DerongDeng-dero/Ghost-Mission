@@ -11,8 +11,10 @@ export interface ScoreResult {
   total: number
   max: number
   breakdown: Record<string, number>
+  breakdownMax: Record<string, number>
   rating: string
   penalties: string[]
+  excludedCategories: string[]
 }
 
 export interface MissionState {
@@ -25,7 +27,7 @@ export interface MissionState {
   objectivesCompleted: Set<string>
 }
 
-function matchesLiteralCommand(command: string, pattern: string): boolean {
+export function matchesMissionCommand(command: string, pattern: string): boolean {
   const candidate = command.trim()
   const target = pattern.trim()
   if (!candidate || !target) return false
@@ -36,7 +38,13 @@ function matchesLiteralCommand(command: string, pattern: string): boolean {
   // action. Word-like patterns must start a simple command segment so an
   // innocent `echo dd` cannot satisfy a task that requires running `dd`.
   if (!/^[\p{L}\p{N}_]/u.test(target)) {
-    return candidate.toLocaleLowerCase().includes(target.toLocaleLowerCase())
+    if (target === ':%s') return candidate.startsWith(':%s/')
+    if ((target === '.env' || target.startsWith('/')) && !target.includes(' ')) {
+      return tokenizeAction(candidate).some(token =>
+        token === target || (target.startsWith('/') && token.startsWith(`${target}/`)),
+      )
+    }
+    return candidate === target
   }
 
   const expectedTokens = tokenizeAction(target)
@@ -45,7 +53,22 @@ function matchesLiteralCommand(command: string, pattern: string): boolean {
     const actualTokens = stripCommandPrefixes(tokenizeAction(segment))
     if (actualTokens.length < expectedTokens.length) return false
     return expectedTokens.every(
-      (token, index) => actualTokens[index]?.toLocaleLowerCase() === token.toLocaleLowerCase(),
+      (token, index) => {
+        const actual = actualTokens[index]
+        if (actual === token) return true
+        // Short POSIX flags may be grouped (`tar -czf`, `rm -rf`). A lesson
+        // asking for `tar -c` should recognize the same flag inside a grouped
+        // option without weakening case sensitivity or token boundaries.
+        if (
+          index > 0
+          && /^-[A-Za-z]+$/.test(token)
+          && /^-[A-Za-z]+$/.test(actual)
+          && token.length < actual.length
+        ) {
+          return [...token.slice(1)].every(flag => actual.slice(1).includes(flag))
+        }
+        return false
+      },
     )
   })
 }
@@ -143,7 +166,7 @@ function tokenizeAction(value: string): string[] {
 function stripCommandPrefixes(tokens: string[]): string[] {
   const remaining = [...tokens]
   while (remaining[0] && /^[A-Za-z_][A-Za-z0-9_]*=/.test(remaining[0])) remaining.shift()
-  if (remaining[0]?.toLocaleLowerCase() !== 'sudo') return remaining
+  if (remaining[0] !== 'sudo') return remaining
 
   remaining.shift()
   const sudoOptionsWithValue = new Set([
@@ -168,27 +191,53 @@ function compileContentPattern(pattern: string): RegExp | null {
   }
 }
 
-function getUnexpectedRedCommands(level: MissionLevel, state: MissionState): string[] {
-  const allowedRedPatterns = [
-    ...level.checks
-      .filter(candidate => candidate.type === 'command_used' && candidate.pattern)
-      .map(candidate => candidate.pattern!),
-    ...(level.redCommands ?? []),
-  ]
-  return state.redCommandsUsed.filter(redCommand =>
-    !allowedRedPatterns.some(pattern => matchesLiteralCommand(pattern, redCommand)),
+function getEffectiveChecks(level: MissionLevel): LevelCheck[] {
+  if (level.checks.some(check => Boolean(check.objectiveId))) return level.checks
+  const legacyObjectives = level.objectives.filter(
+    objective => objective.required && /^obj-\d+$/.test(objective.id),
+  )
+  let progressIndex = 0
+  return level.checks.map(check => {
+    if (check.type === 'no_red_command_used') return check
+    const objective = legacyObjectives[progressIndex++]
+    if (check.type !== 'command_used' || !check.pattern || !objective) return check
+    const expected = objective.label_en.match(/^Master the use of (.+)$/i)?.[1]?.trim()
+    if (
+      expected
+      && expected.toLocaleLowerCase().startsWith(`${check.pattern.toLocaleLowerCase()} `)
+    ) {
+      return { ...check, pattern: expected }
+    }
+    return check
+  })
+}
+
+function matchesAuthorizedRedCommand(command: string, pattern: string): boolean {
+  const expectedTokens = stripCommandPrefixes(tokenizeAction(pattern))
+  const actualTokens = stripCommandPrefixes(tokenizeAction(command))
+  if (expectedTokens.length === 0 || actualTokens.length !== expectedTokens.length) return false
+  return expectedTokens.every((token, index) => actualTokens[index] === token)
+}
+
+export function getUnexpectedRedCommands(level: MissionLevel, redCommands: string[]): string[] {
+  const allowedRedPatterns = getEffectiveChecks(level)
+    .filter(candidate => candidate.type === 'command_used' && candidate.pattern)
+    .map(candidate => candidate.pattern!)
+  return redCommands.filter(redCommand =>
+    !allowedRedPatterns.some(pattern => matchesAuthorizedRedCommand(redCommand, pattern)),
   )
 }
 
 export function validateMission(level: MissionLevel, state: MissionState): ValidationResult[] {
-  const hasExplicitBindings = level.checks.some(check => Boolean(check.objectiveId))
-  const explicitBindingsValid = !hasExplicitBindings || level.checks.every(check => {
+  const effectiveChecks = getEffectiveChecks(level)
+  const hasExplicitBindings = effectiveChecks.some(check => Boolean(check.objectiveId))
+  const explicitBindingsValid = !hasExplicitBindings || effectiveChecks.every(check => {
     if (!check.objectiveId) return false
     const objective = level.objectives.find(candidate => candidate.id === check.objectiveId)
     if (!objective) return false
     return check.type !== 'no_red_command_used' || objective.required
   })
-  const progressChecks = level.checks.filter(check => check.type !== 'no_red_command_used')
+  const progressChecks = effectiveChecks.filter(check => check.type !== 'no_red_command_used')
   const legacySkillObjectives = level.objectives.filter(
     objective => objective.required && /^obj-\d+$/.test(objective.id),
   )
@@ -202,7 +251,7 @@ export function validateMission(level: MissionLevel, state: MissionState): Valid
 
     if (hasExplicitBindings) {
       if (explicitBindingsValid) {
-        const relevantChecks = level.checks.filter(check => check.objectiveId === obj.id)
+        const relevantChecks = effectiveChecks.filter(check => check.objectiveId === obj.id)
         completed = (
           relevantChecks.length > 0
           && relevantChecks.every(check => evaluateCheck(check, state, level))
@@ -223,7 +272,7 @@ export function validateMission(level: MissionLevel, state: MissionState): Valid
       ) {
         completed = (
           progressChecks.length > 0
-          && level.checks.every(check => evaluateCheck(check, state, level))
+          && effectiveChecks.every(check => evaluateCheck(check, state, level))
         )
       }
     }
@@ -237,12 +286,12 @@ function evaluateCheck(check: LevelCheck, state: MissionState, level: MissionLev
   switch (check.type) {
     case 'command_used': {
       if (!check.pattern) return false
-      return state.commandHistory.some(command => matchesLiteralCommand(command, check.pattern!))
+      return state.commandHistory.some(command => matchesMissionCommand(command, check.pattern!))
     }
     case 'command_not_used': {
       if (!check.pattern) return false
       const attemptedCommands = state.attemptedCommandHistory ?? state.commandHistory
-      return !attemptedCommands.some(command => matchesLiteralCommand(command, check.pattern!))
+      return !attemptedCommands.some(command => matchesMissionCommand(command, check.pattern!))
     }
     case 'file_exists': {
       if (!check.pattern) return false
@@ -290,7 +339,7 @@ function evaluateCheck(check: LevelCheck, state: MissionState, level: MissionLev
       return state.gitState.commits.length > 0
     }
     case 'no_red_command_used': {
-      return getUnexpectedRedCommands(level, state).length === 0
+      return getUnexpectedRedCommands(level, state.redCommandsUsed).length === 0
     }
     default:
       return false
@@ -301,12 +350,25 @@ export function calculateScore(
   level: MissionLevel,
   validationResults: ValidationResult[],
   state: MissionState,
-  _elapsedSeconds: number,
+  elapsedSeconds: number,
   commandCount: number
 ): ScoreResult {
   const sc = level.scoring
   const breakdown: Record<string, number> = {}
+  const breakdownMax: Record<string, number> = {}
   const penalties: string[] = []
+  const excludedCategories: string[] = []
+  let configuredPenalty = 0
+
+  const addCategory = (name: string, earned: number, maximum: number) => {
+    breakdown[name] = Math.max(0, Math.min(maximum, earned))
+    breakdownMax[name] = maximum
+  }
+  const applyConfiguredPenalty = (label: string, value: number) => {
+    if (!Number.isFinite(value) || value >= 0) return
+    configuredPenalty += value
+    penalties.push(`${label} (${value} points)`)
+  }
 
   const requiredDone = validationResults.filter(r => {
     const obj = level.objectives.find(o => o.id === r.objectiveId)
@@ -314,46 +376,110 @@ export function calculateScore(
   }).length
   const requiredTotal = level.objectives.filter(o => o.required).length
   const objectiveScore = Math.round(sc.objectives_weight * (requiredDone / Math.max(1, requiredTotal)))
-  breakdown.objectives = objectiveScore
+  addCategory('objectives', objectiveScore, sc.objectives_weight)
 
-  const unexpectedRedCommands = getUnexpectedRedCommands(level, state)
+  const unexpectedRedCommands = getUnexpectedRedCommands(level, state.redCommandsUsed)
   const safetyScore = sc.safety_weight * (unexpectedRedCommands.length === 0 ? 1 : 0)
-  breakdown.safety = safetyScore
+  addCategory('safety', safetyScore, sc.safety_weight)
   if (unexpectedRedCommands.length > 0) {
     penalties.push(`Unexpected red commands used: ${unexpectedRedCommands.join(', ')}`)
+    applyConfiguredPenalty('Unexpected red-command penalty', sc.penalties.red_command)
+    const tokenizedRedCommands = unexpectedRedCommands.map(command => stripCommandPrefixes(tokenizeAction(command)))
+    if (tokenizedRedCommands.some(tokens => tokens[0] === 'kill' && tokens.slice(1).some(token => /^(?:%?1|pid=1)$/i.test(token)))) {
+      applyConfiguredPenalty('Critical-process signal penalty', sc.penalties.kill_critical)
+    }
+    if (tokenizedRedCommands.some(tokens =>
+      tokens[0] === 'chmod' && tokens.slice(1).some(token => /^(?:0?777|a\+rwx)$/i.test(token)),
+    )) {
+      applyConfiguredPenalty('Excessive-permissions penalty', sc.penalties.excessive_perms)
+    }
   }
 
-  const verificationScore = sc.verification_weight
-  breakdown.verification = verificationScore
+  const effectiveChecks = getEffectiveChecks(level)
+  const verificationTypes = new Set([
+    'file_exists', 'file_contains', 'file_not_contains',
+    'git_clean', 'git_branch', 'git_commit_exists',
+  ])
+  const verificationChecks = effectiveChecks.filter(check => verificationTypes.has(check.type))
+  if (verificationChecks.length > 0) {
+    const verificationPassed = verificationChecks.filter(check => evaluateCheck(check, state, level)).length
+    addCategory(
+      'verification',
+      Math.round(sc.verification_weight * verificationPassed / verificationChecks.length),
+      sc.verification_weight,
+    )
+    if (verificationPassed < verificationChecks.length) {
+      applyConfiguredPenalty('Unverified-fix penalty', sc.penalties.unverified_fix)
+    }
+    const requiresCleanGit = verificationChecks.some(check => check.type === 'git_clean')
+    if (requiresCleanGit && !state.gitState.initialized) {
+      applyConfiguredPenalty('Dirty-Git penalty', sc.penalties.dirty_git)
+    } else if (
+      requiresCleanGit
+      && (state.gitState.stagingArea.size > 0 || state.gitState.workingDirectory.size > 0)
+    ) {
+      applyConfiguredPenalty('Dirty-Git penalty', sc.penalties.dirty_git)
+    }
+  } else {
+    excludedCategories.push('verification')
+  }
 
-  const expectedCommands = level.objectives.length * 2
-  const effRatio = Math.min(1, expectedCommands / Math.max(1, commandCount))
+  const commandChecks = effectiveChecks.filter(check => check.type === 'command_used')
+  const expectedCommands = sc.par_actions ?? Math.max(1, commandChecks.length * 2)
+  const commandRatio = Math.min(1, expectedCommands / Math.max(1, commandCount))
+  const expectedSeconds = sc.par_time_seconds ?? 600
+  const timeRatio = elapsedSeconds <= 0 ? 1 : Math.min(1, expectedSeconds / elapsedSeconds)
+  const effRatio = Math.sqrt(commandRatio * timeRatio)
   const efficiencyScore = Math.round(sc.efficiency_weight * effRatio)
-  breakdown.efficiency = efficiencyScore
+  addCategory('efficiency', efficiencyScore, sc.efficiency_weight)
 
-  const shortcutScore = sc.shortcuts_weight
-  breakdown.shortcuts = shortcutScore
+  const shortcutChecks = effectiveChecks.filter(check =>
+    check.type === 'command_used'
+    && Boolean(check.pattern)
+    && /^(?:Ctrl|Alt)-|^(?:Esc|Tab|Arrow(?:Up|Down|Left|Right))$/i.test(check.pattern!),
+  )
+  if (shortcutChecks.length > 0) {
+    const shortcutsPassed = shortcutChecks.filter(check => evaluateCheck(check, state, level)).length
+    addCategory(
+      'shortcuts',
+      Math.round(sc.shortcuts_weight * shortcutsPassed / shortcutChecks.length),
+      sc.shortcuts_weight,
+    )
+  } else {
+    excludedCategories.push('shortcuts')
+  }
 
-  const reviewScore = sc.review_weight
-  breakdown.review = reviewScore
+  // There is currently no user action that records a debrief/review. Keeping
+  // this category out of the denominator is more truthful than granting it.
+  excludedCategories.push('review')
 
   const noHintsScore = sc.no_hints_bonus * (state.hintsUsed === 0 ? 1 : 0)
-  breakdown.noHints = noHintsScore
+  addCategory('noHints', noHintsScore, sc.no_hints_bonus)
   if (state.hintsUsed > 0) {
-    penalties.push(`Hints used: ${state.hintsUsed}`)
+    penalties.push(`No-hints bonus forfeited (${state.hintsUsed} hint${state.hintsUsed === 1 ? '' : 's'} used)`)
   }
 
-  const total = objectiveScore + safetyScore + verificationScore + efficiencyScore + shortcutScore + reviewScore + noHintsScore
-  const max = sc.objectives_weight + sc.safety_weight + sc.verification_weight + sc.efficiency_weight + sc.shortcuts_weight + sc.review_weight + sc.no_hints_bonus
+  const rawTotal = Object.values(breakdown).reduce((sum, value) => sum + value, 0)
+  const applicableMax = Object.values(breakdownMax).reduce((sum, value) => sum + value, 0)
+  const normalizedTotal = 100 * rawTotal / Math.max(1, applicableMax)
+  const total = Math.max(0, Math.min(100, Math.round(normalizedTotal + configuredPenalty)))
+  const max = 100
 
-  let rating = 'Field Pass'
-  if (total >= max * 0.95) rating = 'Ghost Clean'
-  else if (total >= max * 0.80) rating = 'Operator Grade'
-  else if (total >= max * 0.60) rating = 'Field Pass'
-  else if (total >= max * 0.40) rating = 'Panic Exit'
-  else rating = 'Incident Replayed'
+  const rating = getScoreRating(total)
 
-  return { total, max, breakdown, rating, penalties }
+  return { total, max, breakdown, breakdownMax, rating, penalties, excludedCategories }
+}
+
+export function getScoreRating(total: number): string {
+  return total >= 95
+    ? 'Ghost Clean'
+    : total >= 80
+      ? 'Operator Grade'
+      : total >= 60
+        ? 'Field Pass'
+        : total >= 40
+          ? 'Panic Exit'
+          : 'Incident Replayed'
 }
 
 export function isMissionComplete(level: MissionLevel, validationResults: ValidationResult[]): boolean {

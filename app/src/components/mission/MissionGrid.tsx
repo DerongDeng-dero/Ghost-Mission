@@ -19,7 +19,7 @@ export default function MissionGrid({ missions, emptyMessage = 'No missions matc
       >
         <Ghost size={64} className="text-[#1E2D3D]" />
         <h3 className="font-jetbrains text-h3 text-[#8B9EB0]">{emptyMessage}</h3>
-        <p className="font-inter text-body text-[#4A6072]">
+        <p className="font-inter text-body text-[#788DA1]">
           Try adjusting your filters or clearing them to see all missions.
         </p>
       </motion.div>

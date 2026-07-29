@@ -283,7 +283,7 @@ export default function MissionFilter({
                     width: riskFilter.includes(String(level)) ? '10px' : '8px',
                     height: riskFilter.includes(String(level)) ? '10px' : '8px',
                     backgroundColor: riskFilter.includes(String(level)) ? color : 'transparent',
-                    border: `1.5px solid ${riskFilter.includes(String(level)) ? color : '#4A6072'}`,
+                    border: `1.5px solid ${riskFilter.includes(String(level)) ? color : '#788DA1'}`,
                   }}
                 />
                 {/* Tooltip */}
@@ -300,7 +300,7 @@ export default function MissionFilter({
           {/* Search Input */}
           <div className="relative basis-full sm:basis-auto">
             <label htmlFor={searchId} className="sr-only">{t('missionBoard.filters.searchLabel')}</label>
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4A6072]" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#788DA1]" />
             <input
               id={searchId}
               type="text"
@@ -327,7 +327,7 @@ export default function MissionFilter({
                 type="button"
                 onClick={() => setSearchQuery('')}
                 aria-label={t('missionBoard.filters.clearSearch')}
-                className="absolute right-0 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-radius-sm text-[#4A6072] hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+                className="absolute right-0 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-radius-sm text-[#788DA1] hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
               >
                 <X size={12} />
               </button>
@@ -392,7 +392,7 @@ export default function MissionFilter({
                 animate={{ opacity: 1, width: 'auto' }}
                 exit={{ opacity: 0, width: 0 }}
                 onClick={clearAllFilters}
-                className="min-h-11 whitespace-nowrap rounded-radius-sm px-2 font-jetbrains text-body-sm text-[#4A6072] transition-colors duration-fast hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+                className="min-h-11 whitespace-nowrap rounded-radius-sm px-2 font-jetbrains text-body-sm text-[#788DA1] transition-colors duration-fast hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
               >
                 <X size={12} className="inline mr-1" />
                 {t('missionBoard.clearFilters')}

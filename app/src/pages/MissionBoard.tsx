@@ -7,6 +7,9 @@ import type { ModeFilter, StatusFilter, SortOption } from '@/components/mission/
 import MissionGrid from '@/components/mission/MissionGrid'
 import MissionCard from '@/components/mission/MissionCard'
 import { useLocalizedMissions } from '@/hooks/useLocalizedData'
+import { useGameStore } from '@/store/gameStore'
+
+const MISSION_PAGE_SIZE = 24
 
 function MissionSkeleton() {
   return (
@@ -24,6 +27,7 @@ function MissionSkeleton() {
 export default function MissionBoard() {
   const { t } = useTranslation()
   const missions = useLocalizedMissions()
+  const missionProgress = useGameStore(state => state.missionProgress)
   const [modeFilter, setModeFilter] = useState<ModeFilter>('all')
   const [difficultyFilter, setDifficultyFilter] = useState<number | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -31,12 +35,16 @@ export default function MissionBoard() {
   const [riskFilter, setRiskFilter] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOption, setSortOption] = useState<SortOption>('recommended')
+  const [visiblePage, setVisiblePage] = useState({ key: '', count: MISSION_PAGE_SIZE })
   const [isLoading] = useState(false)
 
   // Stats
   const totalMissions = missions.length
-  const completedMissions = missions.filter((m) => m.status === 'completed').length
-  const inProgressMissions = missions.filter((m) => m.status === 'in-progress').length
+  const completedMissions = missions.filter((mission) => missionProgress[mission.id]?.status === 'completed').length
+  const inProgressMissions = missions.filter((mission) => {
+    const progress = missionProgress[mission.id]
+    return progress?.status === 'in-progress' && progress.active
+  }).length
 
   // Active filter count
   const activeFilterCount = useMemo(() => {
@@ -134,8 +142,23 @@ export default function MissionBoard() {
   const recommendedMissions = useMemo(() => {
     return missions
       .filter((m) => m.status === 'available')
-      .slice(0, 2)
+      .slice(3, 5)
   }, [missions])
+
+  const resultSetKey = JSON.stringify([
+    modeFilter,
+    difficultyFilter,
+    statusFilter,
+    skillFilter,
+    riskFilter,
+    searchQuery,
+    sortOption,
+  ])
+  const visibleCount = visiblePage.key === resultSetKey
+    ? visiblePage.count
+    : MISSION_PAGE_SIZE
+  const visibleMissions = filteredMissions.slice(0, visibleCount)
+  const remainingMissions = filteredMissions.length - visibleMissions.length
 
   // Header animation
   const headerVariants = {
@@ -206,7 +229,7 @@ export default function MissionBoard() {
               >
                 {totalMissions}
               </motion.span>
-              <span className="font-jetbrains text-badge text-[#4A6072] uppercase tracking-wider">
+              <span className="font-jetbrains text-badge text-[#788DA1] uppercase tracking-wider">
                 {t('missionBoard.stats.total')}
               </span>
             </motion.div>
@@ -219,7 +242,7 @@ export default function MissionBoard() {
               >
                 {completedMissions}
               </motion.span>
-              <span className="font-jetbrains text-badge text-[#4A6072] uppercase tracking-wider">
+              <span className="font-jetbrains text-badge text-[#788DA1] uppercase tracking-wider">
                 {t('missionBoard.stats.completed')}
               </span>
             </motion.div>
@@ -232,7 +255,7 @@ export default function MissionBoard() {
               >
                 {inProgressMissions}
               </motion.span>
-              <span className="font-jetbrains text-badge text-[#4A6072] uppercase tracking-wider">
+              <span className="font-jetbrains text-badge text-[#788DA1] uppercase tracking-wider">
                 {t('missionBoard.stats.inProgress')}
               </span>
             </motion.div>
@@ -273,7 +296,7 @@ export default function MissionBoard() {
           >
             <div className="flex items-center justify-between mb-space-4">
               <h2 className="font-jetbrains text-h3 text-[#E8EDF2]">{t('missionBoard.featured')}</h2>
-              <span className="font-jetbrains text-body-sm text-[#4A6072]">
+              <span className="font-jetbrains text-body-sm text-[#788DA1]">
                 {t('home.recommended')}
               </span>
             </div>
@@ -326,7 +349,7 @@ export default function MissionBoard() {
           >
             <div className="flex items-center justify-between mb-space-4">
               <h2 className="font-jetbrains text-h3 text-[#E8EDF2]">{t('missionBoard.recommended')}</h2>
-              <span className="font-jetbrains text-body-sm text-[#4A6072]">
+              <span className="font-jetbrains text-body-sm text-[#788DA1]">
                 {t('missionBoard.basedOnSkillGaps')}
               </span>
             </div>
@@ -355,8 +378,11 @@ export default function MissionBoard() {
             <h2 className="font-jetbrains text-h3 text-[#E8EDF2]">
               {activeFilterCount > 0 ? t('missionBoard.filteredResults') : t('missionBoard.allMissions')}
             </h2>
-            <span role="status" aria-live="polite" className="font-jetbrains text-body-sm text-[#4A6072]">
-              {t('missionBoard.showing', { filtered: filteredMissions.length, total: missions.length })}
+            <span role="status" aria-live="polite" className="font-jetbrains text-body-sm text-[#788DA1]">
+              {t('missionBoard.showing', {
+                visible: visibleMissions.length,
+                filtered: filteredMissions.length,
+              })}
             </span>
           </div>
           {filteredMissions.length === 0 && activeFilterCount > 0 ? (
@@ -367,7 +393,7 @@ export default function MissionBoard() {
               className="flex flex-col items-center justify-center py-16 gap-3 text-center"
               role="status"
             >
-              <Search size={48} className="opacity-30" style={{ color: 'var(--text-muted, #4A6072)' }} />
+              <Search size={48} className="opacity-30" style={{ color: 'var(--text-muted, #788DA1)' }} />
               <p className="font-jetbrains text-body text-[#8B9EB0]">{t('missionBoard.noMissionsMatch')}</p>
               <button
                 onClick={() => {
@@ -388,7 +414,26 @@ export default function MissionBoard() {
               </button>
             </motion.div>
           ) : (
-            <MissionGrid missions={filteredMissions} />
+            <>
+              <MissionGrid missions={visibleMissions} />
+              {remainingMissions > 0 && (
+                <div className="mt-space-6 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setVisiblePage({
+                      key: resultSetKey,
+                      count: visibleMissions.length + MISSION_PAGE_SIZE,
+                    })}
+                    className="min-h-11 rounded-radius-sm border px-space-6 font-jetbrains text-body-sm text-[#00E5FF] transition-colors hover:bg-[#00E5FF]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+                    style={{ borderColor: 'rgba(0,229,255,0.35)' }}
+                  >
+                    {t('missionBoard.loadMore', {
+                      count: Math.min(MISSION_PAGE_SIZE, remainingMissions),
+                    })}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </section>
       </div>

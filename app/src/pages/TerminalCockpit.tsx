@@ -9,6 +9,8 @@ import { ShellEngine } from '@/engine/shell'
 import { getLevelById } from '@/engine/levels'
 import { validateMission, calculateScore, isMissionComplete, type ValidationResult, type MissionState } from '@/engine/validator'
 import { createHintState, revealHint, getTotalPenalty } from '@/engine/hints'
+import { saveMissionRunReport, type MissionRunAction } from '@/engine/runReport'
+import { useGameStore } from '@/store/gameStore'
 
 import TerminalEmulator, { type TerminalAction } from '@/components/terminal/TerminalEmulator'
 import ObjectivesPanel from '@/components/terminal/ObjectivesPanel'
@@ -19,7 +21,7 @@ import BriefingModal from '@/components/terminal/BriefingModal'
 import TutorialOverlay from '@/components/terminal/TutorialOverlay'
 import TerminalHelpTip from '@/components/terminal/TerminalHelpTip'
 
-type CockpitPhase = 'loading' | 'briefing' | 'active' | 'completed' | 'failed'
+type CockpitPhase = 'loading' | 'briefing' | 'active' | 'completing' | 'completed' | 'failed'
 type HudHintMode = 'hidden' | 'contextual' | 'training'
 
 interface CockpitState {
@@ -132,6 +134,8 @@ export default function TerminalCockpit() {
         replay: 'Replay',
       }
   const level = useMemo(() => getLevelById(missionId || ''), [missionId])
+  const startMissionProgress = useGameStore(state => state.startMission)
+  const completeMissionProgress = useGameStore(state => state.completeMission)
 
   const vfsRef = useRef(new VFS())
   const shellRef = useRef<ShellEngine | null>(null)
@@ -142,6 +146,10 @@ export default function TerminalCockpit() {
   const missionCompleteRef = useRef(false)
   const successfulActionHistoryRef = useRef<string[]>([])
   const attemptedActionHistoryRef = useRef<string[]>([])
+  const attemptedActionsRef = useRef<MissionRunAction[]>([])
+  const redCommandsUsedRef = useRef<string[]>([])
+  const pendingRedCommandsRef = useRef<string[]>([])
+  const missionStartedAtRef = useRef<number | null>(null)
 
   function getVfsStateSnapshot(): Record<string, string> {
     try {
@@ -182,6 +190,10 @@ export default function TerminalCockpit() {
     const vfs = new VFS()
     vfsRef.current = vfs
     const nextShell = new ShellEngine(vfs, undefined, (cmd) => {
+      pendingRedCommandsRef.current = [...pendingRedCommandsRef.current, cmd]
+      if (!redCommandsUsedRef.current.includes(cmd)) {
+        redCommandsUsedRef.current = [...redCommandsUsedRef.current, cmd]
+      }
       setState(s => {
         if (s.redCommandsUsed.includes(cmd)) return s
         return {
@@ -211,6 +223,15 @@ export default function TerminalCockpit() {
     // can succeed without requiring an undocumented prerequisite.
     if (level.chapter_skill.toLowerCase() === 'git') {
       nextShell.execute('git init', 0, false)
+      if (level.checks.some(check => check.pattern?.toLowerCase().startsWith('git bisect'))) {
+        nextShell.execute('git add training-base.txt', 0, false)
+        nextShell.execute('git commit -m "known good baseline"', 0, false)
+        nextShell.execute('git tag v1.0', 0, false)
+        for (let checkpoint = 1; checkpoint <= 4; checkpoint++) {
+          nextShell.execute(`git add checkpoint-${checkpoint}.txt`, 0, false)
+          nextShell.execute(`git commit -m "training checkpoint ${checkpoint}"`, 0, false)
+        }
+      }
     }
 
     // Populate VFS files from starting state
@@ -221,6 +242,10 @@ export default function TerminalCockpit() {
     validationResultsRef.current = []
     successfulActionHistoryRef.current = []
     attemptedActionHistoryRef.current = []
+    attemptedActionsRef.current = []
+    redCommandsUsedRef.current = []
+    pendingRedCommandsRef.current = []
+    missionStartedAtRef.current = null
     validationTimersRef.current.forEach(t => clearTimeout(t))
     validationTimersRef.current = []
 
@@ -247,10 +272,28 @@ export default function TerminalCockpit() {
  }, [state.phase])
 
   const handleCommandExecuted = useCallback((action: TerminalAction) => {
+    if (stateRef.current.phase !== 'active') return
     const { command, exitCode } = action
+    const redCommands = [...pendingRedCommandsRef.current]
+    pendingRedCommandsRef.current = []
     attemptedActionHistoryRef.current = [...attemptedActionHistoryRef.current, command]
-    if (exitCode === 0) {
-      successfulActionHistoryRef.current = [...successfulActionHistoryRef.current, command]
+    const startedAt = missionStartedAtRef.current
+    const timestampSeconds = startedAt === null
+      ? stateRef.current.timerSeconds
+      : Math.max(0, Math.round((performance.now() - startedAt) / 1000))
+    attemptedActionsRef.current = [...attemptedActionsRef.current, {
+      id: String(attemptedActionsRef.current.length + 1),
+      timestampSeconds,
+      command,
+      exitCode,
+      kind: action.kind,
+      cwd: shellRef.current ? `/${shellRef.current.state.cwd.join('/')}` : '/',
+      mode: stateRef.current.mode,
+      redCommands,
+    }]
+    const successfulCommands = action.successfulCommands ?? (exitCode === 0 ? [command] : [])
+    if (successfulCommands.length > 0) {
+      successfulActionHistoryRef.current = [...successfulActionHistoryRef.current, ...successfulCommands]
     }
 
     // Step 1: Update command history immediately
@@ -279,9 +322,11 @@ export default function TerminalCockpit() {
       }
 
       const currentState = stateRef.current
-      const currentTimerSeconds = currentState.timerSeconds
+      const currentTimerSeconds = missionStartedAtRef.current === null
+        ? currentState.timerSeconds
+        : Math.max(0, Math.round((performance.now() - missionStartedAtRef.current) / 1000))
       const currentCommandCount = attemptedActionHistoryRef.current.length
-      missionState.redCommandsUsed = [...currentState.redCommandsUsed]
+      missionState.redCommandsUsed = [...redCommandsUsedRef.current]
       missionState.hintsUsed = currentState.hintsRevealed.size
       missionState.objectivesCompleted = new Set(currentState.completedObjectiveIds)
 
@@ -298,8 +343,23 @@ export default function TerminalCockpit() {
         if (isMissionComplete(level, results) && !missionCompleteRef.current) {
           missionCompleteRef.current = true
           const scoreResult = calculateScore(level, results, missionState, currentTimerSeconds, currentCommandCount)
+          saveMissionRunReport({
+            version: 1,
+            missionId: level.id,
+            completed: true,
+            completedAt: new Date().toISOString(),
+            elapsedSeconds: currentTimerSeconds,
+            hintsUsed: missionState.hintsUsed,
+            redCommandsUsed: [...missionState.redCommandsUsed],
+            attemptedActions: [...attemptedActionsRef.current],
+            successfulActions: [...successfulActionHistoryRef.current],
+            validationResults: results,
+            scoreResult,
+          })
+          completeMissionProgress(level.id, scoreResult.total)
+          setState(s2 => ({ ...s2, phase: 'completing', score: scoreResult.total, timerSeconds: currentTimerSeconds }))
           const completionTimer = setTimeout(() => {
-            setState(s2 => ({ ...s2, phase: 'completed', score: scoreResult.total }))
+            setState(s2 => ({ ...s2, phase: 'completed', score: scoreResult.total, timerSeconds: currentTimerSeconds }))
           }, 500)
           validationTimersRef.current.push(completionTimer)
         }
@@ -315,21 +375,24 @@ export default function TerminalCockpit() {
     }, 100)
 
     validationTimersRef.current.push(validationTimer)
-  }, [level])
+  }, [completeMissionProgress, level])
 
   const handleModeChange = useCallback((mode: string) => {
     setState(s => ({ ...s, mode }))
   }, [])
 
   const handleStartMission = useCallback(() => {
+    if (!level) return
     const showTutorial = consumeFirstRunTutorial()
+    startMissionProgress(level.id)
+    missionStartedAtRef.current = performance.now()
     setState(s => ({ ...s, phase: 'active', showTutorial }))
     if (!showTutorial) {
       requestAnimationFrame(() => {
         document.querySelector<HTMLElement>('[aria-label="Terminal input"]')?.focus()
       })
     }
-  }, [])
+  }, [level, startMissionProgress])
 
   const handleCloseBriefing = useCallback(() => {
     navigate('/missions')
@@ -533,16 +596,25 @@ export default function TerminalCockpit() {
         {/* Center - Terminal */}
         <div className="flex-1 relative flex flex-col min-w-0">
           <div className="flex-1 relative">
-            {shell ? (
+            {shell && state.phase === 'active' ? (
               <TerminalEmulator
                 shell={shell}
                 onModeChange={handleModeChange}
                 onCommandExecuted={handleCommandExecuted}
                 successPulse={state.successPulse}
+                initialJobScenario={
+                  ['ctrl-c-reflex', 'ctrl-z-suspend', 'boss-panic-marathon', 'nightmare-60sec'].includes(level.id)
+                    ? 'foreground'
+                    : level.id === 'fg-bg-recovery'
+                      ? 'stopped'
+                      : 'none'
+                }
               />
             ) : (
               <div className="flex items-center justify-center h-full">
-                <div className="w-6 h-6 border-2 border-[#00E5FF] border-t-transparent rounded-full animate-spin" />
+                {state.phase === 'loading' && (
+                  <div className="w-6 h-6 border-2 border-[#00E5FF] border-t-transparent rounded-full animate-spin" />
+                )}
               </div>
             )}
             <RedCommandWarning isActive={state.showRedWarning} command={state.lastRedCommand} />
@@ -571,6 +643,7 @@ export default function TerminalCockpit() {
         onRevealHint={handleRevealHint}
         hintsUsed={state.hintsRevealed.size}
         totalPenalty={getTotalPenalty(level.hints, state.hintState)}
+        language={language}
       />
 
       {/* Briefing Modal */}

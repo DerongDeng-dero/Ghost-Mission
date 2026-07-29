@@ -21,6 +21,14 @@ export interface GitTag {
   hash: string
 }
 
+export interface GitBisectState {
+  originalHead: string
+  good: string[]
+  bad: string[]
+  current: string
+  log: string[]
+}
+
 export interface GitState {
   initialized: boolean
   branches: Map<string, Commit[]>
@@ -36,6 +44,7 @@ export interface GitState {
   config: Map<string, string>
   submodules: Map<string, string>
   worktrees: Map<string, string>
+  bisect: GitBisectState | null
 }
 
 export function createGitState(): GitState {
@@ -63,6 +72,7 @@ export function createGitState(): GitState {
     ]),
     submodules: new Map(),
     worktrees: new Map(),
+    bisect: null,
   }
   return st
 }
@@ -124,7 +134,7 @@ export function gitCommand(state: GitState, args: string[], cwd: string): { stdo
   const repositoryCommands = new Set([
     'status', 'add', 'commit', 'diff', 'log', 'show', 'blame', 'branch', 'switch',
     'checkout', 'merge', 'rebase', 'stash', 'restore', 'reset', 'revert', 'reflog',
-    'cherry-pick', 'tag', 'remote', 'fetch', 'pull', 'push', 'clean', 'worktree',
+    'cherry-pick', 'bisect', 'tag', 'remote', 'fetch', 'pull', 'push', 'clean', 'worktree',
     'submodule', 'shortlog', 'archive',
   ])
   if (!state.initialized && repositoryCommands.has(cmd)) return repositoryError(state)
@@ -149,6 +159,7 @@ export function gitCommand(state: GitState, args: string[], cwd: string): { stdo
     case 'revert': return gitRevert(state, cargs, cwd)
     case 'reflog': return gitReflog(state, cargs, cwd)
     case 'cherry-pick': return gitCherryPick(state, cargs, cwd)
+    case 'bisect': return gitBisect(state, cargs, cwd)
     case 'tag': return gitTag(state, cargs, cwd)
     case 'remote': return gitRemote(state, cargs, cwd)
     case 'fetch': return gitFetch(state, cargs, cwd)
@@ -184,7 +195,9 @@ function gitStatus(state: GitState, _args: string[], _cwd: string) {
   void _args
   void _cwd
   if (!state.initialized) return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128, state }
-  let stdout = `On branch ${state.currentBranch}\n`
+  let stdout = state.bisect
+    ? `HEAD detached at ${shortHash(state.bisect.current)}\nYou are currently bisecting, started from ${shortHash(state.bisect.originalHead)}.\n`
+    : `On branch ${state.currentBranch}\n`
   if ((state.branches.get(state.currentBranch)?.length ?? 0) === 0) {
     stdout += 'No commits yet\n'
   }
@@ -636,6 +649,206 @@ function gitCherryPick(state: GitState, args: string[], _cwd: string) {
       head: newHash,
       branches,
       reflog: [...state.reflog, `${newHash} HEAD@{${state.reflog.length}}: cherry-pick: ${target.message}`],
+    },
+  }
+}
+
+function gitBisect(state: GitState, args: string[], _cwd: string) {
+  void _cwd
+  if (!state.initialized) return repositoryError(state)
+
+  const subcommand = args[0]
+  if (!subcommand) {
+    return {
+      stdout: '',
+      stderr: 'usage: git bisect <start|good|bad|reset|log|run> [<args>]',
+      exitCode: 1,
+      state,
+    }
+  }
+
+  if (subcommand === 'start') {
+    if (!state.head) {
+      return {
+        stdout: '',
+        stderr: 'fatal: bad revision HEAD',
+        exitCode: 128,
+        state,
+      }
+    }
+
+    const badReference = args[1]
+    const goodReference = args[2]
+    const badCommit = badReference ? resolveCommitReference(state, badReference) : null
+    const goodCommit = goodReference ? resolveCommitReference(state, goodReference) : null
+    if (badReference && !badCommit) {
+      return { stdout: '', stderr: `error: Bad rev input: ${badReference}`, exitCode: 1, state }
+    }
+    if (goodReference && !goodCommit) {
+      return { stdout: '', stderr: `error: Bad rev input: ${goodReference}`, exitCode: 1, state }
+    }
+
+    const bisect: GitBisectState = {
+      originalHead: state.head,
+      good: goodCommit ? [goodCommit.hash] : [],
+      bad: badCommit ? [badCommit.hash] : [],
+      current: state.head,
+      log: ['git bisect start' + (badReference ? ` ${badReference}` : '') + (goodReference ? ` ${goodReference}` : '')],
+    }
+    const nextState = { ...state, bisect }
+    if (badCommit && goodCommit) return advanceBisect(nextState)
+    return {
+      stdout: 'status: waiting for both good and bad commits',
+      stderr: '',
+      exitCode: 0,
+      state: nextState,
+    }
+  }
+
+  if (subcommand === 'reset') {
+    if (!state.bisect) {
+      return {
+        stdout: '',
+        stderr: 'We are not bisecting.',
+        exitCode: 1,
+        state,
+      }
+    }
+    return {
+      stdout: `Previous HEAD position was ${shortHash(state.bisect.current)}\nSwitched to branch '${state.currentBranch}'`,
+      stderr: '',
+      exitCode: 0,
+      state: { ...state, head: state.bisect.originalHead, bisect: null },
+    }
+  }
+
+  if (!state.bisect) {
+    return {
+      stdout: '',
+      stderr: 'You need to start by "git bisect start".',
+      exitCode: 1,
+      state,
+    }
+  }
+
+  if (subcommand === 'log') {
+    return {
+      stdout: state.bisect.log.join('\n'),
+      stderr: '',
+      exitCode: 0,
+      state,
+    }
+  }
+
+  if (subcommand === 'run') {
+    const command = args.slice(1)
+    if (command.length === 0) {
+      return {
+        stdout: '',
+        stderr: 'usage: git bisect run <cmd>...',
+        exitCode: 1,
+        state,
+      }
+    }
+    return {
+      stdout: '',
+      stderr: 'git bisect run is unavailable in the isolated Git model; run the check in the shell and mark the revision good or bad',
+      exitCode: 1,
+      state,
+    }
+  }
+
+  if (subcommand !== 'good' && subcommand !== 'bad') {
+    return {
+      stdout: '',
+      stderr: `error: unknown bisect subcommand: ${subcommand}`,
+      exitCode: 1,
+      state,
+    }
+  }
+
+  const reference = args[1]
+  const commit = reference
+    ? resolveCommitReference(state, reference)
+    : resolveCommitReference(state, state.bisect.current)
+  if (!commit) {
+    return {
+      stdout: '',
+      stderr: `error: Bad rev input: ${reference ?? state.bisect.current}`,
+      exitCode: 1,
+      state,
+    }
+  }
+
+  const marks = [...state.bisect[subcommand]]
+  if (!marks.includes(commit.hash)) marks.push(commit.hash)
+  const nextState: GitState = {
+    ...state,
+    bisect: {
+      ...state.bisect,
+      [subcommand]: marks,
+      log: [...state.bisect.log, `git bisect ${subcommand} ${commit.hash}`],
+    },
+  }
+  if (nextState.bisect?.good.length && nextState.bisect.bad.length) return advanceBisect(nextState)
+  return {
+    stdout: `status: waiting for ${subcommand === 'good' ? 'bad' : 'good'} commit`,
+    stderr: '',
+    exitCode: 0,
+    state: nextState,
+  }
+}
+
+function advanceBisect(state: GitState) {
+  const bisect = state.bisect
+  if (!bisect) return { stdout: '', stderr: 'We are not bisecting.', exitCode: 1, state }
+  const badCommit = state.commits.find(commit => commit.hash === bisect.bad.at(-1))
+  const goodCommit = state.commits.find(commit => commit.hash === bisect.good.at(-1))
+  if (!badCommit || !goodCommit) {
+    return { stdout: '', stderr: 'error: invalid bisect state', exitCode: 1, state }
+  }
+
+  const history = buildLinearHistory(state, badCommit)
+  const goodIndex = history.findIndex(commit => commit.hash === goodCommit.hash)
+  const badIndex = history.findIndex(commit => commit.hash === badCommit.hash)
+  if (goodIndex < 0 || badIndex < 0 || goodIndex >= badIndex) {
+    return {
+      stdout: '',
+      stderr: 'Some good revs are not ancestors of the bad rev.',
+      exitCode: 1,
+      state,
+    }
+  }
+
+  if (badIndex - goodIndex === 1) {
+    return {
+      stdout: `${badCommit.hash} is the first bad commit\ncommit ${badCommit.hash}\nAuthor: ${badCommit.author}\n\n    ${badCommit.message}`,
+      stderr: '',
+      exitCode: 0,
+      state: {
+        ...state,
+        head: badCommit.hash,
+        bisect: {
+          ...bisect,
+          current: badCommit.hash,
+        },
+      },
+    }
+  }
+
+  const current = history[Math.floor((goodIndex + badIndex) / 2)]
+  const remaining = badIndex - goodIndex - 1
+  return {
+    stdout: `Bisecting: ${remaining} revision${remaining === 1 ? '' : 's'} left to test after this\n[${shortHash(current.hash)}] ${current.message}`,
+    stderr: '',
+    exitCode: 0,
+    state: {
+      ...state,
+      head: current.hash,
+      bisect: {
+        ...bisect,
+        current: current.hash,
+      },
     },
   }
 }

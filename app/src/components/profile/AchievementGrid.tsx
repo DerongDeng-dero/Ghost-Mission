@@ -69,7 +69,7 @@ export default function AchievementGrid({ compact = false }: AchievementGridProp
             onClick={() => setActiveCategory(cat)}
             className="px-3 py-1.5 font-jetbrains text-body-sm transition-all duration-fast rounded-radius-sm"
             style={{
-              color: activeCategory === cat ? '#00E5FF' : '#4A6072',
+              color: activeCategory === cat ? '#00E5FF' : '#788DA1',
               backgroundColor: activeCategory === cat ? 'rgba(0, 229, 255, 0.08)' : 'transparent',
               border: `1px solid ${activeCategory === cat ? '#00E5FF' : '#1E2D3D'}`,
             }}
@@ -119,7 +119,7 @@ export default function AchievementGrid({ compact = false }: AchievementGridProp
                 {isUnlocked ? (
                   <Icon size={22} style={{ color: tierColor }} />
                 ) : (
-                  <Lock size={18} className="text-[#4A6072]" />
+                  <Lock size={18} className="text-[#788DA1]" />
                 )}
               </div>
 
@@ -152,7 +152,7 @@ export default function AchievementGrid({ compact = false }: AchievementGridProp
                 </span>
               )}
               {!isUnlocked && (
-                <span className="font-jetbrains text-[10px] text-[#4A6072] mt-2">
+                <span className="font-jetbrains text-[10px] text-[#788DA1] mt-2">
                   Locked
                 </span>
               )}

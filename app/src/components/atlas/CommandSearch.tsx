@@ -54,7 +54,7 @@ export default function CommandSearch({ value, onChange, resultCount }: CommandS
         <Search
           size={20}
           className="absolute left-3 pointer-events-none transition-colors duration-fast"
-          style={{ color: isFocused ? '#00E5FF' : '#4A6072' }}
+          style={{ color: isFocused ? '#00E5FF' : '#788DA1' }}
         />
 
         <input
@@ -68,7 +68,7 @@ export default function CommandSearch({ value, onChange, resultCount }: CommandS
           placeholder={t('commandAtlas.search')}
           aria-label={t('commandAtlas.searchLabel')}
           aria-keyshortcuts="Control+K Meta+K"
-          className="w-full h-12 pl-10 pr-20 bg-transparent font-fira text-base placeholder:text-[#4A6072] focus:outline-none"
+          className="w-full h-12 pl-10 pr-20 bg-transparent font-fira text-base placeholder:text-[#788DA1] focus:outline-none"
           style={{ color: '#E8EDF2' }}
         />
 
@@ -83,7 +83,7 @@ export default function CommandSearch({ value, onChange, resultCount }: CommandS
                 transition={{ duration: 0.15 }}
                 onClick={() => { onChange(''); inputRef.current?.focus(); }}
                 aria-label={t('commandAtlas.clearSearch')}
-                className="flex min-h-11 min-w-11 items-center justify-center rounded-sm text-[#4A6072] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-sm text-[#788DA1] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
               >
                 <X size={16} />
               </motion.button>
@@ -102,8 +102,8 @@ export default function CommandSearch({ value, onChange, resultCount }: CommandS
                   border: '1px solid #1E2D3D',
                 }}
               >
-                <Command size={10} className="text-[#4A6072]" />
-                <span className="font-jetbrains text-[10px] text-[#4A6072] font-medium">K</span>
+                <Command size={10} className="text-[#788DA1]" />
+                <span className="font-jetbrains text-[10px] text-[#788DA1] font-medium">K</span>
               </motion.div>
             )}
           </AnimatePresence>
@@ -111,7 +111,7 @@ export default function CommandSearch({ value, onChange, resultCount }: CommandS
       </div>
 
       {resultCount !== undefined && (
-        <p role="status" aria-live="polite" className="mt-2 font-jetbrains text-body-sm text-[#4A6072] text-center">
+        <p role="status" aria-live="polite" className="mt-2 font-jetbrains text-body-sm text-[#788DA1] text-center">
           {resultCount === 0
             ? t('commandAtlas.noCommandsFound')
             : t(resultCount === 1 ? 'commandAtlas.results' : 'commandAtlas.resultsPlural', { count: resultCount })}

@@ -7,15 +7,18 @@ interface MissionReportProps {
     commandsUsed: number
     hintsUsed: number
     redCommandsAvoided: boolean
-    verificationPassed: boolean
+    verificationPassed: boolean | null
   }
 }
 
 export default function MissionReport({ report, metadata }: MissionReportProps) {
   const ref = useRef<HTMLDivElement>(null)
   const isInView = useInView(ref, { once: true, margin: '-60px' })
-  const [displayedText, setDisplayedText] = useState('')
-  const [showCursor, setShowCursor] = useState(true)
+  const [typewriter, setTypewriter] = useState({
+    source: '',
+    text: '',
+    showCursor: true,
+  })
 
   // Word-by-word typewriter reveal
   useEffect(() => {
@@ -23,30 +26,34 @@ export default function MissionReport({ report, metadata }: MissionReportProps) 
 
     const words = report.split(' ')
     let index = 0
-    setDisplayedText('')
+    let cursorTimer: ReturnType<typeof setTimeout> | null = null
 
     const interval = setInterval(() => {
       if (index < words.length) {
-        setDisplayedText(words.slice(0, index + 1).join(' '))
         index++
+        setTypewriter({
+          source: report,
+          text: words.slice(0, index).join(' '),
+          showCursor: true,
+        })
       } else {
         clearInterval(interval)
-        // Blink cursor for 2s then hide
-        setTimeout(() => setShowCursor(false), 2000)
+        cursorTimer = setTimeout(() => {
+          setTypewriter(current => current.source === report
+            ? { ...current, showCursor: false }
+            : current)
+        }, 2000)
       }
     }, 15)
 
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      if (cursorTimer) clearTimeout(cursorTimer)
+    }
   }, [isInView, report])
 
-  // Blinking cursor effect
-  useEffect(() => {
-    if (!showCursor) return
-    const blink = setInterval(() => {
-      setShowCursor((prev) => !prev)
-    }, 530)
-    return () => clearInterval(blink)
-  }, [showCursor])
+  const displayedText = typewriter.source === report ? typewriter.text : ''
+  const showCursor = isInView && (typewriter.source !== report || typewriter.showCursor)
 
   return (
     <section ref={ref} className="max-w-[960px] mx-auto px-space-4 mt-space-8">
@@ -66,7 +73,7 @@ export default function MissionReport({ report, metadata }: MissionReportProps) 
         <div className="font-inter text-body leading-[1.7] text-[#E8EDF2] min-h-[80px]">
           {displayedText}
           <span
-            className="inline-block w-[2px] h-[1.1em] ml-[2px] align-middle"
+            className={`inline-block w-[2px] h-[1.1em] ml-[2px] align-middle ${showCursor ? 'animate-pulse' : ''}`}
             style={{
               backgroundColor: '#00E5FF',
               opacity: showCursor ? 1 : 0,
@@ -83,22 +90,22 @@ export default function MissionReport({ report, metadata }: MissionReportProps) 
           animate={isInView ? { opacity: 1 } : {}}
           transition={{ delay: 0.5, duration: 0.3 }}
         >
-          <span className="font-jetbrains text-body-sm text-[#4A6072]">
+          <span className="font-jetbrains text-body-sm text-[#788DA1]">
             Commands used: <span className="text-[#8B9EB0]">{metadata.commandsUsed}</span>
           </span>
-          <span className="font-jetbrains text-body-sm text-[#4A6072]">
+          <span className="font-jetbrains text-body-sm text-[#788DA1]">
             Hints used: <span className="text-[#8B9EB0]">{metadata.hintsUsed}</span>
           </span>
-          <span className="font-jetbrains text-body-sm text-[#4A6072]">
-            Red commands avoided:{" "}
+          <span className="font-jetbrains text-body-sm text-[#788DA1]">
+            No red commands recorded:{" "}
             <span style={{ color: metadata.redCommandsAvoided ? '#00FF88' : '#FF4757' }}>
               {metadata.redCommandsAvoided ? '\u2713' : '\u2717'}
             </span>
           </span>
-          <span className="font-jetbrains text-body-sm text-[#4A6072]">
+          <span className="font-jetbrains text-body-sm text-[#788DA1]">
             Verification passed:{" "}
-            <span style={{ color: metadata.verificationPassed ? '#00FF88' : '#FF4757' }}>
-              {metadata.verificationPassed ? '\u2713' : '\u2717'}
+            <span style={{ color: metadata.verificationPassed === null ? '#8B9EB0' : metadata.verificationPassed ? '#00FF88' : '#FF4757' }}>
+              {metadata.verificationPassed === null ? 'N/A' : metadata.verificationPassed ? '\u2713' : '\u2717'}
             </span>
           </span>
         </motion.div>

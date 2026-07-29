@@ -11,15 +11,7 @@ import { useLocalizedChapters } from '@/hooks/useLocalizedData'
 
 export default function Academy() {
   const { t } = useTranslation()
-  const sourceChapters = useLocalizedChapters()
-  const chapters = useMemo(() => sourceChapters.map((item) => {
-    const key = item.number.toLowerCase()
-    return {
-      ...item,
-      subtitle: t(`academy.chapterDetails.${key}.subtitle`),
-      description: t(`academy.chapterDetails.${key}.description`),
-    }
-  }), [sourceChapters, t])
+  const chapters = useLocalizedChapters()
   const [activeChapter, setActiveChapter] = useState(1)
   const chapter = chapters.find((c) => c.id === activeChapter) || chapters[0]
 
@@ -91,7 +83,7 @@ export default function Academy() {
                   <span className="font-jetbrains text-h4 text-[#00FF88]" style={{ fontSize: '1rem' }}>
                     {completedDrills * 120}
                   </span>
-                  <span className="font-jetbrains text-body-sm text-[#4A6072] ml-1">{t('academy.xp')}</span>
+                  <span className="font-jetbrains text-body-sm text-[#788DA1] ml-1">{t('academy.xp')}</span>
                 </div>
               </div>
               <div className="flex items-center gap-space-2 px-space-4 py-space-2 rounded-radius-md border"
@@ -102,7 +94,7 @@ export default function Academy() {
                   <span className="font-jetbrains text-code text-[#E8EDF2]">
                     {completedDrills}/{totalDrills}
                   </span>
-                  <span className="font-jetbrains text-body-sm text-[#4A6072] ml-1">{t('academy.drills')}</span>
+                  <span className="font-jetbrains text-body-sm text-[#788DA1] ml-1">{t('academy.drills')}</span>
                 </div>
               </div>
             </motion.div>
@@ -240,7 +232,7 @@ export default function Academy() {
             <StatCard
               icon={<Clock size={18} />}
               label={t('academy.trainingTime')}
-              value={t('academy.trainingTimeValue')}
+              value={t('academy.notTracked')}
               color="#C77DFF"
             />
           </div>
@@ -251,7 +243,7 @@ export default function Academy() {
               const progress = ch.totalDrills > 0 ? (ch.completedDrills / ch.totalDrills) * 100 : 0
               return (
                 <div key={ch.id} className="flex items-center gap-space-3">
-                  <span className="font-fira text-code-sm text-[#4A6072] w-12 flex-shrink-0">
+                  <span className="font-fira text-code-sm text-[#788DA1] w-12 flex-shrink-0">
                     {ch.number}
                   </span>
                   <div
@@ -272,13 +264,13 @@ export default function Academy() {
                       }}
                       className="h-full rounded-full"
                       style={{
-                        backgroundColor: progress === 100 ? '#00FF88' : ch.id === activeChapter ? '#00E5FF' : '#4A6072',
+                        backgroundColor: progress === 100 ? '#00FF88' : ch.id === activeChapter ? '#00E5FF' : '#788DA1',
                       }}
                     />
                   </div>
                   <span
                     className="font-fira text-code-sm w-10 text-right flex-shrink-0"
-                    style={{ color: progress === 100 ? '#00FF88' : '#4A6072' }}
+                    style={{ color: progress === 100 ? '#00FF88' : '#788DA1' }}
                   >
                     {Math.round(progress)}%
                   </span>
@@ -327,7 +319,7 @@ function StatCard({
         <span className="font-jetbrains text-h4 block" style={{ color, fontSize: '1.125rem' }}>
           {value}
         </span>
-        <span className="font-jetbrains text-body-sm text-[#4A6072]">{label}</span>
+        <span className="font-jetbrains text-body-sm text-[#788DA1]">{label}</span>
       </div>
     </div>
   )

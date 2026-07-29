@@ -68,6 +68,9 @@ export default function TrainingCard({ drill, index }: TrainingCardProps) {
   const isInProgress = drill.status === 'in-progress'
   const isBoss = drill.type === 'boss'
   const isNightmare = drill.type === 'nightmare'
+  const displayTitle = isBoss
+    ? drill.title.replace(/^[^:：]+[:：]\s*/, '')
+    : drill.title
 
   const typeConfig = drillTypeConfig[drill.type] || drillTypeConfig.command
   const typeIcon = iconMap[typeConfig.icon] || iconMap.Target
@@ -114,8 +117,8 @@ export default function TrainingCard({ drill, index }: TrainingCardProps) {
       {isLocked && (isBoss || isNightmare) && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0A0E14]/50">
           <div className="flex flex-col items-center gap-space-2">
-            <Lock size={24} className="text-[#4A6072]" />
-            <span className="font-jetbrains text-body-sm text-[#4A6072]">{t('academy.completePreviousDrills')}</span>
+            <Lock size={24} className="text-[#788DA1]" />
+            <span className="font-jetbrains text-body-sm text-[#788DA1]">{t('academy.completePreviousDrills')}</span>
           </div>
         </div>
       )}
@@ -133,18 +136,18 @@ export default function TrainingCard({ drill, index }: TrainingCardProps) {
             </div>
             {/* Number + Title */}
             <div className="flex min-w-0 items-center gap-space-1.5">
-              <span className="font-fira text-code-sm text-[#4A6072]">{drill.number}.</span>
+              <span className="font-fira text-code-sm text-[#788DA1]">{drill.number}.</span>
               <h4 className="min-w-0 break-words font-jetbrains text-h4 text-[#E8EDF2]" style={{ fontSize: '0.9375rem' }}>
                 {isBoss && (
                   <span className="text-badge uppercase mr-2" style={{ color: '#C77DFF' }}>{t('academy.boss')}</span>
                 )}
-                {drill.title}
+                {displayTitle}
               </h4>
             </div>
           </div>
 
           {/* Time */}
-          <div className="flex items-center gap-1 text-[#4A6072] flex-shrink-0 ml-2">
+          <div className="flex items-center gap-1 text-[#788DA1] flex-shrink-0 ml-2">
             <Clock size={12} />
             <span className="font-jetbrains text-body-sm">{drill.duration}</span>
           </div>

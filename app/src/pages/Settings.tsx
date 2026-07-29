@@ -21,13 +21,20 @@ import ThemeSelector from '@/components/settings/ThemeSelector'
 import type { Theme } from '@/components/settings/ThemeSelector'
 import ToggleOption from '@/components/settings/ToggleOption'
 import AccessibilityPanel from '@/components/settings/AccessibilityPanel'
+import { useGameStore } from '@/store/gameStore'
 
 // ─── localStorage Helpers ───────────────────────────────────────────
 
-function loadSetting<T>(key: string, fallback: T): T {
+function loadSetting<K extends keyof SettingsState>(
+  key: K,
+  fallback: SettingsState[K],
+): SettingsState[K] {
   try {
-    const raw = localStorage.getItem(`ghostops_${key}`)
-    return raw !== null ? (JSON.parse(raw) as T) : fallback
+    if (typeof window === 'undefined') return fallback
+    const raw = window.localStorage.getItem(`ghostops_${key}`)
+    if (raw === null) return fallback
+    const parsed: unknown = JSON.parse(raw)
+    return isValidSettingValue(key, parsed) ? parsed as SettingsState[K] : fallback
   } catch {
     return fallback
   }
@@ -35,7 +42,9 @@ function loadSetting<T>(key: string, fallback: T): T {
 
 function saveSetting(key: string, value: unknown) {
   try {
-    localStorage.setItem(`ghostops_${key}`, JSON.stringify(value))
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(`ghostops_${key}`, JSON.stringify(value))
+    }
   } catch {
     // ignore
   }
@@ -120,6 +129,33 @@ const DEFAULT_SETTINGS: SettingsState = {
 
   displayName: 'Ghost-7',
   locale: 'en-US',
+}
+
+function isValidSettingValue(key: keyof SettingsState, value: unknown): boolean {
+  switch (key) {
+    case 'theme':
+      return value === 'dark' || value === 'high-contrast' || value === 'warm'
+    case 'animationIntensity':
+      return value === 'full' || value === 'reduced' || value === 'none'
+    case 'fontSize':
+      return Number.isInteger(value) && Number(value) >= 11 && Number(value) <= 16
+    case 'fontFamily':
+      return value === 'Fira Code' || value === 'JetBrains Mono' || value === 'Cascadia Code'
+    case 'cursorStyle':
+      return value === 'block' || value === 'line' || value === 'bar'
+    case 'scrollbackLines':
+      return value === 1000 || value === 5000 || value === 10000
+    case 'defaultHintLevel':
+      return Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 5
+    case 'masterVolume':
+      return Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 100
+    case 'displayName':
+      return typeof value === 'string' && value.length <= 20
+    case 'locale':
+      return value === 'en-US' || value === 'zh-CN'
+    default:
+      return typeof value === typeof DEFAULT_SETTINGS[key]
+  }
 }
 
 // ─── Slider Component ───────────────────────────────────────────────
@@ -290,7 +326,7 @@ function ResetModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: 
         <button
           type="button"
           onClick={onCancel}
-          className="absolute right-space-3 top-space-3 flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-[#4A6072] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+          className="absolute right-space-3 top-space-3 flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-[#788DA1] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
           aria-label={t('common.close')}
         >
           <X size={18} />
@@ -338,6 +374,7 @@ function ResetModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: 
 
 export default function Settings() {
   const { t, i18n } = useTranslation()
+  const resetMissionProgress = useGameStore(state => state.resetMissionProgress)
   const [activeSection, setActiveSection] = useState('appearance')
   const [showResetModal, setShowResetModal] = useState(false)
   const [s, setS] = useState<SettingsState>(() => {
@@ -381,13 +418,19 @@ export default function Settings() {
   }, [])
 
   const handleReset = () => {
-    // Clear all ghostops localStorage keys
-    for (const key of Object.keys(localStorage)) {
-      if (key.startsWith('ghostops_')) {
-        localStorage.removeItem(key)
+    resetMissionProgress()
+    try {
+      for (const storage of [window.localStorage, window.sessionStorage]) {
+        for (let index = storage.length - 1; index >= 0; index -= 1) {
+          const key = storage.key(index)
+          if (key?.startsWith('ghostops_run_report:')) {
+            storage.removeItem(key)
+          }
+        }
       }
+    } catch {
+      // The in-memory store is already reset if browser storage is unavailable.
     }
-    setS({ ...DEFAULT_SETTINGS })
     setShowResetModal(false)
   }
 
@@ -758,7 +801,7 @@ export default function Settings() {
                     onChange={(v) => update('defaultHintLevel', v)}
                   />
                 </div>
-                <p className="font-jetbrains text-body-sm text-[#4A6072] mt-space-2">
+                <p className="font-jetbrains text-body-sm text-[#788DA1] mt-space-2">
                   {hintDescriptions[s.defaultHintLevel]}
                 </p>
               </div>
@@ -898,7 +941,7 @@ export default function Settings() {
                     className="min-h-11 flex-1 max-w-[300px] rounded-radius-sm border border-[#1E2D3D] bg-[#1A2332] px-space-3 py-space-2 font-jetbrains text-body text-[#E8EDF2] transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
                     placeholder={t('settings.callsignPlaceholder')}
                   />
-                  <span id="settings-display-name-count" className="font-jetbrains text-code-sm text-[#4A6072]">
+                  <span id="settings-display-name-count" className="font-jetbrains text-code-sm text-[#788DA1]">
                     {s.displayName.length}/20
                   </span>
                 </div>
@@ -930,7 +973,11 @@ export default function Settings() {
                     const locale = String(v)
                     update('locale', locale)
                     const language = locale.startsWith('zh') ? 'zh' : 'en'
-                    localStorage.setItem('i18nextLng', language)
+                    try {
+                      window.localStorage.setItem('i18nextLng', language)
+                    } catch {
+                      // Language switching still works when persistence is unavailable.
+                    }
                     void i18n.changeLanguage(language)
                   }}
                 />
@@ -1008,7 +1055,7 @@ export default function Settings() {
                 </p>
 
                 <div className="mt-space-6 pt-space-4 border-t" style={{ borderColor: '#1E2D3D' }}>
-                  <p className="font-jetbrains text-body-sm text-[#4A6072] mb-space-2">{t('settings.builtWith')}</p>
+                  <p className="font-jetbrains text-body-sm text-[#788DA1] mb-space-2">{t('settings.builtWith')}</p>
                   <div className="flex flex-wrap items-center justify-center gap-space-3">
                     {['React', 'TypeScript', 'Tailwind CSS', 'xterm.js', 'GSAP'].map((lib) => (
                       <span
@@ -1026,7 +1073,7 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <p className="font-inter text-body-sm text-[#4A6072] mt-space-6">
+                <p className="font-inter text-body-sm text-[#788DA1] mt-space-6">
                   {t('settings.educational')}
                 </p>
               </div>

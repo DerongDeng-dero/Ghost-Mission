@@ -128,8 +128,9 @@
       "inProgress": "In Progress"
     },
     "seeAll": "See All",
-    "basedOnSkillGaps": "Based on your skill gaps",
-    "showing": "Showing {{filtered}} of {{total}} missions",
+    "basedOnSkillGaps": "Quick picks from available missions",
+    "showing": "Showing {{visible}} of {{filtered}} missions",
+    "loadMore": "Load {{count}} more",
     "filteredResults": "filtered results",
     "clearFilters": "Clear Filters",
     "noMissionsMatch": "No missions match your current filters.",
@@ -169,7 +170,7 @@
     "totalXP": "Total XP",
     "chaptersDone": "Chapters Done",
     "trainingTime": "Training Time",
-    "trainingTimeValue": "4h 32m",
+    "notTracked": "Not tracked",
     "completePreviousDrills": "Complete previous drills",
     "boss": "Boss",
     "riskLevel": "Risk: {{level}}",
@@ -204,31 +205,16 @@
       "portMimic": "Hides on random nonstandard ports, moving and dodging until connections time out."
     },
     "enemyChapters": {
-      "pagerPhantom": "Chapter 04: The Pager", "vimTrapMonk": "Chapter 05: Vim Temple", "resetDemon": "Chapter 06: Git Labyrinth", "mergeConflictHydra": "Chapter 06: Git Labyrinth", "backgroundJobGhost": "Chapter 15: Ghost Protocol", "captainCat": "Chapter 10: Shell Mastery", "symlinkWraith": "Chapter 15: Ghost Protocol", "diskHydra": "Chapter 11: The Monitor", "portMimic": "Chapter 12: Red Zone"
-    },
-    "chapterDetails": {
-      "ch01": { "subtitle": "Help & Foundations", "description": "Your journey starts here. Learn how to ask for help, navigate the terminal, and understand command-line fundamentals." },
-      "ch02": { "subtitle": "ls, cd, pwd", "description": "The filesystem is your battlefield. Learn to inspect, move through, and understand directory structures." },
-      "ch03": { "subtitle": "cat, cp, mv, rm", "description": "Create, copy, move, and remove files. With great power comes great responsibility." },
-      "ch04": { "subtitle": "less, more, head, tail", "description": "Not every file fits on one screen. Page through content, inspect its beginning and end, and never get trapped." },
-      "ch05": { "subtitle": "Editing & Survival", "description": "Enter the terminal world's most feared editor, master its modes, and escape with your sanity intact." },
-      "ch06": { "subtitle": "Version Control", "description": "Git is a maze of branches, commits, and merges. Cross it without losing your code." },
-      "ch07": { "subtitle": "ps, top, kill", "description": "Every process leaves a trace. Track, monitor, and terminate them when necessary." },
-      "ch08": { "subtitle": "ping, curl, ssh", "description": "The network is a dark forest. Probe it, connect to it, and move through it silently." },
-      "ch09": { "subtitle": "Containers", "description": "Containers shape modern deployment. Learn to build, run, and manage them." },
-      "ch10": { "subtitle": "Scripts & Variables", "description": "The shell is more than a command interpreter; it is a programming language. Master variables, loops, and conditions." },
-      "ch11": { "subtitle": "df, du, free", "description": "System resources are finite. Monitor disk and memory use, and recognize when the system is under pressure." },
-      "ch12": { "subtitle": "Advanced Operations", "description": "Enter the danger zone: advanced file operations, permissions, and system-level commands." },
-      "ch13": { "subtitle": "Permission Nightmare", "description": "Doctor 777 grants every permission to everyone. Learn to fight back and restore a secure configuration." },
-      "ch14": { "subtitle": "Escape Trapped Programs", "description": "Every operator gets trapped sometimes. Learn the common escape sequences for terminal programs." },
-      "ch15": { "subtitle": "Advanced Combinations", "description": "Combine your skills into complex operations. A true Ghost operator joins tools seamlessly." },
-      "ch16": { "subtitle": "Final Trial", "description": "Everything you have learned—every skill, drill, and enemy—comes together in the final exam." },
-      "ch17": { "subtitle": "tmux Mastery", "description": "Split terminals, manage sessions, and become a true multitasking operator." }
+      "pagerPhantom": "Chapter 15: Editors & REPLs", "vimTrapMonk": "Chapter 15: Editors & REPLs", "resetDemon": "Chapter 16: Git Timeline", "mergeConflictHydra": "Chapter 16: Git Timeline", "backgroundJobGhost": "Chapter 09: Process & Resource", "captainCat": "Chapter 05: Text Intelligence", "symlinkWraith": "Chapter 03: File Manipulation", "diskHydra": "Chapter 10: Storage & Filesystems", "portMimic": "Chapter 12: Network Diagnostics"
     }
   },
   "terminal": {
     "title": "Terminal Cockpit",
     "objectives": "Objectives",
+    "objectivesRegion": "Mission objectives",
+    "expandObjectives": "Expand objectives panel",
+    "collapseObjectives": "Collapse objectives panel",
+    "optional": "Optional",
     "hints": "Hints",
     "hintLevels": {
       "direction": "Direction hint",
@@ -328,8 +314,8 @@
     "stats": {
       "totalCommands": "Total Commands",
       "domains": "{{count}} Domains",
-      "youLearned": "You Learned",
-      "coverage": "{{percent}}% Coverage",
+      "graphLinks": "Graph Links",
+      "resolvedLinks": "Resolved relationships",
       "dangerCommands": "Danger Commands",
       "ofTotal": "{{percent}}% of total"
     },
@@ -356,13 +342,12 @@
     "clearSearch": "Clear command search",
     "noCommandsFound": "No commands found",
     "tryDifferentSearch": "Try different keywords or clear the filters.",
-    "learned": "Learned",
     "commonFlags": "Common Flags",
     "examples": "Examples",
     "antiPatterns": "Anti-Patterns",
     "safePatterns": "Safe Patterns",
     "relatedCommands": "Related Commands",
-    "usedInMissions": "Used in Missions",
+    "usedInMissions": "Related Missions (inferred)",
     "copyExample": "Copy example command: {{command}}"
   },
   "profile": {

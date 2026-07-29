@@ -134,7 +134,7 @@ export default function SkillRadar({ skills, size = 400 }: SkillRadarProps) {
             return `${pt.x},${pt.y}`;
           }).join(' ')}
           fill="rgba(139, 158, 176, 0.05)"
-          stroke="#4A6072"
+          stroke="#788DA1"
           strokeOpacity={0.3}
           strokeWidth={1}
           strokeDasharray="4 4"
@@ -209,7 +209,7 @@ export default function SkillRadar({ skills, size = 400 }: SkillRadarProps) {
           className="font-jetbrains"
           style={{
             fontSize: '10px',
-            fill: '#4A6072',
+            fill: '#788DA1',
           }}
         >
           {t('profile.overall')}

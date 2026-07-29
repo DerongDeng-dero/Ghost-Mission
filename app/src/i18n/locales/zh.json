@@ -127,8 +127,9 @@
       "inProgress": "进行中"
     },
     "seeAll": "查看全部",
-    "basedOnSkillGaps": "基于你的技能差距",
-    "showing": "显示 {{filtered}} / {{total}} 个任务",
+    "basedOnSkillGaps": "从可用任务中快速选择",
+    "showing": "显示 {{visible}} / {{filtered}} 个任务",
+    "loadMore": "再加载 {{count}} 个",
     "filteredResults": "筛选结果",
     "clearFilters": "清除筛选",
     "noMissionsMatch": "没有任务匹配当前筛选条件。",
@@ -168,7 +169,7 @@
     "totalXP": "总经验值",
     "chaptersDone": "已完成章节",
     "trainingTime": "训练时长",
-    "trainingTimeValue": "4小时32分",
+    "notTracked": "暂未记录",
     "completePreviousDrills": "请先完成前置演练",
     "boss": "首领",
     "riskLevel": "风险：{{level}}",
@@ -203,31 +204,16 @@
       "portMimic": "隐藏在随机非标准端口上。移动、闪避、让你的连接超时。"
     },
     "enemyChapters": {
-      "pagerPhantom": "第 04 章：分页器", "vimTrapMonk": "第 05 章：Vim 神庙", "resetDemon": "第 06 章：Git 迷宫", "mergeConflictHydra": "第 06 章：Git 迷宫", "backgroundJobGhost": "第 15 章：幽灵协议", "captainCat": "第 10 章：Shell 精通", "symlinkWraith": "第 15 章：幽灵协议", "diskHydra": "第 11 章：监控器", "portMimic": "第 12 章：红区"
-    },
-    "chapterDetails": {
-      "ch01": { "subtitle": "帮助与基础", "description": "你的旅程从这里开始。学会寻求帮助、在终端中导航，理解命令行的基础概念。" },
-      "ch02": { "subtitle": "ls, cd, pwd", "description": "文件系统是你的战场。学会查看、移动和理解目录结构。" },
-      "ch03": { "subtitle": "cat, cp, mv, rm", "description": "创建、复制、移动和删除文件。能力越大，责任越大。" },
-      "ch04": { "subtitle": "less, more, head, tail", "description": "不是所有文件都能一次性读完。学会翻页浏览内容，查看开头和结尾，永远不要被困住。" },
-      "ch05": { "subtitle": "编辑与生存", "description": "终端世界最令人畏惧的编辑器。进入神庙，学会各种模式，带着理智逃出来。" },
-      "ch06": { "subtitle": "版本控制", "description": "Git 是一个由分支、提交和合并组成的迷宫。在不丢失代码的情况下穿越迷宫。" },
-      "ch07": { "subtitle": "ps, top, kill", "description": "每个进程都会留下痕迹。学会追踪它们、监控它们，必要时终止它们。" },
-      "ch08": { "subtitle": "ping, curl, ssh", "description": "网络是一片黑暗的森林。学会探测它、连接它，在其中无声无息地穿行。" },
-      "ch09": { "subtitle": "容器", "description": "容器是部署的未来。学会构建、运行和管理它们。" },
-      "ch10": { "subtitle": "脚本与变量", "description": "Shell 不仅仅是一个命令解释器，它是一门编程语言。掌握变量、循环和条件语句。" },
-      "ch11": { "subtitle": "df, du, free", "description": "系统资源是有限的。监控磁盘使用、内存，了解系统何时处于压力之下。" },
-      "ch12": { "subtitle": "高级操作", "description": "危险地带。高级文件操作、权限管理和系统级命令。" },
-      "ch13": { "subtitle": "权限噩梦", "description": "777 博士是最危险的敌人。他们把所有权限设为 777。学会反击并恢复安全。" },
-      "ch14": { "subtitle": "逃离被困程序", "description": "每个操作员有时都会被困住。学会每个程序的通用退出序列。" },
-      "ch15": { "subtitle": "高级组合", "description": "将所有技能组合成复杂操作。幽灵操作员的真正考验是无缝地组合工具。" },
-      "ch16": { "subtitle": "最终考验", "description": "你所学到的一切。每项技能、每次演练、每个敌人——准备最终考试。" },
-      "ch17": { "subtitle": "tmux 精通", "description": "分割你的终端，管理会话，成为真正的多任务操作员。" }
+      "pagerPhantom": "第 15 章：编辑器与 REPL", "vimTrapMonk": "第 15 章：编辑器与 REPL", "resetDemon": "第 16 章：Git 时间线", "mergeConflictHydra": "第 16 章：Git 时间线", "backgroundJobGhost": "第 09 章：进程与资源", "captainCat": "第 05 章：文本智能", "symlinkWraith": "第 03 章：文件操控", "diskHydra": "第 10 章：存储与文件系统", "portMimic": "第 12 章：网络诊断"
     }
   },
   "terminal": {
     "title": "终端驾驶舱",
     "objectives": "目标",
+    "objectivesRegion": "任务目标",
+    "expandObjectives": "展开任务目标面板",
+    "collapseObjectives": "折叠任务目标面板",
+    "optional": "可选",
     "hints": "提示",
     "hintLevels": {
       "direction": "方向提示",
@@ -327,8 +313,8 @@
     "stats": {
       "totalCommands": "命令总数",
       "domains": "{{count}} 个领域",
-      "youLearned": "已学习",
-      "coverage": "掌握度 {{percent}}%",
+      "graphLinks": "图谱连接",
+      "resolvedLinks": "已解析关系",
       "dangerCommands": "危险命令",
       "ofTotal": "占总数的 {{percent}}%"
     },
@@ -355,13 +341,12 @@
     "clearSearch": "清除命令搜索",
     "noCommandsFound": "未找到命令",
     "tryDifferentSearch": "请尝试其他关键词或清除筛选条件。",
-    "learned": "已学习",
     "commonFlags": "常用参数",
     "examples": "示例",
     "antiPatterns": "反模式",
     "safePatterns": "安全模式",
     "relatedCommands": "相关命令",
-    "usedInMissions": "用于任务",
+    "usedInMissions": "相关任务（推断）",
     "copyExample": "复制示例命令：{{command}}"
   },
   "profile": {

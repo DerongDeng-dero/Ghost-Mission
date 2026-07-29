@@ -7,6 +7,37 @@ import DomainFilter from '@/components/atlas/DomainFilter';
 import CommandGrid from '@/components/atlas/CommandGrid';
 import CommandGraph3D from '@/components/atlas/CommandGraph3D';
 import { commands, getCommandStats } from '@/data/commands';
+import type { CommandData } from '@/data/commands';
+import { ALL_LEVELS } from '@/engine/levels';
+
+function commandMatchesMission(commandName: string, level: (typeof ALL_LEVELS)[number]): boolean {
+  const normalizedName = commandName.trim().toLowerCase().replace(/\s+/g, ' ');
+  const skillMatch = level.skills.some(skill => {
+    const normalizedSkill = skill.trim().toLowerCase().replace(/\s+/g, ' ');
+    return normalizedSkill === normalizedName
+      || normalizedSkill.startsWith(`${normalizedName} `);
+  });
+  if (skillMatch) return true;
+
+  return level.checks.some(check => {
+    if (check.type !== 'command_used' || !check.pattern) return false;
+    const pattern = check.pattern.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (normalizedName === '|' || normalizedName === '>') return pattern === normalizedName;
+    if (normalizedName.includes(' ')) {
+      return pattern === normalizedName || pattern.startsWith(`${normalizedName} `);
+    }
+    const withoutPrefix = pattern.replace(/^(?:sudo|command|builtin)\s+/, '');
+    return withoutPrefix === normalizedName || withoutPrefix.startsWith(`${normalizedName} `);
+  });
+}
+
+function attachCurrentMissionReferences(command: CommandData, language: 'en' | 'zh'): CommandData {
+  const missions = ALL_LEVELS
+    .filter(level => commandMatchesMission(command.name, level))
+    .slice(0, 8)
+    .map(level => level.getTitle(language));
+  return { ...command, missions };
+}
 
 function AtlasSkeleton() {
   return (
@@ -27,13 +58,18 @@ function AtlasSkeleton() {
 }
 
 export default function CommandAtlas() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const language: 'en' | 'zh' = i18n.resolvedLanguage?.startsWith('zh') ? 'zh' : 'en';
   const [searchQuery, setSearchQuery] = useState('');
   const [activeDomain, setActiveDomain] = useState('All');
   const [activeRisks, setActiveRisks] = useState<Set<string>>(new Set());
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'graph'>('list');
+  const atlasCommands = useMemo(
+    () => commands.map(command => attachCurrentMissionReferences(command, language)),
+    [language],
+  );
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 150)
@@ -72,17 +108,17 @@ export default function CommandAtlas() {
 
   // Compute command counts per domain
   const commandCounts = useMemo(() => {
-    const counts: Record<string, number> = { All: commands.length };
-    for (const cmd of commands) {
+    const counts: Record<string, number> = { All: atlasCommands.length };
+    for (const cmd of atlasCommands) {
       counts[cmd.domain] = (counts[cmd.domain] || 0) + 1;
     }
     return counts;
-  }, []);
+  }, [atlasCommands]);
 
   // Filter commands
   const filteredCommands = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
-    return commands.filter((cmd) => {
+    return atlasCommands.filter((cmd) => {
       // Domain filter
       if (activeDomain !== 'All' && cmd.domain !== activeDomain) return false;
 
@@ -114,12 +150,12 @@ export default function CommandAtlas() {
 
       return true;
     });
-  }, [searchQuery, activeDomain, activeRisks, activeTypes]);
+  }, [searchQuery, activeDomain, activeRisks, activeTypes, atlasCommands]);
 
   // Stats
   const stats = useMemo(() => {
     const stats = getCommandStats();
-    const danger = commands.filter((c) => c.riskLevel === 'red' || c.riskLevel === 'black').length;
+    const danger = atlasCommands.filter((c) => c.riskLevel === 'red' || c.riskLevel === 'black').length;
     return [
       {
         label: t('commandAtlas.stats.totalCommands'),
@@ -128,9 +164,9 @@ export default function CommandAtlas() {
         color: '#00FF88',
       },
       {
-        label: t('commandAtlas.stats.youLearned'),
-        value: stats.learned,
-        subtitle: t('commandAtlas.stats.coverage', { percent: Math.round((stats.learned / stats.total) * 100) }),
+        label: t('commandAtlas.stats.graphLinks'),
+        value: stats.links,
+        subtitle: t('commandAtlas.stats.resolvedLinks'),
         color: '#00E5FF',
       },
       {
@@ -140,7 +176,7 @@ export default function CommandAtlas() {
         color: '#FF4757',
       },
     ];
-  }, [commandCounts, t]);
+  }, [atlasCommands, commandCounts, t]);
 
   return (
     <div className="min-h-[100dvh]" style={{ backgroundColor: '#0A0E14' }}>
@@ -253,7 +289,7 @@ export default function CommandAtlas() {
               aria-pressed={viewMode === 'list'}
               style={{
                 backgroundColor: viewMode === 'list' ? '#1E2D3D' : 'transparent',
-                color: viewMode === 'list' ? '#E8EDF2' : '#4A6072',
+                color: viewMode === 'list' ? '#E8EDF2' : '#788DA1',
               }}
             >
               <List size={14} />
@@ -265,7 +301,7 @@ export default function CommandAtlas() {
               aria-pressed={viewMode === 'graph'}
               style={{
                 backgroundColor: viewMode === 'graph' ? '#1E2D3D' : 'transparent',
-                color: viewMode === 'graph' ? '#E8EDF2' : '#4A6072',
+                color: viewMode === 'graph' ? '#E8EDF2' : '#788DA1',
               }}
             >
               <Network size={14} />
@@ -293,7 +329,7 @@ export default function CommandAtlas() {
               <BookOpen size={18} className="text-[#00E5FF]" />
               {t('commandAtlas.commands')}
             </h2>
-            <span className="font-jetbrains text-body-sm text-[#4A6072]">
+            <span className="font-jetbrains text-body-sm text-[#788DA1]">
               {t('commandAtlas.results', { count: filteredCommands.length })}
             </span>
           </div>
@@ -304,7 +340,7 @@ export default function CommandAtlas() {
               transition={{ duration: 0.3 }}
               className="flex flex-col items-center justify-center py-16 gap-3 text-center"
             >
-              <Search size={48} className="opacity-30" style={{ color: 'var(--text-muted, #4A6072)' }} />
+              <Search size={48} className="opacity-30" style={{ color: 'var(--text-muted, #788DA1)' }} />
               <p className="font-jetbrains text-body text-[#8B9EB0]">{t('commandAtlas.noCommandsMatch')}</p>
               <button
                 onClick={() => {

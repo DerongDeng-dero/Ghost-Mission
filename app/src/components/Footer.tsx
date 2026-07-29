@@ -12,10 +12,10 @@ export default function Footer() {
       <div className="max-w-[1200px] mx-auto flex flex-col md:flex-row items-center justify-between gap-space-4">
         {/* Left: Wordmark + Version */}
         <div className="flex items-center gap-space-2">
-          <span className="font-jetbrains text-body-sm text-[#4A6072]">
+          <span className="font-jetbrains text-body-sm text-[#788DA1]">
             {t('app.title')}
           </span>
-          <span className="font-jetbrains text-xs text-[#4A6072] opacity-60">
+          <span className="font-jetbrains text-xs text-[#788DA1]">
             v1.0.0
           </span>
         </div>
@@ -25,7 +25,7 @@ export default function Footer() {
           <span
             aria-disabled="true"
             title={t('common.unavailable')}
-            className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#4A6072]"
+            className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#788DA1]"
           >
             <FileText size={12} aria-hidden="true" />
             {t('footer.documentation')}
@@ -33,7 +33,7 @@ export default function Footer() {
           <span
             aria-disabled="true"
             title={t('common.unavailable')}
-            className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#4A6072]"
+            className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#788DA1]"
           >
             <Shield size={12} aria-hidden="true" />
             {t('footer.securityPolicy')}
@@ -41,7 +41,7 @@ export default function Footer() {
           <span
             aria-disabled="true"
             title={t('common.unavailable')}
-            className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#4A6072]"
+            className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#788DA1]"
           >
             <AlertTriangle size={12} aria-hidden="true" />
             {t('footer.reportIssue')}
@@ -50,7 +50,7 @@ export default function Footer() {
 
         {/* Right: Tagline */}
         <div className="flex items-center gap-space-2">
-          <span className="font-inter text-body-sm text-[#4A6072] italic">
+          <span className="font-inter text-body-sm text-[#788DA1] italic">
             {t('footer.tagline')}
           </span>
         </div>

@@ -1,6 +1,7 @@
 import type { Objective } from '@/engine/levels'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface ObjectivesPanelProps {
   objectives: Objective[]
@@ -11,6 +12,8 @@ interface ObjectivesPanelProps {
 }
 
 export default function ObjectivesPanel({ objectives, completedIds, progress, isCollapsed, onToggleCollapse }: ObjectivesPanelProps) {
+  const { t, i18n } = useTranslation()
+  const language: 'en' | 'zh' = i18n.resolvedLanguage?.startsWith('zh') ? 'zh' : 'en'
   const requiredObjectives = objectives.filter(objective => objective.required)
   const completedRequiredCount = requiredObjectives.filter(objective => completedIds.has(objective.id)).length
 
@@ -23,8 +26,8 @@ export default function ObjectivesPanel({ objectives, completedIds, progress, is
         <button
           onClick={onToggleCollapse}
           className="text-[var(--text-muted)] hover:text-[var(--neon-cyan)] transition-colors"
-          aria-label="Expand objectives panel"
-          title="Expand"
+          aria-label={t('terminal.expandObjectives')}
+          title={t('terminal.expandObjectives')}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
@@ -44,10 +47,10 @@ export default function ObjectivesPanel({ objectives, completedIds, progress, is
       className="flex flex-col border-r overflow-hidden"
       style={{ width: 280, minWidth: 280, backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-subtle)' }}
       role="region"
-      aria-label="Mission objectives"
+      aria-label={t('terminal.objectivesRegion')}
     >
       <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-        <h3 className="font-jetbrains text-h4" style={{ color: 'var(--text-primary)' }}>Objectives</h3>
+        <h3 className="font-jetbrains text-h4" style={{ color: 'var(--text-primary)' }}>{t('terminal.objectives')}</h3>
         <div className="flex items-center gap-2">
           <span className="font-jetbrains text-body-sm" style={{ color: 'var(--text-secondary)' }}>
             {completedRequiredCount}/{requiredObjectives.length}
@@ -55,7 +58,7 @@ export default function ObjectivesPanel({ objectives, completedIds, progress, is
           <button
             onClick={onToggleCollapse}
             className="text-[var(--text-muted)] hover:text-[var(--neon-cyan)] transition-colors"
-            aria-label="Collapse objectives panel"
+            aria-label={t('terminal.collapseObjectives')}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
@@ -122,13 +125,13 @@ export default function ObjectivesPanel({ objectives, completedIds, progress, is
                     }}
                   >
                     {obj.required && <span style={{ color: 'var(--neon-cyan)' }}>&#8226; </span>}
-                    {obj.getLabel('en')}
+                    {obj.getLabel(language)}
                     {!obj.required && (
                       <span
                         className="ml-2 inline-flex align-middle rounded px-1.5 py-0.5 font-jetbrains text-[9px] uppercase tracking-wider"
                         style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' }}
                       >
-                        Optional
+                        {t('terminal.optional')}
                       </span>
                     )}
                   </p>

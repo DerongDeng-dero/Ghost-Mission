@@ -18,6 +18,7 @@ import StatsPanel from '@/components/profile/StatsPanel';
 import ActivityHeatmap from '@/components/profile/ActivityHeatmap';
 import SkillTreeMini from '@/components/profile/SkillTreeMini';
 import { achievements, getUnlockedCount, tierColors } from '@/data/achievements';
+import { publicAssetUrl } from '@/lib/publicAsset';
 
 const rankLabels: Record<string, { titleKey: string; color: string }> = {
   recruit: { titleKey: 'profile.rank.recruit', color: '#CD7F32' },
@@ -94,7 +95,7 @@ export default function Profile() {
                 }}
               >
                 <img
-                  src="/avatar-default.png"
+                  src={publicAssetUrl('avatar-default.png')}
                   alt="Avatar"
                   className="w-full h-full object-cover"
                   onError={(e) => {
@@ -137,7 +138,7 @@ export default function Profile() {
                   >
                     {t(rankInfo.titleKey)}
                   </span>
-                  <span className="font-jetbrains text-body-sm text-[#4A6072]">
+                  <span className="font-jetbrains text-body-sm text-[#788DA1]">
                     {t('profile.operativeSince', { date: 'March 2024' })}
                   </span>
                 </div>
@@ -352,7 +353,7 @@ export default function Profile() {
                           <p className="font-inter text-body text-[#E8EDF2]">
                             {activity.description}
                           </p>
-                          <p className="font-jetbrains text-body-sm text-[#4A6072] mt-0.5">
+                          <p className="font-jetbrains text-body-sm text-[#788DA1] mt-0.5">
                             {activity.timestamp}
                           </p>
                         </motion.div>
@@ -401,7 +402,7 @@ export default function Profile() {
                   <span className="font-jetbrains text-h2 text-[#E8EDF2]">
                     {unlockedCount}
                   </span>
-                  <span className="font-jetbrains text-body text-[#4A6072] ml-2">
+                  <span className="font-jetbrains text-body text-[#788DA1] ml-2">
                     / {totalAchievements} {t('profile.achievements.unlocked')}
                   </span>
                 </div>
@@ -431,9 +432,9 @@ export default function Profile() {
                   transition={{ duration: 0.3 }}
                   className="flex flex-col items-center justify-center py-16 gap-3 text-center"
                 >
-                  <Lock size={48} className="opacity-30" style={{ color: 'var(--text-muted, #4A6072)' }} />
+                  <Lock size={48} className="opacity-30" style={{ color: 'var(--text-muted, #788DA1)' }} />
                   <p className="font-jetbrains text-body text-[#8B9EB0]">{t('profile.achievements.noneYet')}</p>
-                  <p className="font-inter text-body-sm text-[#4A6072] max-w-sm">
+                  <p className="font-inter text-body-sm text-[#788DA1] max-w-sm">
                     {t('profile.achievements.noneDescription')}
                   </p>
                 </motion.div>
@@ -496,7 +497,7 @@ export default function Profile() {
                           ].map((h) => (
                             <th
                               key={h}
-                              className="px-4 py-3 text-left font-jetbrains text-body-sm text-[#4A6072] uppercase tracking-wider"
+                              className="px-4 py-3 text-left font-jetbrains text-body-sm text-[#788DA1] uppercase tracking-wider"
                             >
                               {h}
                             </th>
@@ -542,7 +543,7 @@ export default function Profile() {
                             <td className="px-4 py-3 font-jetbrains text-body-sm text-[#8B9EB0]">
                               {mission.time}
                             </td>
-                            <td className="px-4 py-3 font-jetbrains text-body-sm text-[#4A6072]">
+                            <td className="px-4 py-3 font-jetbrains text-body-sm text-[#788DA1]">
                               {mission.date}
                             </td>
                             <td className="px-4 py-3">

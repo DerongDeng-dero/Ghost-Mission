@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { gzipSync } from 'node:zlib'
-import { appRoot, getAssetMetrics, listFiles } from './project-metrics.mjs'
+import { appRoot, workspaceRoot, getAssetMetrics, listFiles } from './project-metrics.mjs'
 
 const distRoot = path.resolve(appRoot, 'dist')
 const manifestPath = path.resolve(distRoot, '.vite/manifest.json')
@@ -104,6 +104,35 @@ const largestJavascript = javascriptSizes.toSorted((a, b) => b.raw - a.raw)[0]
 const dynamicBoundaries = new Set(
   Object.values(manifest).flatMap((value) => value.dynamicImports ?? []),
 )
+
+const readme = await readFile(path.resolve(workspaceRoot, 'README.md'), 'utf8')
+const initialRawKiB = Math.round(initialRaw / 1024)
+const initialGzipKiB = Math.round(initialGzip / 1024)
+const documentedBuildMetrics =
+  `首载 ${initialFiles.size} 个 JS 块，约 ${initialRawKiB.toLocaleString('en-US')} KiB raw / ` +
+  `${initialGzipKiB.toLocaleString('en-US')} KiB gzip；${dynamicBoundaries.size} 个动态边界，约 ` +
+  `${Math.round(totalJsGzip / 1024).toLocaleString('en-US')} KiB total JS gzip`
+if (!readme.includes(documentedBuildMetrics)) {
+  failures.push('README production-build metrics do not match the current manifest.')
+}
+
+const initialMetricPattern = /首载[^\r\n]*?([0-9][0-9,]*) KiB raw\s*\/\s*([0-9][0-9,]*) KiB gzip/gi
+for (const [lineIndex, line] of readme.split(/\r?\n/).entries()) {
+  initialMetricPattern.lastIndex = 0
+  let match
+  while ((match = initialMetricPattern.exec(line)) !== null) {
+    const documentedRawKiB = Number(match[1].replaceAll(',', ''))
+    const documentedGzipKiB = Number(match[2].replaceAll(',', ''))
+    if (documentedRawKiB !== initialRawKiB || documentedGzipKiB !== initialGzipKiB) {
+      failures.push(
+        `README line ${lineIndex + 1} contains stale initial-build metrics: ` +
+          `${match[1]} KiB raw / ${match[2]} KiB gzip; expected ` +
+          `${initialRawKiB.toLocaleString('en-US')} KiB raw / ` +
+          `${initialGzipKiB.toLocaleString('en-US')} KiB gzip.`,
+      )
+    }
+  }
+}
 
 if (initialGzip > 400 * 1024) {
   failures.push('Initial JavaScript exceeds the 400 KiB gzip budget.')

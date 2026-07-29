@@ -52,7 +52,7 @@ module.exports = {
         "neon-blue": "#4488FF",
         "text-primary": "#E8EDF2",
         "text-secondary": "#8B9EB0",
-        "text-muted": "#4A6072",
+        "text-muted": "#788DA1",
         "text-terminal": "#E6DCCF",
         "text-terminal-dim": "#5C7A8C",
         "text-green": "#00FF88",

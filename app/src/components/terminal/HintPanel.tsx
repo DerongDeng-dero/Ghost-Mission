@@ -10,6 +10,7 @@ interface HintPanelProps {
   onRevealHint: (level: number) => void
   hintsUsed: number
   totalPenalty: number
+  language: 'en' | 'zh'
 }
 
 function getLevelColor(level: number): string {
@@ -18,7 +19,18 @@ function getLevelColor(level: number): string {
   return 'var(--status-danger)'
 }
 
-export default function HintPanel({ isOpen, onClose, hints, revealedLevels, onRevealHint, hintsUsed, totalPenalty }: HintPanelProps) {
+export default function HintPanel({ isOpen, onClose, hints, revealedLevels, onRevealHint, hintsUsed, totalPenalty, language }: HintPanelProps) {
+  const copy = language === 'zh'
+    ? {
+        panel: '任务提示面板', title: '任务提示', used: '已使用提示', close: '关闭提示面板',
+        level: '等级', hint: '提示', reveal: '显示提示', forfeits: '查看提示会失去一次性的无提示奖励',
+        penalty: '已失去无提示奖励', footer: '使用提示会降低最终得分。尽量自行推理以获得最高分。',
+      }
+    : {
+        panel: 'Mission hints panel', title: 'Mission Hints', used: 'Hints used', close: 'Close hint panel',
+        level: 'Level', hint: 'Hint', reveal: 'Show Hint', forfeits: 'Revealing a hint forfeits the one-time no-hints bonus',
+        penalty: 'No-hints bonus forfeited', footer: 'Using hints reduces your final score. Try to solve without them for maximum points.',
+      }
   return (
     <AnimatePresence>
       {isOpen && (
@@ -35,7 +47,7 @@ export default function HintPanel({ isOpen, onClose, hints, revealedLevels, onRe
           <motion.div
             className="fixed top-[52px] right-0 bottom-0 z-[30] flex flex-col border-l overflow-y-auto"
             style={{
-              width: 360,
+              width: 'min(360px, 100vw)',
               backgroundColor: 'rgba(15, 20, 25, 0.95)',
               backdropFilter: 'blur(12px)',
               borderColor: 'var(--border-subtle)',
@@ -45,20 +57,20 @@ export default function HintPanel({ isOpen, onClose, hints, revealedLevels, onRe
             exit={{ x: 360 }}
             transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] as [number, number, number, number] }}
             role="complementary"
-            aria-label="Mission hints panel"
+            aria-label={copy.panel}
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
               <div>
-                <h3 className="font-jetbrains text-h3" style={{ color: 'var(--text-primary)' }}>Mission Hints</h3>
+                <h3 className="font-jetbrains text-h3" style={{ color: 'var(--text-primary)' }}>{copy.title}</h3>
                 <p className="font-jetbrains text-body-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-                  Hints used: {hintsUsed}/{hints.length}
+                  {copy.used}: {hintsUsed}/{hints.length}
                 </p>
               </div>
               <button
                 onClick={onClose}
                 className="p-1.5 rounded-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all"
-                aria-label="Close hint panel"
+                aria-label={copy.close}
               >
                 <X size={18} />
               </button>
@@ -78,9 +90,9 @@ export default function HintPanel({ isOpen, onClose, hints, revealedLevels, onRe
                     <div className="flex items-center justify-between px-3 py-2">
                       <div className="flex items-center gap-2">
                         <span className="font-jetbrains text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded-full" style={{ color, backgroundColor: color.replace(')', ', 0.12)').replace('var(', 'rgba(').replace('--neon-cyan', '0, 229, 255').replace('--status-warning', '255, 209, 102').replace('--status-danger', '255, 71, 87') }}>
-                          Level {hint.level}
+                          {copy.level} {hint.level}
                         </span>
-                        <span className="font-jetbrains text-body-sm" style={{ color: 'var(--text-primary)' }}>Hint {hint.level}</span>
+                        <span className="font-jetbrains text-body-sm" style={{ color: 'var(--text-primary)' }}>{copy.hint} {hint.level}</span>
                       </div>
                       {!isRevealed && (
                         <button
@@ -94,7 +106,7 @@ export default function HintPanel({ isOpen, onClose, hints, revealedLevels, onRe
                           onMouseEnter={e => { e.currentTarget.style.borderColor = color; e.currentTarget.style.color = color }}
                           onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)' }}
                         >
-                          Show Hint
+                          {copy.reveal}
                         </button>
                       )}
                     </div>
@@ -109,11 +121,11 @@ export default function HintPanel({ isOpen, onClose, hints, revealedLevels, onRe
                         >
                           <div className="px-3 pb-3 pt-1">
                             <p className="font-jetbrains text-body leading-relaxed" style={{ color: 'var(--text-primary)' }}>
-                              {hint.getText('en')}
+                              {hint.getText(language)}
                             </p>
                             <p className="font-jetbrains text-body-sm mt-2 flex items-center gap-1" style={{ color: 'var(--status-warning)' }}>
                               <AlertTriangle size={12} />
-                              Using this hint reduces perfect score bonus
+                              {copy.forfeits}
                             </p>
                           </div>
                         </motion.div>
@@ -128,19 +140,11 @@ export default function HintPanel({ isOpen, onClose, hints, revealedLevels, onRe
             <div className="p-3 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
               {totalPenalty > 0 && (
                 <p className="font-jetbrains text-body-sm mb-2" style={{ color: 'var(--status-warning)' }}>
-                  Score penalty: -{totalPenalty} points
+                  {copy.penalty}: -{totalPenalty} {language === 'zh' ? '分（总计）' : 'points total'}
                 </p>
               )}
-              {hintsUsed >= 3 && (
-                <button
-                  className="w-full py-2 rounded-md font-jetbrains text-body-sm transition-colors"
-                  style={{ color: 'var(--status-danger)', border: '1px solid rgba(255,71,87,0.3)', backgroundColor: 'rgba(255,71,87,0.06)' }}
-                >
-                  Request Override
-                </button>
-              )}
               <p className="font-jetbrains text-[10px] mt-2" style={{ color: 'var(--text-muted)' }}>
-                Using hints reduces your final score. Try to solve without them for maximum points.
+                {copy.footer}
               </p>
             </div>
           </motion.div>

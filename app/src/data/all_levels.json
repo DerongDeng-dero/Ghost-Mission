@@ -2275,8 +2275,8 @@
     "difficulty": 2,
     "risk_level": "blue",
     "estimated_time": "3-5 min",
-    "summary_en": "Practice Navigation with Glob Storm. Learn to use *, ?, [] effectively.",
-    "summary_zh": "通过 通配符风暴 练习Navigation。学会有效使用 *, ?, []。",
+  "summary_en": "Practice deterministic filename expansion with the supported * and ? glob patterns.",
+  "summary_zh": "使用受支持的 * 与 ? 通配符模式练习确定性的文件名展开。",
     "story": {
       "briefing_en": "Welcome to Filesystem Movement - Glob Storm. This mission tests your Navigation skills. Use the terminal to complete all objectives.",
       "briefing_zh": "欢迎来到 文件系统漫游 - 通配符风暴。本任务测试你的Navigation技能。使用终端完成所有目标。",
@@ -2285,10 +2285,9 @@
       "failure_en": "Mission incomplete. Review Navigation fundamentals and try again.",
       "failure_zh": "任务未完成。复习Navigation基础知识后重试。"
     },
-    "skills": [
-      "*",
-      "?",
-      "[]"
+  "skills": [
+    "*",
+    "?"
     ],
     "objectives": [
       {
@@ -2302,12 +2301,6 @@
         "label_en": "Master the use of ?",
         "label_zh": "掌握 ? 的使用",
         "required": true
-      },
-      {
-        "id": "obj-3",
-        "label_en": "Master the use of []",
-        "label_zh": "掌握 [] 的使用",
-        "required": false
       },
       {
         "id": "obj-practice",
@@ -2329,31 +2322,31 @@
         "type": "no_red_command_used"
       }
     ],
-    "hints": [
-      {
-        "level": 1,
-        "text_en": "Think about what '*' does in a Linux environment.",
-        "text_zh": "想想 '*' 在Linux环境中是做什么的。"
-      },
-      {
-        "level": 2,
-        "text_en": "Review the basics of Navigation commands.",
-        "text_zh": "复习Navigation相关命令的基础知识。"
-      },
-      {
-        "level": 3,
-        "text_en": "Try running '*' and observe the output carefully.",
-        "text_zh": "试着运行 '*' 并仔细观察输出。"
-      },
-      {
-        "level": 4,
-        "text_en": "The command you need is: *. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: *。使用适当的参数执行它。"
-      },
-      {
-        "level": 5,
-        "text_en": "Full solution: Use '*' to complete the objective.",
-        "text_zh": "完整解答: 使用 '*' 来完成目标。"
+  "hints": [
+    {
+      "level": 1,
+      "text_en": "A glob only counts when it expands to a real directory entry; quoted or unmatched symbols stay literal.",
+      "text_zh": "通配符只有在展开到真实目录项时才计入进度；被引号包裹或无法匹配的符号仍是字面量。"
+    },
+    {
+      "level": 2,
+      "text_en": "Create a one-character filename so both * and ? have a deterministic match.",
+      "text_zh": "先创建一个单字符文件名，让 * 与 ? 都能得到确定的匹配。"
+    },
+    {
+      "level": 3,
+      "text_en": "Run: touch a",
+      "text_zh": "运行：touch a"
+    },
+    {
+      "level": 4,
+      "text_en": "Then pass both patterns to a harmless command: echo * ?",
+      "text_zh": "然后把两个模式交给无害命令：echo * ?"
+    },
+    {
+      "level": 5,
+      "text_en": "Full solution: touch a && echo * ?",
+      "text_zh": "完整解答：touch a && echo * ?"
       }
     ],
     "scoring": {
@@ -2730,16 +2723,23 @@
       "failure_en": "Mission incomplete. Review File Operations fundamentals and try again.",
       "failure_zh": "任务未完成。复习File Operations基础知识后重试。"
     },
-    "skills": [
-      "touch"
-    ],
+  "skills": [
+    "touch -t",
+    "stat"
+  ],
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of touch",
-        "label_zh": "掌握 touch 的使用",
-        "required": true
-      },
+      "label_en": "Master the use of touch -t 202401010830 signal.conf",
+      "label_zh": "掌握 touch -t 202401010830 signal.conf 的使用",
+      "required": true
+    },
+    {
+      "id": "obj-2",
+      "label_en": "Master the use of stat signal.conf",
+      "label_zh": "掌握 stat signal.conf 的使用",
+      "required": true
+    },
       {
         "id": "obj-practice",
         "label_en": "Complete the Touch Signal training",
@@ -2750,10 +2750,14 @@
     "checks": [
       {
         "type": "command_used",
-        "pattern": "touch"
+      "pattern": "touch -t 202401010830 signal.conf"
+    },
+    {
+      "type": "command_used",
+      "pattern": "stat signal.conf"
       },
       {
-        "type": "no_red_command_used"
+      "type": "no_red_command_used"
       }
     ],
     "hints": [
@@ -2769,18 +2773,18 @@
       },
       {
         "level": 3,
-        "text_en": "Try running 'touch' and observe the output carefully.",
-        "text_zh": "试着运行 'touch' 并仔细观察输出。"
+        "text_en": "Create and backdate a file with touch -t YYYYMMDDhhmm FILE.",
+        "text_zh": "使用 touch -t YYYYMMDDhhmm 文件名 创建文件并设置过去的时间戳。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: touch. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: touch。使用适当的参数执行它。"
+        "text_en": "Run stat FILE afterward and inspect its Modify timestamp.",
+        "text_zh": "随后运行 stat 文件名，检查 Modify 时间是否已改变。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'touch' to complete the objective.",
-        "text_zh": "完整解答: 使用 'touch' 来完成目标。"
+        "text_en": "Example: touch -t 202401010830 signal.conf && stat signal.conf",
+        "text_zh": "示例：touch -t 202401010830 signal.conf && stat signal.conf"
       }
     ],
     "scoring": {
@@ -3119,8 +3123,8 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of rm",
-        "label_zh": "掌握 rm 的使用",
+        "label_en": "Master the use of rm decoy.txt",
+        "label_zh": "掌握 rm decoy.txt 的使用",
         "required": true
       },
       {
@@ -3133,7 +3137,7 @@
     "checks": [
       {
         "type": "command_used",
-        "pattern": "rm"
+        "pattern": "rm decoy.txt"
       },
       {
         "type": "no_red_command_used"
@@ -3157,13 +3161,13 @@
       },
       {
         "level": 4,
-        "text_en": "The command you need is: rm. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: rm。使用适当的参数执行它。"
+        "text_en": "Create a harmless practice target first: touch decoy.txt.",
+        "text_zh": "先创建一个无害的练习目标：touch decoy.txt。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'rm' to complete the objective.",
-        "text_zh": "完整解答: 使用 'rm' 来完成目标。"
+        "text_en": "Full solution: touch decoy.txt && rm decoy.txt",
+        "text_zh": "完整解答：touch decoy.txt && rm decoy.txt"
       }
     ],
     "scoring": {
@@ -3924,14 +3928,14 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of find",
-        "label_zh": "掌握 find 的使用",
+        "label_en": "Master the use of find drill -name '*.tmp'",
+        "label_zh": "掌握 find drill -name '*.tmp' 的使用",
         "required": true
       },
       {
         "id": "obj-2",
-        "label_en": "Master the use of rm",
-        "label_zh": "掌握 rm 的使用",
+        "label_en": "Master the use of rm -i drill/nested/decoy.tmp",
+        "label_zh": "掌握 rm -i drill/nested/decoy.tmp 的使用",
         "required": true
       },
       {
@@ -3950,11 +3954,11 @@
     "checks": [
       {
         "type": "command_used",
-        "pattern": "find"
+        "pattern": "find drill -name '*.tmp'"
       },
       {
         "type": "command_used",
-        "pattern": "rm"
+        "pattern": "rm -i drill/nested/decoy.tmp"
       },
       {
         "type": "no_red_command_used"
@@ -3978,13 +3982,13 @@
       },
       {
         "level": 4,
-        "text_en": "The command you need is: find. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: find。使用适当的参数执行它。"
+        "text_en": "Build a disposable drill/nested/decoy.tmp fixture, inspect it with find, then use interactive rm.",
+        "text_zh": "创建一次性的 drill/nested/decoy.tmp 样本，先用 find 检查，再使用交互式 rm。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'find' to complete the objective.",
-        "text_zh": "完整解答: 使用 'find' 来完成目标。"
+        "text_en": "Full solution: mkdir -p drill/nested && touch drill/nested/decoy.tmp && find drill -name '*.tmp' && rm -i drill/nested/decoy.tmp",
+        "text_zh": "完整解答：mkdir -p drill/nested && touch drill/nested/decoy.tmp && find drill -name '*.tmp' && rm -i drill/nested/decoy.tmp"
       }
     ],
     "scoring": {
@@ -4137,8 +4141,8 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of chmod",
-        "label_zh": "掌握 chmod 的使用",
+        "label_en": "Master the use of chmod u+x run.sh",
+        "label_zh": "掌握 chmod u+x run.sh 的使用",
         "required": true
       },
       {
@@ -4151,7 +4155,7 @@
     "checks": [
       {
         "type": "command_used",
-        "pattern": "chmod"
+        "pattern": "chmod u+x run.sh"
       },
       {
         "type": "no_red_command_used"
@@ -4175,13 +4179,13 @@
       },
       {
         "level": 4,
-        "text_en": "The command you need is: chmod. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: chmod。使用适当的参数执行它。"
+        "text_en": "Create run.sh first, then add only the owner's execute bit.",
+        "text_zh": "先创建 run.sh，再只为所有者添加执行位。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'chmod' to complete the objective.",
-        "text_zh": "完整解答: 使用 'chmod' 来完成目标。"
+        "text_en": "Full solution: touch run.sh && chmod u+x run.sh",
+        "text_zh": "完整解答：touch run.sh && chmod u+x run.sh"
       }
     ],
     "scoring": {
@@ -4439,14 +4443,14 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of chown",
-        "label_zh": "掌握 chown 的使用",
+        "label_en": "Master the use of chown root:root ownership.txt",
+        "label_zh": "掌握 chown root:root ownership.txt 的使用",
         "required": true
       },
       {
         "id": "obj-2",
-        "label_en": "Master the use of chgrp",
-        "label_zh": "掌握 chgrp 的使用",
+        "label_en": "Master the use of chgrp sudo ownership.txt",
+        "label_zh": "掌握 chgrp sudo ownership.txt 的使用",
         "required": true
       },
       {
@@ -4459,11 +4463,11 @@
     "checks": [
       {
         "type": "command_used",
-        "pattern": "chown"
+        "pattern": "chown root:root ownership.txt"
       },
       {
         "type": "command_used",
-        "pattern": "chgrp"
+        "pattern": "chgrp sudo ownership.txt"
       },
       {
         "type": "no_red_command_used"
@@ -4487,13 +4491,13 @@
       },
       {
         "level": 4,
-        "text_en": "The command you need is: chown. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: chown。使用适当的参数执行它。"
+        "text_en": "Create ownership.txt, change its group while you still own it, then use sudo for the ownership transfer.",
+        "text_zh": "创建 ownership.txt，在仍拥有它时修改组，最后用 sudo 转移所有权。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'chown' to complete the objective.",
-        "text_zh": "完整解答: 使用 'chown' 来完成目标。"
+        "text_en": "Full solution: touch ownership.txt && chgrp sudo ownership.txt && sudo chown root:root ownership.txt",
+        "text_zh": "完整解答：touch ownership.txt && chgrp sudo ownership.txt && sudo chown root:root ownership.txt"
       }
     ],
     "scoring": {
@@ -5019,14 +5023,14 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of chmod",
-        "label_zh": "掌握 chmod 的使用",
+        "label_en": "Master the use of chmod 640 secure.conf",
+        "label_zh": "掌握 chmod 640 secure.conf 的使用",
         "required": true
       },
       {
         "id": "obj-2",
-        "label_en": "Master the use of ls -l",
-        "label_zh": "掌握 ls -l 的使用",
+        "label_en": "Master the use of ls -l secure.conf",
+        "label_zh": "掌握 ls -l secure.conf 的使用",
         "required": true
       },
       {
@@ -5039,11 +5043,11 @@
     "checks": [
       {
         "type": "command_used",
-        "pattern": "chmod"
+        "pattern": "chmod 640 secure.conf"
       },
       {
         "type": "command_used",
-        "pattern": "ls"
+        "pattern": "ls -l secure.conf"
       },
       {
         "type": "no_red_command_used"
@@ -5067,13 +5071,13 @@
       },
       {
         "level": 4,
-        "text_en": "The command you need is: chmod. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: chmod。使用适当的参数执行它。"
+        "text_en": "Create secure.conf, apply least-privilege mode 640, then verify the resulting metadata.",
+        "text_zh": "创建 secure.conf，应用最小权限 640，再验证结果元数据。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'chmod' to complete the objective.",
-        "text_zh": "完整解答: 使用 'chmod' 来完成目标。"
+        "text_en": "Full solution: touch secure.conf && chmod 640 secure.conf && ls -l secure.conf",
+        "text_zh": "完整解答：touch secure.conf && chmod 640 secure.conf && ls -l secure.conf"
       }
     ],
     "scoring": {
@@ -5124,14 +5128,14 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of chmod",
-        "label_zh": "掌握 chmod 的使用",
+        "label_en": "Master the use of chmod 640 lockdown.conf",
+        "label_zh": "掌握 chmod 640 lockdown.conf 的使用",
         "required": true
       },
       {
         "id": "obj-2",
-        "label_en": "Master the use of chown",
-        "label_zh": "掌握 chown 的使用",
+        "label_en": "Master the use of chown root:root lockdown.conf",
+        "label_zh": "掌握 chown root:root lockdown.conf 的使用",
         "required": true
       },
       {
@@ -5150,11 +5154,11 @@
     "checks": [
       {
         "type": "command_used",
-        "pattern": "chmod"
+        "pattern": "chmod 640 lockdown.conf"
       },
       {
         "type": "command_used",
-        "pattern": "chown"
+        "pattern": "chown root:root lockdown.conf"
       },
       {
         "type": "no_red_command_used"
@@ -5178,13 +5182,13 @@
       },
       {
         "level": 4,
-        "text_en": "The command you need is: chmod. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: chmod。使用适当的参数执行它。"
+        "text_en": "Prepare lockdown.conf, set mode 640 before transferring ownership, and inspect the final ACL.",
+        "text_zh": "准备 lockdown.conf，在转移所有权前设置 640，并检查最终 ACL。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'chmod' to complete the objective.",
-        "text_zh": "完整解答: 使用 'chmod' 来完成目标。"
+        "text_en": "Full solution: touch lockdown.conf && chmod 640 lockdown.conf && sudo chown root:root lockdown.conf && getfacl lockdown.conf",
+        "text_zh": "完整解答：touch lockdown.conf && chmod 640 lockdown.conf && sudo chown root:root lockdown.conf && getfacl lockdown.conf"
       }
     ],
     "scoring": {
@@ -5235,14 +5239,14 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of chmod",
-        "label_zh": "掌握 chmod 的使用",
+        "label_en": "Master the use of chmod 640 service.conf",
+        "label_zh": "掌握 chmod 640 service.conf 的使用",
         "required": true
       },
       {
         "id": "obj-2",
-        "label_en": "Master the use of chown",
-        "label_zh": "掌握 chown 的使用",
+        "label_en": "Master the use of chown www-data:www-data service.conf",
+        "label_zh": "掌握 chown www-data:www-data service.conf 的使用",
         "required": true
       },
       {
@@ -5261,11 +5265,11 @@
     "checks": [
       {
         "type": "command_used",
-        "pattern": "chmod"
+        "pattern": "chmod 640 service.conf"
       },
       {
         "type": "command_used",
-        "pattern": "chown"
+        "pattern": "chown www-data:www-data service.conf"
       },
       {
         "type": "no_red_command_used"
@@ -5289,13 +5293,13 @@
       },
       {
         "level": 4,
-        "text_en": "The command you need is: chmod. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: chmod。使用适当的参数执行它。"
+        "text_en": "Create service.conf, set its mode while you own it, transfer it to www-data, then inspect it.",
+        "text_zh": "创建 service.conf，在拥有它时设置模式，再转移给 www-data 并检查。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'chmod' to complete the objective.",
-        "text_zh": "完整解答: 使用 'chmod' 来完成目标。"
+        "text_en": "Full solution: touch service.conf && chmod 640 service.conf && sudo chown www-data:www-data service.conf && ls -l service.conf",
+        "text_zh": "完整解答：touch service.conf && chmod 640 service.conf && sudo chown www-data:www-data service.conf && ls -l service.conf"
       }
     ],
     "scoring": {
@@ -6879,28 +6883,28 @@
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what 'if' does in a Linux environment.",
-        "text_zh": "想想 'if' 在Linux环境中是做什么的。"
+        "text_en": "An if statement branches on a command's exit status; use test as the condition.",
+        "text_zh": "if 会根据命令的退出状态分支；可使用 test 作为条件。"
       },
       {
         "level": 2,
-        "text_en": "Review the basics of Shell Scripting commands.",
-        "text_zh": "复习Shell Scripting相关命令的基础知识。"
+        "text_en": "Use the bounded one-line form: if test CONDITION; then COMMAND; fi.",
+        "text_zh": "使用有界的单行形式：if test 条件; then 命令; fi。"
       },
       {
         "level": 3,
-        "text_en": "Try running 'if' and observe the output carefully.",
-        "text_zh": "试着运行 'if' 并仔细观察输出。"
+        "text_en": "Test a real file: if test -f /etc/hostname; then echo found; fi.",
+        "text_zh": "测试真实文件：if test -f /etc/hostname; then echo found; fi。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: if. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: if。使用适当的参数执行它。"
+        "text_en": "Both if and test must execute as part of a syntactically valid statement.",
+        "text_zh": "if 与 test 都必须在语法有效的语句中真正执行。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'if' to complete the objective.",
-        "text_zh": "完整解答: 使用 'if' 来完成目标。"
+        "text_en": "Full solution: if test -f /etc/hostname; then echo found; fi",
+        "text_zh": "完整解答：if test -f /etc/hostname; then echo found; fi"
       }
     ],
     "scoring": {
@@ -6983,8 +6987,8 @@
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what 'for' does in a Linux environment.",
-        "text_zh": "想想 'for' 在Linux环境中是做什么的。"
+        "text_en": "Use for for a finite list and a false condition to demonstrate a bounded while loop safely.",
+        "text_zh": "用 for 遍历有限列表，并用 false 条件安全演示有界 while 循环。"
       },
       {
         "level": 2,
@@ -6993,18 +6997,18 @@
       },
       {
         "level": 3,
-        "text_en": "Try running 'for' and observe the output carefully.",
-        "text_zh": "试着运行 'for' 并仔细观察输出。"
+        "text_en": "First run: for item in alpha beta; do echo \"$item\"; done",
+        "text_zh": "先运行：for item in alpha beta; do echo \"$item\"; done"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: for. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: for。使用适当的参数执行它。"
+        "text_en": "Then run: while false; do echo never; done",
+        "text_zh": "然后运行：while false; do echo never; done"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'for' to complete the objective.",
-        "text_zh": "完整解答: 使用 'for' 来完成目标。"
+        "text_en": "Full solution: run both bounded loop commands above; an always-true while loop is rejected.",
+        "text_zh": "完整解答：依次运行上面两条有界循环命令；始终为真的 while 循环会被拒绝。"
       }
     ],
     "scoring": {
@@ -7087,8 +7091,8 @@
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what 'read' does in a Linux environment.",
-        "text_zh": "想想 'read' 在Linux环境中是做什么的。"
+        "text_en": "Combine while with read -r so every input line is consumed without interpreting backslashes.",
+        "text_zh": "将 while 与 read -r 组合，逐行读取且不解释反斜杠。"
       },
       {
         "level": 2,
@@ -7097,18 +7101,18 @@
       },
       {
         "level": 3,
-        "text_en": "Try running 'read' and observe the output carefully.",
-        "text_zh": "试着运行 'read' 并仔细观察输出。"
+        "text_en": "Use /etc/hostname as bounded input for the loop.",
+        "text_zh": "使用 /etc/hostname 作为循环的有界输入。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: read. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: read。使用适当的参数执行它。"
+        "text_en": "Run: while read -r line; do echo \"$line\"; done < /etc/hostname",
+        "text_zh": "运行：while read -r line; do echo \"$line\"; done < /etc/hostname"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'read' to complete the objective.",
-        "text_zh": "完整解答: 使用 'read' 来完成目标。"
+        "text_en": "Full solution: while read -r line; do echo \"$line\"; done < /etc/hostname",
+        "text_zh": "完整解答：while read -r line; do echo \"$line\"; done < /etc/hostname"
       }
     ],
     "scoring": {
@@ -7180,8 +7184,8 @@
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what 'function' does in a Linux environment.",
-        "text_zh": "想想 'function' 在Linux环境中是做什么的。"
+        "text_en": "A function definition needs a valid name, a body, and braces; defining it changes shell state.",
+        "text_zh": "函数定义需要有效名称、函数体和花括号；定义后会改变 Shell 状态。"
       },
       {
         "level": 2,
@@ -7190,18 +7194,18 @@
       },
       {
         "level": 3,
-        "text_en": "Try running 'function' and observe the output carefully.",
-        "text_zh": "试着运行 'function' 并仔细观察输出。"
+        "text_en": "Define and invoke a bounded function in one line.",
+        "text_zh": "在一行内定义并调用一个有界函数。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: function. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: function。使用适当的参数执行它。"
+        "text_en": "Run: function deploy() { echo ready; }; deploy",
+        "text_zh": "运行：function deploy() { echo ready; }; deploy"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'function' to complete the objective.",
-        "text_zh": "完整解答: 使用 'function' 来完成目标。"
+        "text_en": "Full solution: function deploy() { echo ready; }; deploy",
+        "text_zh": "完整解答：function deploy() { echo ready; }; deploy"
       }
     ],
     "scoring": {
@@ -7366,8 +7370,8 @@
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what 'trap' does in a Linux environment.",
-        "text_zh": "想想 'trap' 在Linux环境中是做什么的。"
+        "text_en": "trap registers a cleanup action for a supported signal or for shell EXIT.",
+        "text_zh": "trap 可为受支持的信号或 Shell EXIT 注册清理动作。"
       },
       {
         "level": 2,
@@ -7376,18 +7380,18 @@
       },
       {
         "level": 3,
-        "text_en": "Try running 'trap' and observe the output carefully.",
-        "text_zh": "试着运行 'trap' 并仔细观察输出。"
+        "text_en": "Register a harmless EXIT cleanup action.",
+        "text_zh": "注册一个无害的 EXIT 清理动作。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: trap. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: trap。使用适当的参数执行它。"
+        "text_en": "Run: trap 'echo cleanup' EXIT",
+        "text_zh": "运行：trap 'echo cleanup' EXIT"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'trap' to complete the objective.",
-        "text_zh": "完整解答: 使用 'trap' 来完成目标。"
+        "text_en": "Full solution: trap 'echo cleanup' EXIT",
+        "text_zh": "完整解答：trap 'echo cleanup' EXIT"
       }
     ],
     "scoring": {
@@ -7459,8 +7463,8 @@
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what 'getopts' does in a Linux environment.",
-        "text_zh": "想想 'getopts' 在Linux环境中是做什么的。"
+        "text_en": "getopts validates a short-option specification and stores the parsed option in a variable.",
+        "text_zh": "getopts 会校验短选项规范，并把解析出的选项保存到变量。"
       },
       {
         "level": 2,
@@ -7469,18 +7473,18 @@
       },
       {
         "level": 3,
-        "text_en": "Try running 'getopts' and observe the output carefully.",
-        "text_zh": "试着运行 'getopts' 并仔细观察输出。"
+        "text_en": "The colon after a means that -a requires a value.",
+        "text_zh": "a 后面的冒号表示 -a 必须带一个值。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: getopts. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: getopts。使用适当的参数执行它。"
+        "text_en": "Run the bounded parser: getopts 'a:' opt -a value",
+        "text_zh": "运行有界解析器：getopts 'a:' opt -a value"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'getopts' to complete the objective.",
-        "text_zh": "完整解答: 使用 'getopts' 来完成目标。"
+        "text_en": "Full solution: getopts 'a:' opt -a value",
+        "text_zh": "完整解答：getopts 'a:' opt -a value"
       }
     ],
     "scoring": {
@@ -7552,8 +7556,8 @@
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what 'array' does in a Linux environment.",
-        "text_zh": "想想 'array' 在Linux环境中是做什么的。"
+        "text_en": "Bash arrays are created with NAME=(values); array is a language construct, not an executable.",
+        "text_zh": "Bash 数组使用 名称=(值列表) 创建；array 是语言结构，不是可执行命令。"
       },
       {
         "level": 2,
@@ -7562,18 +7566,18 @@
       },
       {
         "level": 3,
-        "text_en": "Try running 'array' and observe the output carefully.",
-        "text_zh": "试着运行 'array' 并仔细观察输出。"
+        "text_en": "Assign two values to an items array.",
+        "text_zh": "为 items 数组赋两个值。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: array. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: array。使用适当的参数执行它。"
+        "text_en": "Run: items=(alpha beta)",
+        "text_zh": "运行：items=(alpha beta)"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'array' to complete the objective.",
-        "text_zh": "完整解答: 使用 'array' 来完成目标。"
+        "text_en": "Full solution: items=(alpha beta)",
+        "text_zh": "完整解答：items=(alpha beta)"
       }
     ],
     "scoring": {
@@ -7663,8 +7667,8 @@
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what 'bash' does in a Linux environment.",
-        "text_zh": "想想 'bash' 在Linux环境中是做什么的。"
+        "text_en": "bash should execute a readable script only after every bounded statement passes validation.",
+        "text_zh": "bash 只应在可读脚本中的每条有界语句都通过校验后执行。"
       },
       {
         "level": 2,
@@ -7673,18 +7677,18 @@
       },
       {
         "level": 3,
-        "text_en": "Try running 'bash' and observe the output carefully.",
-        "text_zh": "试着运行 'bash' 并仔细观察输出。"
+        "text_en": "Create a script containing a real if/test statement, then execute that file.",
+        "text_zh": "创建包含真实 if/test 语句的脚本，然后执行该文件。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: bash. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: bash。使用适当的参数执行它。"
+        "text_en": "Create it with: echo 'if test -f /etc/hostname; then echo ready; fi' > deploy.sh",
+        "text_zh": "创建脚本：echo 'if test -f /etc/hostname; then echo ready; fi' > deploy.sh"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'bash' to complete the objective.",
-        "text_zh": "完整解答: 使用 'bash' 来完成目标。"
+        "text_en": "Full solution: echo 'if test -f /etc/hostname; then echo ready; fi' > deploy.sh && bash deploy.sh",
+        "text_zh": "完整解答：echo 'if test -f /etc/hostname; then echo ready; fi' > deploy.sh && bash deploy.sh"
       }
     ],
     "scoring": {
@@ -8641,8 +8645,8 @@
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what '<<' does in a Linux environment.",
-        "text_zh": "想想 '<<' 在Linux环境中是做什么的。"
+        "text_en": "A heredoc starts with cat <<WORD and ends only when WORD appears alone on a later line.",
+        "text_zh": "Heredoc 以 cat <<标记 开始，直到后续某一行仅包含该标记时结束。"
       },
       {
         "level": 2,
@@ -8651,18 +8655,18 @@
       },
       {
         "level": 3,
-        "text_en": "Try running '<<' and observe the output carefully.",
-        "text_zh": "试着运行 '<<' 并仔细观察输出。"
+        "text_en": "Start with cat <<EOF, enter one or more message lines, then enter EOF.",
+        "text_zh": "先输入 cat <<EOF，再输入一行或多行消息，最后单独输入 EOF。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: <<. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: <<。使用适当的参数执行它。"
+        "text_en": "The closing delimiter must match exactly and contain no extra spaces.",
+        "text_zh": "结束标记必须完全匹配，且不能带额外空格。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use '<<' to complete the objective.",
-        "text_zh": "完整解答: 使用 '<<' 来完成目标。"
+        "text_en": "Full solution: enter cat <<EOF, then Mission ready, then EOF on its own line.",
+        "text_zh": "完整解答：依次输入 cat <<EOF、Mission ready，并在最后单独输入 EOF。"
       }
     ],
     "scoring": {
@@ -8734,8 +8738,8 @@
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what '<()' does in a Linux environment.",
-        "text_zh": "想想 '<()' 在Linux环境中是做什么的。"
+        "text_en": "Process substitution exposes command output as an input path for another command.",
+        "text_zh": "进程替换会把命令输出暴露为另一个命令可读取的输入路径。"
       },
       {
         "level": 2,
@@ -8744,18 +8748,18 @@
       },
       {
         "level": 3,
-        "text_en": "Try running '<()' and observe the output carefully.",
-        "text_zh": "试着运行 '<()' 并仔细观察输出。"
+        "text_en": "The bounded terminal supports comparing two sorted files with diff and <(...).",
+        "text_zh": "有界终端支持使用 diff 与 <(...) 比较两个排序后的文件。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: <(). Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: <()。使用适当的参数执行它。"
+        "text_en": "Compare a known file with itself so diff succeeds.",
+        "text_zh": "将一个已知文件与自身比较，使 diff 成功。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use '<()' to complete the objective.",
-        "text_zh": "完整解答: 使用 '<()' 来完成目标。"
+        "text_en": "Full solution: diff <(sort /etc/hostname) <(sort /etc/hostname)",
+        "text_zh": "完整解答：diff <(sort /etc/hostname) <(sort /etc/hostname)"
       }
     ],
     "scoring": {
@@ -10809,8 +10813,8 @@
     "difficulty": 2,
     "risk_level": "blue",
     "estimated_time": "3-5 min",
-    "summary_en": "Practice Process Management with Graceful Kill. Learn to use kill, kill -TERM effectively.",
-    "summary_zh": "通过 优雅终止 练习Process Management。学会有效使用 kill, kill -TERM。",
+  "summary_en": "Identify the bounded Node process, then terminate it with SIGTERM instead of a destructive signal.",
+  "summary_zh": "先识别有界环境中的 Node 进程，再使用 SIGTERM 而非破坏性信号终止它。",
     "story": {
       "briefing_en": "Welcome to Process & Resource - Graceful Kill. This mission tests your Process Management skills. Use the terminal to complete all objectives.",
       "briefing_zh": "欢迎来到 进程与资源 - 优雅终止。本任务测试你的Process Management技能。使用终端完成所有目标。",
@@ -10819,21 +10823,21 @@
       "failure_en": "Mission incomplete. Review Process Management fundamentals and try again.",
       "failure_zh": "任务未完成。复习Process Management基础知识后重试。"
     },
-    "skills": [
-      "kill",
-      "kill -TERM"
+  "skills": [
+    "pgrep node",
+    "kill -TERM"
     ],
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of kill",
-        "label_zh": "掌握 kill 的使用",
+      "label_en": "Master the use of pgrep node",
+      "label_zh": "掌握 pgrep node 的使用",
         "required": true
       },
       {
         "id": "obj-2",
-        "label_en": "Master the use of kill -TERM",
-        "label_zh": "掌握 kill -TERM 的使用",
+      "label_en": "Master the use of kill -TERM 1842",
+      "label_zh": "掌握 kill -TERM 1842 的使用",
         "required": true
       },
       {
@@ -10845,42 +10849,42 @@
     ],
     "checks": [
       {
-        "type": "command_used",
-        "pattern": "kill"
+      "type": "command_used",
+      "pattern": "pgrep node"
       },
       {
         "type": "command_used",
-        "pattern": "kill"
+      "pattern": "kill -TERM 1842"
       },
       {
         "type": "no_red_command_used"
       }
     ],
-    "hints": [
-      {
-        "level": 1,
-        "text_en": "Think about what 'kill' does in a Linux environment.",
-        "text_zh": "想想 'kill' 在Linux环境中是做什么的。"
-      },
-      {
-        "level": 2,
-        "text_en": "Review the basics of Process Management commands.",
-        "text_zh": "复习Process Management相关命令的基础知识。"
-      },
-      {
-        "level": 3,
-        "text_en": "Try running 'kill' and observe the output carefully.",
-        "text_zh": "试着运行 'kill' 并仔细观察输出。"
-      },
-      {
-        "level": 4,
-        "text_en": "The command you need is: kill. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: kill。使用适当的参数执行它。"
-      },
-      {
-        "level": 5,
-        "text_en": "Full solution: Use 'kill' to complete the objective.",
-        "text_zh": "完整解答: 使用 'kill' 来完成目标。"
+  "hints": [
+    {
+      "level": 1,
+      "text_en": "First identify the intended process; never guess a PID before sending a signal.",
+      "text_zh": "先识别目标进程；发送信号前不要猜测 PID。"
+    },
+    {
+      "level": 2,
+      "text_en": "Use pgrep with the exact process name node.",
+      "text_zh": "使用 pgrep 查询准确的进程名 node。"
+    },
+    {
+      "level": 3,
+      "text_en": "Run pgrep node; the bounded process table returns PID 1842.",
+      "text_zh": "运行 pgrep node；有界进程表会返回 PID 1842。"
+    },
+    {
+      "level": 4,
+      "text_en": "Send the graceful termination signal explicitly: kill -TERM 1842.",
+      "text_zh": "明确发送优雅终止信号：kill -TERM 1842。"
+    },
+    {
+      "level": 5,
+      "text_en": "Full solution: pgrep node && kill -TERM 1842",
+      "text_zh": "完整解答：pgrep node && kill -TERM 1842"
       }
     ],
     "scoring": {
@@ -10936,13 +10940,13 @@
       },
       {
         "id": "obj-2",
-        "label_en": "Master the use of kill",
-        "label_zh": "掌握 kill 的使用",
-        "required": true
-      },
-      {
-        "id": "obj-practice",
-        "label_en": "Complete the Do Not Kill PID 1 training",
+      "label_en": "Master the use of kill -TERM 1842",
+      "label_zh": "掌握 kill -TERM 1842 的使用",
+      "required": true
+    },
+    {
+      "id": "obj-practice",
+      "label_en": "Complete the Do Not Kill PID 1 training",
         "label_zh": "完成 别杀PID 1 训练",
         "required": true
       }
@@ -11517,8 +11521,8 @@
       },
       {
         "id": "obj-2",
-        "label_en": "Master the use of kill",
-        "label_zh": "掌握 kill 的使用",
+      "label_en": "Master the use of kill -STOP 1842",
+      "label_zh": "掌握 kill -STOP 1842 的使用",
         "required": true
       },
       {
@@ -11594,8 +11598,8 @@
   },
   {
     "id": "boss-zombie-theater",
-    "title_en": "Boss: Zombie Process Theater",
-    "title_zh": "Boss: 僵尸进程剧场",
+    "title_en": "Boss: Stopped Process Recovery",
+    "title_zh": "Boss: 停止进程恢复",
     "chapter_id": "ch09",
     "chapter_title_en": "Process & Resource",
     "chapter_title_zh": "进程与资源",
@@ -11604,85 +11608,93 @@
     "difficulty": 4,
     "risk_level": "red",
     "estimated_time": "10-15 min",
-    "summary_en": "Practice Process Management with Boss: Zombie Process Theater. Learn to use ps, kill, wait effectively.",
-    "summary_zh": "通过 Boss: 僵尸进程剧场 练习Process Management。学会有效使用 ps, kill, wait。",
+    "summary_en": "Inspect a live process, stop it deliberately, confirm the state transition, and resume the same PID.",
+    "summary_zh": "检查活动进程，有意停止它，确认状态转换，再恢复同一个 PID。",
     "story": {
-      "briefing_en": "BOSS BATTLE: Boss: Zombie Process Theater! The guardian of Process & Resource stands in your way. Only mastery of Process Management can defeat it.",
-      "briefing_zh": "Boss战: Boss: 僵尸进程剧场! 进程与资源的守护者挡住了你的去路。唯有精通Process Management才能击败它。",
-      "success_en": "Excellent work! You've mastered Boss: Zombie Process Theater and demonstrated strong Process Management skills.",
-      "success_zh": "出色的工作! 你已掌握 Boss: 僵尸进程剧场，展示了扎实的Process Management技能。",
+      "briefing_en": "BOSS BATTLE: Prove that you can distinguish a stopped process from a zombie. Use PID 1842, observe it, stop it, then resume it without terminating it.",
+      "briefing_zh": "Boss战：证明你能区分停止进程与僵尸进程。观察 PID 1842，停止它，再在不终止它的情况下恢复。",
+      "success_en": "Process 1842 was stopped and resumed with an evidence-backed signal sequence.",
+      "success_zh": "已通过可验证的信号序列停止并恢复进程 1842。",
       "failure_en": "Mission incomplete. Review Process Management fundamentals and try again.",
       "failure_zh": "任务未完成。复习Process Management基础知识后重试。"
     },
     "skills": [
-      "ps",
-      "kill",
-      "wait"
+      "ps -ef",
+      "kill -STOP 1842",
+      "kill -CONT 1842"
     ],
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of ps",
-        "label_zh": "掌握 ps 的使用",
+        "label_en": "Master the use of ps -ef",
+        "label_zh": "掌握 ps -ef 的使用",
         "required": true
       },
       {
         "id": "obj-2",
-        "label_en": "Master the use of kill",
-        "label_zh": "掌握 kill 的使用",
+        "label_en": "Master the use of kill -STOP 1842",
+        "label_zh": "掌握 kill -STOP 1842 的使用",
         "required": true
       },
       {
         "id": "obj-3",
-        "label_en": "Master the use of wait",
-        "label_zh": "掌握 wait 的使用",
-        "required": false
+        "label_en": "Master the use of kill -CONT 1842",
+        "label_zh": "掌握 kill -CONT 1842 的使用",
+        "required": true
       },
       {
         "id": "obj-boss",
-        "label_en": "Defeat the Boss of Process & Resource",
-        "label_zh": "击败 进程与资源 的Boss",
+        "label_en": "Restore the stopped process without terminating it",
+        "label_zh": "在不终止进程的情况下恢复它",
         "required": true
       }
     ],
     "checks": [
       {
         "type": "command_used",
-        "pattern": "ps"
+        "pattern": "ps -ef",
+        "objectiveId": "obj-1"
       },
       {
         "type": "command_used",
-        "pattern": "kill"
+        "pattern": "kill -STOP 1842",
+        "objectiveId": "obj-2"
       },
       {
-        "type": "no_red_command_used"
+        "type": "command_used",
+        "pattern": "kill -CONT 1842",
+        "objectiveId": "obj-3"
+      },
+      {
+        "type": "no_red_command_used",
+        "objectiveId": "obj-boss"
       }
     ],
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what 'ps' does in a Linux environment.",
-        "text_zh": "想想 'ps' 在Linux环境中是做什么的。"
+        "text_en": "A stopped process remains alive; a zombie has exited and awaits reaping. This simulator models the stopped-state workflow.",
+        "text_zh": "停止进程仍然存活；僵尸进程已经退出并等待回收。本模拟器建模的是停止状态流程。"
       },
       {
         "level": 2,
-        "text_en": "Review the basics of Process Management commands.",
-        "text_zh": "复习Process Management相关命令的基础知识。"
+        "text_en": "Use ps -ef to identify PID 1842 before sending any signal.",
+        "text_zh": "发送任何信号前，先用 ps -ef 确认 PID 1842。"
       },
       {
         "level": 3,
-        "text_en": "Try running 'ps' and observe the output carefully.",
-        "text_zh": "试着运行 'ps' 并仔细观察输出。"
+        "text_en": "SIGSTOP pauses the process; SIGCONT resumes that same stopped process.",
+        "text_zh": "SIGSTOP 暂停进程；SIGCONT 恢复同一个已停止进程。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: ps. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: ps。使用适当的参数执行它。"
+        "text_en": "Run the signals in order against PID 1842. Do not substitute another PID.",
+        "text_zh": "按顺序向 PID 1842 发送信号，不要替换成其他 PID。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'ps' to complete the objective.",
-        "text_zh": "完整解答: 使用 'ps' 来完成目标。"
+        "text_en": "Full solution: ps -ef && kill -STOP 1842 && kill -CONT 1842",
+        "text_zh": "完整解答：ps -ef && kill -STOP 1842 && kill -CONT 1842"
       }
     ],
     "scoring": {
@@ -12198,8 +12210,8 @@
     "difficulty": 3,
     "risk_level": "yellow",
     "estimated_time": "5-10 min",
-    "summary_en": "Practice Storage with Deleted But Open. Learn to use lsof, /proc effectively.",
-    "summary_zh": "通过 已删但占用 练习Storage。学会有效使用 lsof, /proc。",
+  "summary_en": "Find deleted-but-open files, then inspect the owning process file descriptor through /proc.",
+  "summary_zh": "找出已删除但仍被打开的文件，再通过 /proc 检查持有它的进程文件描述符。",
     "story": {
       "briefing_en": "Welcome to Storage & Filesystems - Deleted But Open. This mission tests your Storage skills. Use the terminal to complete all objectives.",
       "briefing_zh": "欢迎来到 存储与文件系统 - 已删但占用。本任务测试你的Storage技能。使用终端完成所有目标。",
@@ -12208,21 +12220,21 @@
       "failure_en": "Mission incomplete. Review Storage fundamentals and try again.",
       "failure_zh": "任务未完成。复习Storage基础知识后重试。"
     },
-    "skills": [
-      "lsof",
-      "/proc"
+  "skills": [
+    "lsof +L1",
+    "readlink /proc/1891/fd/4"
     ],
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of lsof",
-        "label_zh": "掌握 lsof 的使用",
+      "label_en": "Master the use of lsof +L1",
+      "label_zh": "掌握 lsof +L1 的使用",
         "required": true
       },
       {
         "id": "obj-2",
-        "label_en": "Master the use of /proc",
-        "label_zh": "掌握 /proc 的使用",
+      "label_en": "Master the use of readlink /proc/1891/fd/4",
+      "label_zh": "掌握 readlink /proc/1891/fd/4 的使用",
         "required": true
       },
       {
@@ -12234,42 +12246,42 @@
     ],
     "checks": [
       {
-        "type": "command_used",
-        "pattern": "lsof"
+      "type": "command_used",
+      "pattern": "lsof +L1"
       },
       {
-        "type": "command_used",
-        "pattern": "/proc"
+      "type": "command_used",
+      "pattern": "readlink /proc/1891/fd/4"
       },
       {
         "type": "no_red_command_used"
       }
     ],
-    "hints": [
-      {
-        "level": 1,
-        "text_en": "Think about what 'lsof' does in a Linux environment.",
-        "text_zh": "想想 'lsof' 在Linux环境中是做什么的。"
-      },
-      {
-        "level": 2,
-        "text_en": "Review the basics of Storage commands.",
-        "text_zh": "复习Storage相关命令的基础知识。"
-      },
-      {
-        "level": 3,
-        "text_en": "Try running 'lsof' and observe the output carefully.",
-        "text_zh": "试着运行 'lsof' 并仔细观察输出。"
-      },
-      {
-        "level": 4,
-        "text_en": "The command you need is: lsof. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: lsof。使用适当的参数执行它。"
-      },
-      {
-        "level": 5,
-        "text_en": "Full solution: Use 'lsof' to complete the objective.",
-        "text_zh": "完整解答: 使用 'lsof' 来完成目标。"
+  "hints": [
+    {
+      "level": 1,
+      "text_en": "Deleted directory entries can still consume space while a process keeps their file descriptor open.",
+      "text_zh": "目录项虽已删除，只要进程仍持有文件描述符，文件仍会占用空间。"
+    },
+    {
+      "level": 2,
+      "text_en": "lsof +L1 filters for open files whose link count is below one.",
+      "text_zh": "lsof +L1 会筛选链接计数小于 1 的打开文件。"
+    },
+    {
+      "level": 3,
+      "text_en": "Run lsof +L1 and note nginx PID 1891 with descriptor 4w.",
+      "text_zh": "运行 lsof +L1，记录 nginx 的 PID 1891 与描述符 4w。"
+    },
+    {
+      "level": 4,
+      "text_en": "Resolve that descriptor through /proc with readlink /proc/1891/fd/4.",
+      "text_zh": "通过 /proc 解析该描述符：readlink /proc/1891/fd/4。"
+    },
+    {
+      "level": 5,
+      "text_en": "Full solution: lsof +L1 && readlink /proc/1891/fd/4",
+      "text_zh": "完整解答：lsof +L1 && readlink /proc/1891/fd/4"
       }
     ],
     "scoring": {
@@ -12411,8 +12423,8 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of dd",
-        "label_zh": "掌握 dd 的使用",
+        "label_en": "Master the use of dd if=input.bin of=copy.bin",
+        "label_zh": "掌握 dd if=input.bin of=copy.bin 的使用",
         "required": true
       },
       {
@@ -12425,7 +12437,7 @@
     "checks": [
       {
         "type": "command_used",
-        "pattern": "dd"
+        "pattern": "dd if=input.bin of=copy.bin"
       },
       {
         "type": "no_red_command_used"
@@ -12449,13 +12461,13 @@
       },
       {
         "level": 4,
-        "text_en": "The command you need is: dd. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: dd。使用适当的参数执行它。"
+        "text_en": "Create a tiny input.bin fixture and name both dd endpoints explicitly before executing.",
+        "text_zh": "创建一个很小的 input.bin 样本，并在执行前明确写出 dd 的输入和输出。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'dd' to complete the objective.",
-        "text_zh": "完整解答: 使用 'dd' 来完成目标。"
+        "text_en": "Full solution: echo payload > input.bin && dd if=input.bin of=copy.bin",
+        "text_zh": "完整解答：echo payload > input.bin && dd if=input.bin of=copy.bin"
       }
     ],
     "scoring": {
@@ -13008,8 +13020,8 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of dd",
-        "label_zh": "掌握 dd 的使用",
+      "label_en": "Master the use of dd if=/etc/hostname of=hostname.backup",
+      "label_zh": "掌握 dd if=/etc/hostname of=hostname.backup 的使用",
         "required": true
       },
       {
@@ -15728,13 +15740,13 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of systemctl",
-        "label_zh": "掌握 systemctl 的使用",
-        "required": true
-      },
-      {
-        "id": "obj-practice",
-        "label_en": "Complete the systemctl status training",
+      "label_en": "Master the use of systemctl status nginx",
+      "label_zh": "掌握 systemctl status nginx 的使用",
+      "required": true
+    },
+    {
+      "id": "obj-practice",
+      "label_en": "Complete the systemctl status training",
         "label_zh": "完成 systemctl状态 训练",
         "required": true
       }
@@ -16363,8 +16375,8 @@
     "difficulty": 3,
     "risk_level": "yellow",
     "estimated_time": "5-10 min",
-    "summary_en": "Practice Services with systemd Timer Intro. Learn to use systemd timer effectively.",
-    "summary_zh": "通过 systemd定时器 练习Services。学会有效使用 systemd timer。",
+  "summary_en": "Inspect the bounded systemd timer schedule with systemctl list-timers.",
+  "summary_zh": "使用 systemctl list-timers 检查有界环境中的 systemd 定时器计划。",
     "story": {
       "briefing_en": "Welcome to Services & Logs - systemd Timer Intro. This mission tests your Services skills. Use the terminal to complete all objectives.",
       "briefing_zh": "欢迎来到 服务与日志 - systemd定时器。本任务测试你的Services技能。使用终端完成所有目标。",
@@ -16373,14 +16385,14 @@
       "failure_en": "Mission incomplete. Review Services fundamentals and try again.",
       "failure_zh": "任务未完成。复习Services基础知识后重试。"
     },
-    "skills": [
-      "systemd timer"
+  "skills": [
+    "systemctl list-timers"
     ],
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of systemd timer",
-        "label_zh": "掌握 systemd timer 的使用",
+      "label_en": "Master the use of systemctl list-timers",
+      "label_zh": "掌握 systemctl list-timers 的使用",
         "required": true
       },
       {
@@ -16392,38 +16404,38 @@
     ],
     "checks": [
       {
-        "type": "command_used",
-        "pattern": "systemd"
+      "type": "command_used",
+      "pattern": "systemctl list-timers"
       },
       {
         "type": "no_red_command_used"
       }
     ],
-    "hints": [
-      {
-        "level": 1,
-        "text_en": "Think about what 'systemd timer' does in a Linux environment.",
-        "text_zh": "想想 'systemd timer' 在Linux环境中是做什么的。"
-      },
-      {
-        "level": 2,
-        "text_en": "Review the basics of Services commands.",
-        "text_zh": "复习Services相关命令的基础知识。"
-      },
-      {
-        "level": 3,
-        "text_en": "Try running 'systemd timer' and observe the output carefully.",
-        "text_zh": "试着运行 'systemd timer' 并仔细观察输出。"
-      },
-      {
-        "level": 4,
-        "text_en": "The command you need is: systemd timer. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: systemd timer。使用适当的参数执行它。"
-      },
-      {
-        "level": 5,
-        "text_en": "Full solution: Use 'systemd timer' to complete the objective.",
-        "text_zh": "完整解答: 使用 'systemd timer' 来完成目标。"
+  "hints": [
+    {
+      "level": 1,
+      "text_en": "A timer unit is inspected through systemctl; 'systemd timer' is not a shell command.",
+      "text_zh": "定时器单元应通过 systemctl 检查；“systemd timer”并不是 Shell 命令。"
+    },
+    {
+      "level": 2,
+      "text_en": "Use the list-timers systemctl subcommand.",
+      "text_zh": "使用 systemctl 的 list-timers 子命令。"
+    },
+    {
+      "level": 3,
+      "text_en": "Run systemctl list-timers and inspect NEXT, LAST, UNIT, and ACTIVATES.",
+      "text_zh": "运行 systemctl list-timers，检查 NEXT、LAST、UNIT 与 ACTIVATES 列。"
+    },
+    {
+      "level": 4,
+      "text_en": "The bounded host exposes backup.timer and health-check.timer fixtures for inspection.",
+      "text_zh": "有界主机提供 backup.timer 与 health-check.timer 固定数据供检查。"
+    },
+    {
+      "level": 5,
+      "text_en": "Full solution: systemctl list-timers",
+      "text_zh": "完整解答：systemctl list-timers"
       }
     ],
     "scoring": {
@@ -16771,14 +16783,14 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of systemctl",
-        "label_zh": "掌握 systemctl 的使用",
+      "label_en": "Master the use of systemctl status nginx",
+      "label_zh": "掌握 systemctl status nginx 的使用",
         "required": true
       },
       {
         "id": "obj-2",
-        "label_en": "Master the use of journalctl",
-        "label_zh": "掌握 journalctl 的使用",
+      "label_en": "Master the use of journalctl -u nginx",
+      "label_zh": "掌握 journalctl -u nginx 的使用",
         "required": true
       },
       {
@@ -16991,8 +17003,8 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of apt",
-        "label_zh": "掌握 apt 的使用",
+      "label_en": "Master the use of apt search nginx",
+      "label_zh": "掌握 apt search nginx 的使用",
         "required": true
       },
       {
@@ -19904,8 +19916,8 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of git merge",
-        "label_zh": "掌握 git merge 的使用",
+      "label_en": "Master the use of git merge incident",
+      "label_zh": "掌握 git merge incident 的使用",
         "required": true
       },
       {
@@ -19971,8 +19983,8 @@
   },
   {
     "id": "conflict-markers",
-    "title_en": "Conflict Markers",
-    "title_zh": "冲突标记",
+  "title_en": "Merge Resolution Workflow",
+  "title_zh": "合并解决流程",
     "chapter_id": "ch16",
     "chapter_title_en": "Git Timeline",
     "chapter_title_zh": "Git时间线",
@@ -19981,19 +19993,19 @@
     "difficulty": 3,
     "risk_level": "yellow",
     "estimated_time": "5-10 min",
-    "summary_en": "Practice Git with Conflict Markers. Learn to use git merge, 冲突解决 effectively.",
-    "summary_zh": "通过 冲突标记 练习Git。学会有效使用 git merge, 冲突解决。",
+  "summary_en": "Practice a bounded merge-resolution workflow: merge a known branch, then stage the resolved file.",
+  "summary_zh": "练习有界的合并解决流程：合并已知分支，然后暂存解决后的文件。",
     "story": {
       "briefing_en": "Welcome to Git Timeline - Conflict Markers. This mission tests your Git skills. Use the terminal to complete all objectives.",
       "briefing_zh": "欢迎来到 Git时间线 - 冲突标记。本任务测试你的Git技能。使用终端完成所有目标。",
-      "success_en": "Excellent work! You've mastered Conflict Markers and demonstrated strong Git skills.",
-      "success_zh": "出色的工作! 你已掌握 冲突标记，展示了扎实的Git技能。",
+    "success_en": "Excellent work! You've completed the merge-resolution sequence and staged the resolved artifact.",
+    "success_zh": "出色的工作！你已完成合并解决顺序，并暂存了解决后的文件。",
       "failure_en": "Mission incomplete. Review Git fundamentals and try again.",
       "failure_zh": "任务未完成。复习Git基础知识后重试。"
     },
-    "skills": [
-      "git merge",
-      "冲突解决"
+  "skills": [
+    "git merge",
+    "git add"
     ],
     "objectives": [
       {
@@ -20004,55 +20016,55 @@
       },
       {
         "id": "obj-2",
-        "label_en": "Master the use of 冲突解决",
-        "label_zh": "掌握 冲突解决 的使用",
+      "label_en": "Master the use of git add resolved.txt",
+      "label_zh": "掌握 git add resolved.txt 的使用",
         "required": true
       },
       {
         "id": "obj-practice",
-        "label_en": "Complete the Conflict Markers training",
-        "label_zh": "完成 冲突标记 训练",
+      "label_en": "Complete the Merge Resolution Workflow training",
+      "label_zh": "完成 合并解决流程 训练",
         "required": true
       }
     ],
     "checks": [
       {
-        "type": "command_used",
-        "pattern": "git"
+      "type": "command_used",
+      "pattern": "git merge incident"
       },
       {
-        "type": "command_used",
-        "pattern": "冲突解决"
+      "type": "command_used",
+      "pattern": "git add resolved.txt"
       },
       {
         "type": "no_red_command_used"
       }
     ],
-    "hints": [
-      {
-        "level": 1,
-        "text_en": "Think about what 'git merge' does in a Linux environment.",
-        "text_zh": "想想 'git merge' 在Linux环境中是做什么的。"
-      },
-      {
-        "level": 2,
-        "text_en": "Review the basics of Git commands.",
-        "text_zh": "复习Git相关命令的基础知识。"
-      },
-      {
-        "level": 3,
-        "text_en": "Try running 'git merge' and observe the output carefully.",
-        "text_zh": "试着运行 'git merge' 并仔细观察输出。"
-      },
-      {
-        "level": 4,
-        "text_en": "The command you need is: git merge. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: git merge。使用适当的参数执行它。"
-      },
-      {
-        "level": 5,
-        "text_en": "Full solution: Use 'git merge' to complete the objective.",
-        "text_zh": "完整解答: 使用 'git merge' 来完成目标。"
+  "hints": [
+    {
+      "level": 1,
+      "text_en": "This bounded Git model teaches the resolution sequence; it does not synthesize textual conflict markers.",
+      "text_zh": "此有界 Git 模型用于练习解决顺序，不会自动生成文本冲突标记。"
+    },
+    {
+      "level": 2,
+      "text_en": "Initialize the repository and create a branch that can be merged.",
+      "text_zh": "先初始化仓库，并创建一个可供合并的分支。"
+    },
+    {
+      "level": 3,
+      "text_en": "Run: git init && git branch incident && git merge incident",
+      "text_zh": "运行：git init && git branch incident && git merge incident"
+    },
+    {
+      "level": 4,
+      "text_en": "Create the resolved artifact and stage it: touch resolved.txt && git add resolved.txt",
+      "text_zh": "创建解决后的文件并暂存：touch resolved.txt && git add resolved.txt"
+    },
+    {
+      "level": 5,
+      "text_en": "Full solution: git init && git branch incident && git merge incident && touch resolved.txt && git add resolved.txt",
+      "text_zh": "完整解答：git init && git branch incident && git merge incident && touch resolved.txt && git add resolved.txt"
       }
     ],
     "scoring": {
@@ -21400,37 +21412,49 @@
     "checks": [
       {
         "type": "command_used",
-        "pattern": "screen"
+        "pattern": "screen -S",
+        "objectiveId": "obj-1"
       },
       {
-        "type": "no_red_command_used"
+        "type": "command_used",
+        "pattern": "Ctrl-a d",
+        "objectiveId": "obj-practice"
+      },
+      {
+        "type": "command_used",
+        "pattern": "screen -r",
+        "objectiveId": "obj-practice"
+      },
+      {
+        "type": "no_red_command_used",
+        "objectiveId": "obj-practice"
       }
     ],
-    "hints": [
-      {
-        "level": 1,
-        "text_en": "Think about what 'screen' does in a Linux environment.",
-        "text_zh": "想想 'screen' 在Linux环境中是做什么的。"
-      },
-      {
-        "level": 2,
-        "text_en": "Review the basics of Multiplexer commands.",
-        "text_zh": "复习Multiplexer相关命令的基础知识。"
-      },
-      {
-        "level": 3,
-        "text_en": "Try running 'screen' and observe the output carefully.",
-        "text_zh": "试着运行 'screen' 并仔细观察输出。"
-      },
-      {
-        "level": 4,
-        "text_en": "The command you need is: screen. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: screen。使用适当的参数执行它。"
-      },
-      {
-        "level": 5,
-        "text_en": "Full solution: Use 'screen' to complete the objective.",
-        "text_zh": "完整解答: 使用 'screen' 来完成目标。"
+  "hints": [
+    {
+      "level": 1,
+      "text_en": "A complete screen lifecycle has three observable steps: create, detach with the screen prefix, and reattach.",
+      "text_zh": "完整的 screen 生命周期包含三个可观察步骤：创建、使用 screen 前缀分离、再重新连接。"
+    },
+    {
+      "level": 2,
+      "text_en": "Create a named session with screen -S work.",
+      "text_zh": "使用 screen -S work 创建命名会话。"
+    },
+    {
+      "level": 3,
+      "text_en": "Inside screen, press Ctrl-a and then d to detach.",
+      "text_zh": "进入 screen 后，依次按 Ctrl-a 与 d 完成分离。"
+    },
+    {
+      "level": 4,
+      "text_en": "Back at the shell, run screen -r work to reattach the same session.",
+      "text_zh": "回到 Shell 后运行 screen -r work，重新连接同一会话。"
+    },
+    {
+      "level": 5,
+      "text_en": "Full solution: screen -S work; press Ctrl-a d; then run screen -r work.",
+      "text_zh": "完整解答：screen -S work；按 Ctrl-a d；然后运行 screen -r work。"
       }
     ],
     "scoring": {
@@ -21672,8 +21696,8 @@
       },
       {
         "id": "obj-2",
-        "label_en": "Master the use of &",
-        "label_zh": "掌握 & 的使用",
+      "label_en": "Master the use of nohup true &",
+      "label_zh": "掌握 nohup true & 的使用",
         "required": true
       },
       {
@@ -21688,39 +21712,39 @@
         "type": "command_used",
         "pattern": "nohup"
       },
-      {
-        "type": "command_used",
-        "pattern": "&"
+    {
+      "type": "command_used",
+      "pattern": "nohup true &"
       },
       {
         "type": "no_red_command_used"
       }
     ],
-    "hints": [
-      {
-        "level": 1,
-        "text_en": "Think about what 'nohup' does in a Linux environment.",
-        "text_zh": "想想 'nohup' 在Linux环境中是做什么的。"
-      },
-      {
-        "level": 2,
-        "text_en": "Review the basics of Multiplexer commands.",
-        "text_zh": "复习Multiplexer相关命令的基础知识。"
-      },
-      {
-        "level": 3,
-        "text_en": "Try running 'nohup' and observe the output carefully.",
-        "text_zh": "试着运行 'nohup' 并仔细观察输出。"
-      },
-      {
-        "level": 4,
-        "text_en": "The command you need is: nohup. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: nohup。使用适当的参数执行它。"
-      },
-      {
-        "level": 5,
-        "text_en": "Full solution: Use 'nohup' to complete the objective.",
-        "text_zh": "完整解答: 使用 'nohup' 来完成目标。"
+  "hints": [
+    {
+      "level": 1,
+      "text_en": "nohup changes hangup handling, while a trailing & requests background execution; they solve different parts of the problem.",
+      "text_zh": "nohup 改变挂断处理，末尾的 & 请求后台执行；二者解决的是不同问题。"
+    },
+    {
+      "level": 2,
+      "text_en": "The simulator executes the child deterministically but records the background operator as a bounded shell event.",
+      "text_zh": "模拟器会确定性执行子命令，同时把后台运算符记录为有界 Shell 事件。"
+    },
+    {
+      "level": 3,
+      "text_en": "Use true as a harmless child command.",
+      "text_zh": "使用 true 作为无害的子命令。"
+    },
+    {
+      "level": 4,
+      "text_en": "Place & at the end of the complete nohup invocation.",
+      "text_zh": "把 & 放在完整 nohup 命令的末尾。"
+    },
+    {
+      "level": 5,
+      "text_en": "Full solution: nohup true &",
+      "text_zh": "完整解答：nohup true &"
       }
     ],
     "scoring": {

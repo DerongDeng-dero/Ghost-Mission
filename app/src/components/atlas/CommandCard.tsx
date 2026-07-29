@@ -15,7 +15,6 @@ import { useTranslation } from 'react-i18next';
 
 interface CommandCardProps {
   command: CommandData;
-  isLearned: boolean;
   index: number;
 }
 
@@ -43,7 +42,7 @@ const domainColorMap: Record<string, string> = {
   Shell: '#E8EDF2',
 };
 
-export default function CommandCard({ command, isLearned, index }: CommandCardProps) {
+export default function CommandCard({ command, index }: CommandCardProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -86,7 +85,6 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
         backgroundColor: '#0F1419',
         border: `1px solid ${expanded ? '#2A4365' : '#1E2D3D'}`,
         borderRadius: 'var(--radius-md)',
-        borderLeft: isLearned && !expanded ? `3px solid ${riskColor}` : undefined,
         transition: 'border-color 150ms, box-shadow 150ms',
       }}
     >
@@ -120,19 +118,6 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
               >
                 {t(`commandAtlas.domains.${command.domain.toLowerCase()}`, { defaultValue: command.domain })}
               </span>
-              {isLearned && (
-                <span
-                  className="font-jetbrains text-badge uppercase px-1.5 py-0.5 rounded-radius-sm flex items-center gap-1"
-                  style={{
-                    color: '#00FF88',
-                    backgroundColor: 'rgba(0, 255, 136, 0.1)',
-                    border: '1px solid rgba(0, 255, 136, 0.2)',
-                  }}
-                >
-                  <Check size={10} aria-hidden="true" />
-                  {t('commandAtlas.learned')}
-                </span>
-              )}
             </div>
             <p className="font-inter text-body text-[#8B9EB0] mt-1.5">
               {command.summary}
@@ -161,7 +146,7 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
               animate={{ rotate: expanded ? 180 : 0 }}
               transition={{ duration: 0.2 }}
             >
-              <ChevronDown size={16} className="text-[#4A6072]" />
+              <ChevronDown size={16} className="text-[#788DA1]" />
             </motion.div>
           </div>
         </div>
@@ -219,7 +204,7 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
               {/* Full flags grid */}
               {command.commonFlags.length > 0 && (
                 <div>
-                  <h4 className="font-jetbrains text-body-sm text-[#4A6072] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <h4 className="font-jetbrains text-body-sm text-[#788DA1] uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Flag size={12} />
                     {t('commandAtlas.commonFlags')}
                   </h4>
@@ -252,7 +237,7 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
               {/* Examples */}
               {command.examples.length > 0 && (
                 <div>
-                  <h4 className="font-jetbrains text-body-sm text-[#4A6072] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <h4 className="font-jetbrains text-body-sm text-[#788DA1] uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Terminal size={12} />
                     {t('commandAtlas.examples')}
                   </h4>
@@ -275,7 +260,7 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
                             }}
                             aria-label={t('commandAtlas.copyExample', { command: ex.command })}
                             className="flex min-h-11 min-w-11 flex-shrink-0 items-center justify-center rounded-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
-                            style={{ color: copiedId === `ex-${command.id}-${i}` ? '#00FF88' : '#4A6072' }}
+                            style={{ color: copiedId === `ex-${command.id}-${i}` ? '#00FF88' : '#788DA1' }}
                           >
                             {copiedId === `ex-${command.id}-${i}` ? (
                               <Check size={14} />
@@ -351,7 +336,7 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
               {/* Related commands */}
               {command.related.length > 0 && (
                 <div>
-                  <h4 className="font-jetbrains text-body-sm text-[#4A6072] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <h4 className="font-jetbrains text-body-sm text-[#788DA1] uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <BookOpen size={12} />
                     {t('commandAtlas.relatedCommands')}
                   </h4>
@@ -376,7 +361,7 @@ export default function CommandCard({ command, isLearned, index }: CommandCardPr
               {/* Mission references */}
               {command.missions.length > 0 && (
                 <div>
-                  <h4 className="font-jetbrains text-body-sm text-[#4A6072] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <h4 className="font-jetbrains text-body-sm text-[#788DA1] uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <BookOpen size={12} />
                     {t('commandAtlas.usedInMissions')}
                   </h4>

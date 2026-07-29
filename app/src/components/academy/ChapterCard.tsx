@@ -1,5 +1,4 @@
 import { motion } from 'framer-motion'
-import { Lock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Chapter } from '@/data/academy'
 
@@ -13,7 +12,6 @@ export default function ChapterCard({ chapter, isActive, onClick }: ChapterCardP
   const { t } = useTranslation()
   const progress = chapter.totalDrills > 0 ? (chapter.completedDrills / chapter.totalDrills) * 100 : 0
   const isCompleted = chapter.completedDrills === chapter.totalDrills
-  const isLocked = chapter.completedDrills === 0 && !isActive
 
   return (
     <motion.button
@@ -44,7 +42,7 @@ export default function ChapterCard({ chapter, isActive, onClick }: ChapterCardP
       {/* Chapter Number */}
       <span
         className="font-jetbrains text-badge uppercase"
-        style={{ color: isActive ? '#00E5FF' : '#4A6072' }}
+        style={{ color: isActive ? '#00E5FF' : '#788DA1' }}
       >
         {chapter.number}
       </span>
@@ -70,14 +68,9 @@ export default function ChapterCard({ chapter, isActive, onClick }: ChapterCardP
           animate={{ width: `${progress}%` }}
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
           className="h-full rounded-full"
-          style={{ backgroundColor: isCompleted ? '#00FF88' : isActive ? '#00E5FF' : '#4A6072' }}
+          style={{ backgroundColor: isCompleted ? '#00FF88' : isActive ? '#00E5FF' : '#788DA1' }}
         />
       </div>
-
-      {/* Lock indicator */}
-      {isLocked && !isActive && (
-        <Lock size={8} aria-hidden="true" className="absolute bottom-0.5 right-0.5 text-[#4A6072]" />
-      )}
     </motion.button>
   )
 }

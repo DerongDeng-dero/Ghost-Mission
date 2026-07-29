@@ -328,7 +328,7 @@ export default function GhostGuide3D() {
               type="button"
               onClick={(e) => { e.stopPropagation(); hideMessage() }}
               aria-label={t('common.close')}
-              className="absolute right-1 top-1 flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-sm text-[#4A6072] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+              className="absolute right-1 top-1 flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-sm text-[#788DA1] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
             >
               ✕
             </button>

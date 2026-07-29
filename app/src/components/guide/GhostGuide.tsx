@@ -340,12 +340,12 @@ export default function GhostGuide() {
                 handleBubbleClick()
               }}
               className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded text-[10px] transition-colors"
-              style={{ color: '#4A6072' }}
+              style={{ color: '#788DA1' }}
               onMouseEnter={(e) =>
                 (e.currentTarget.style.color = '#E8EDF2')
               }
               onMouseLeave={(e) =>
-                (e.currentTarget.style.color = '#4A6072')
+                (e.currentTarget.style.color = '#788DA1')
               }
               aria-label="\u5173\u95ed\u6d88\u606f"
             >

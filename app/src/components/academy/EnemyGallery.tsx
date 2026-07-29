@@ -149,7 +149,7 @@ export default function EnemyGallery({ enemies }: EnemyGalleryProps) {
             </div>
 
             {/* Chapter */}
-            <span className="font-fira text-code-sm text-[#4A6072] mt-space-2 text-center">
+            <span className="font-fira text-code-sm text-[#788DA1] mt-space-2 text-center">
               {t(`academy.enemyChapters.${enemyKey}`, { defaultValue: enemy.chapter })}
             </span>
           </motion.article>

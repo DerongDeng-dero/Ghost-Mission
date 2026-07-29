@@ -90,8 +90,8 @@ export default function MissionCard({ mission, index, featured = false }: Missio
       {isLocked && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0A0E14]/40">
           <div className="flex flex-col items-center gap-space-2">
-            <Lock size={28} className="text-[#4A6072]" />
-            <span className="font-jetbrains text-body-sm text-[#4A6072] uppercase tracking-wider">
+            <Lock size={28} className="text-[#788DA1]" />
+            <span className="font-jetbrains text-body-sm text-[#788DA1] uppercase tracking-wider">
               {t('missionBoard.locked')}
             </span>
           </div>
@@ -120,7 +120,7 @@ export default function MissionCard({ mission, index, featured = false }: Missio
             ))}
           </div>
           {/* Time Badge */}
-          <div className="flex items-center gap-1 text-[#4A6072]">
+          <div className="flex items-center gap-1 text-[#788DA1]">
             <Clock size={12} />
             <span className="font-jetbrains text-body-sm">{mission.estimatedTime}</span>
           </div>
@@ -132,7 +132,7 @@ export default function MissionCard({ mission, index, featured = false }: Missio
         </p>
 
         {/* Chapter Label */}
-        <span className="font-jetbrains text-code-sm text-[#4A6072]">{mission.chapter}</span>
+        <span className="font-jetbrains text-code-sm text-[#788DA1]">{mission.chapter}</span>
 
         {/* Skill Tags */}
         <div className="flex flex-wrap gap-1.5">
@@ -150,7 +150,7 @@ export default function MissionCard({ mission, index, featured = false }: Missio
             </span>
           ))}
           {mission.skills.length > 3 && (
-            <span className="font-jetbrains text-badge uppercase px-2 py-0.5 text-[#4A6072]">
+            <span className="font-jetbrains text-badge uppercase px-2 py-0.5 text-[#788DA1]">
               +{mission.skills.length - 3}
             </span>
           )}

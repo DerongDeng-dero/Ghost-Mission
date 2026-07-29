@@ -192,7 +192,7 @@ export default function SkillTreeMini() {
               <motion.div
                 animate={{ rotate: isExpanded ? 90 : 0 }}
                 transition={{ duration: 0.2 }}
-                className="text-[#4A6072] flex-shrink-0"
+                className="text-[#788DA1] flex-shrink-0"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <polyline points="9 18 15 12 9 6" />
@@ -229,7 +229,7 @@ export default function SkillTreeMini() {
                           transition={{ delay: 0.1 + i * 0.05, duration: 0.4 }}
                         />
                       </div>
-                      <span className="font-jetbrains text-[10px] text-[#4A6072] w-7 text-right flex-shrink-0">
+                      <span className="font-jetbrains text-[10px] text-[#788DA1] w-7 text-right flex-shrink-0">
                         {skill.progress}%
                       </span>
                     </motion.div>

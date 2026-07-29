@@ -62,14 +62,19 @@ export async function getContentMetrics() {
 export async function getCommandMetrics() {
   const { commands } = await loadTypescriptModule('src/data/commands.ts')
   const links = new Set()
+  let unresolvedRelated = 0
+  let staticMissionReferences = 0
 
   for (const command of commands) {
+    staticMissionReferences += command.missions.length
     for (const relatedName of command.related) {
       const related = commands.find(
         (candidate) => candidate.name === relatedName || candidate.id === relatedName,
       )
       if (related) {
         links.add([command.id, related.id].sort().join('\0'))
+      } else {
+        unresolvedRelated++
       }
     }
   }
@@ -78,6 +83,8 @@ export async function getCommandMetrics() {
     commands: commands.length,
     domains: new Set(commands.map((command) => command.domain)).size,
     links: links.size,
+    unresolvedRelated,
+    staticMissionReferences,
   }
 }
 

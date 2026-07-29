@@ -25,7 +25,8 @@
     /* Text Colors */
     --text-primary: #E8EDF2;
     --text-secondary: #8B9EB0;
-    --text-muted: #4A6072;
+    /* 4.60:1 against --bg-input, preserving WCAG AA for small muted copy. */
+    --text-muted: #788DA1;
     --text-terminal: #E6DCCF;
     --text-terminal-dim: #5C7A8C;
     --text-green: #00FF88;
@@ -132,7 +133,7 @@
     --secondary: 210 18% 8%;
     --secondary-foreground: 210 20% 93%;
     --muted: 210 18% 12%;
-    --muted-foreground: 210 15% 42%;
+    --muted-foreground: 210 18% 55%;
     --accent: 190 100% 50%;
     --accent-foreground: 220 20% 4%;
     --destructive: 354 100% 64%;

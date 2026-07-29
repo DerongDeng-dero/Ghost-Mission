@@ -75,7 +75,7 @@ export default function ThemeSelector({ value, onChange }: ThemeSelectorProps) {
               <div
                 className="w-4 h-4 rounded-full border-2 flex items-center justify-center"
                 style={{
-                  borderColor: isSelected ? '#00E5FF' : '#4A6072',
+                  borderColor: isSelected ? '#00E5FF' : '#788DA1',
                 }}
               >
                 {isSelected && (

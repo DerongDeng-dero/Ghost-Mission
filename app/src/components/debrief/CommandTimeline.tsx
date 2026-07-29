@@ -122,7 +122,7 @@ function TimelineItem({ entry, isEven }: TimelineItemProps) {
       <div className="p-space-3 flex items-start gap-space-3">
         {/* Timestamp */}
         <div className="flex-shrink-0 w-[48px] pt-[2px]">
-          <span className="font-fira text-code-sm text-[#4A6072] flex items-center gap-1">
+          <span className="font-fira text-code-sm text-[#788DA1] flex items-center gap-1">
             <Clock size={10} />
             {entry.timestamp}
           </span>
@@ -169,7 +169,7 @@ function TimelineItem({ entry, isEven }: TimelineItemProps) {
             >
               exit:{entry.exitCode}
             </span>
-            <span className="font-fira text-code-sm text-[#4A6072]">{entry.cwd}</span>
+            <span className="font-fira text-code-sm text-[#788DA1]">{entry.cwd}</span>
             <span className="font-fira text-code-sm" style={{ color: '#00E5FF' }}>
               {entry.mode}
             </span>
@@ -182,7 +182,7 @@ function TimelineItem({ entry, isEven }: TimelineItemProps) {
           animate={{ rotate: expanded ? 180 : 0 }}
           transition={{ duration: 0.2 }}
         >
-          <ChevronDown size={16} style={{ color: '#4A6072' }} />
+          <ChevronDown size={16} style={{ color: '#788DA1' }} />
         </motion.div>
       </div>
 
@@ -241,7 +241,7 @@ function TimelineItem({ entry, isEven }: TimelineItemProps) {
             {/* Output preview */}
             {entry.output && (
               <div className="mt-space-2">
-                <span className="font-jetbrains text-body-sm text-[#4A6072]">Output:</span>
+                <span className="font-jetbrains text-body-sm text-[#788DA1]">Output:</span>
                 <pre
                   className="mt-space-1 p-space-2 rounded-radius-sm font-fira text-code-sm overflow-x-auto"
                   style={{
@@ -302,7 +302,7 @@ export default function CommandTimeline({ entries }: CommandTimelineProps) {
       >
         {filteredEntries.length === 0 ? (
           <div className="p-space-8 text-center">
-            <span className="font-inter text-body text-[#4A6072]">No entries match this filter</span>
+            <span className="font-inter text-body text-[#788DA1]">No entries match this filter</span>
           </div>
         ) : (
           filteredEntries.map((entry, i) => (

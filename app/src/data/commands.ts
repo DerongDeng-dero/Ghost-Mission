@@ -15,7 +15,7 @@ export interface CommandData {
   missions: string[];
 }
 
-export const commands: CommandData[] = [
+const commandDefinitions: CommandData[] = [
   // ── Filesystem (green) ──
   {
     id: 'ls',
@@ -2164,6 +2164,17 @@ export const commands: CommandData[] = [
   },
 ];
 
+// Legacy imports carried mission labels from an older catalog. Keep the
+// command reference data, but fail closed on those labels; CommandAtlas
+// derives current mission references from all_levels.json at render time.
+const commandIdentity = new Set(commandDefinitions.flatMap(command => [command.id, command.name]));
+
+export const commands: CommandData[] = commandDefinitions.map(command => ({
+  ...command,
+  related: command.related.filter(reference => commandIdentity.has(reference)),
+  missions: [],
+}));
+
 // Domain list for filtering
 export const domains = [
   'All',
@@ -2200,29 +2211,30 @@ export const commandTypes = [
   { type: 'shortcut', label: '快捷键' },
 ] as const;
 
-// Learned commands set (for demo purposes)
-export const learnedCommandIds = new Set([
-  'ls', 'cd', 'pwd', 'cat', 'grep', 'echo', 'less', 'head', 'tail',
-  'ps', 'top', 'kill', 'chmod', 'git-status', 'git-add', 'git-commit',
-  'git-log', 'curl', 'ping', 'docker-ps', 'docker-run', 'touch',
-  'mkdir', 'rm', 'cp', 'mv', 'find', 'chmod', 'vim', 'nano',
-  'export', 'alias', 'history', 'sudo', 'man', 'which',
-]);
-
 // Stats - computed lazily to avoid heavy computation at module load
-let _commandStats: { total: number; learned: number; danger: number } | null = null
+let _commandStats: { total: number; links: number; danger: number } | null = null
 export function getCommandStats() {
   if (!_commandStats) {
+    const commandByReference = new Map(
+      commands.flatMap(command => [[command.id, command], [command.name, command]] as const),
+    )
+    const links = new Set<string>()
+    for (const command of commands) {
+      for (const relatedReference of command.related) {
+        const related = commandByReference.get(relatedReference)
+        if (related) links.add([command.id, related.id].sort().join('\0'))
+      }
+    }
     _commandStats = {
       total: commands.length,
-      learned: learnedCommandIds.size,
+      links: links.size,
       danger: commands.filter((c) => c.riskLevel === 'red' || c.riskLevel === 'black').length,
     }
   }
   return _commandStats
 }
 // Backward-compatible accessor (lazy)
-export const commandStats = new Proxy({} as { total: number; learned: number; danger: number }, {
+export const commandStats = new Proxy({} as { total: number; links: number; danger: number }, {
   get(_target, prop) {
     const stats = getCommandStats()
     return stats[prop as keyof typeof stats]

@@ -2,15 +2,23 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ALL_LEVELS } from '@/engine/levels';
 import { mapRiskLevel, type Mission } from '@/data/missions';
-import type { TrainingDrill, Chapter } from '@/data/academy';
-import { chapterMetaList, deriveDrillFromLevel } from '@/data/academy';
+import type { Chapter } from '@/data/academy';
+import { buildLocalizedChapters } from '@/data/academy';
+import { useGameStore } from '@/store/gameStore';
 
 export function useLocalizedMissions(): Mission[] {
   const { i18n } = useTranslation();
   const isZh = i18n.language?.startsWith('zh') ?? false;
+  const missionProgress = useGameStore(state => state.missionProgress);
 
   return useMemo(() => {
-    return ALL_LEVELS.map((level, index) => {
+    return ALL_LEVELS.map((level) => {
+      const progress = missionProgress[level.id];
+      const status: Mission['status'] = progress?.status === 'completed'
+        ? 'completed'
+        : progress?.active
+          ? 'in-progress'
+          : 'available';
       const chNum = level.chapter_id.replace(/\D/g, '').padStart(2, '0');
       const chapter = isZh
         ? `第${chNum}章：${level.chapter_title_zh}`
@@ -22,8 +30,6 @@ export function useLocalizedMissions(): Mission[] {
       else if (level.mode === 'operation') mode = 'operation';
 
       const diff = Math.max(1, Math.min(5, level.difficulty));
-      const status = index < 50 ? 'available' as const : 'locked' as const;
-
       return {
         id: level.id,
         title: isZh ? level.title_zh : level.title_en,
@@ -45,7 +51,7 @@ export function useLocalizedMissions(): Mission[] {
           required: obj.required,
         })),
         status,
-        score: undefined,
+        score: status === 'completed' ? progress?.bestScore : undefined,
         _title_en: level.title_en,
         _title_zh: level.title_zh,
         _summary_en: level.summary_en,
@@ -56,48 +62,15 @@ export function useLocalizedMissions(): Mission[] {
         _label_zh: level.objectives.map(o => o.label_zh),
       };
     });
-  }, [isZh]);
+  }, [isZh, missionProgress]);
 }
 
 export function useLocalizedChapters(): Chapter[] {
   const { i18n } = useTranslation();
   const isZh = i18n.language?.startsWith('zh') ?? false;
+  const missionProgress = useGameStore(state => state.missionProgress);
 
   return useMemo(() => {
-    return chapterMetaList.map((meta) => {
-      const chapterLevels = ALL_LEVELS.filter(
-        (l) => l.chapter_id === meta.chapterId
-      );
-      const drills: TrainingDrill[] = chapterLevels.map((level, chapterIndex) =>
-        deriveDrillFromLevel(level, chapterIndex + 1, isZh)
-      );
-
-      const completedDrills = drills.filter((d) => d.status === 'completed').length;
-      const totalXP = completedDrills * 100;
-
-      return {
-        id: meta.id,
-        number: meta.number,
-        title: isZh ? meta.title : meta.title.replace(/系统启动|文件系统基础|文件操作|分页器|Vim神庙|Git迷宫|进程追踪|暗影网络|Docker港湾|Shell精通|监控器|红区|777博士|逃脱|幽灵协议|终极终端|多路复用器/g, (m) => {
-          const map: Record<string, string> = {
-            '系统启动': 'System Boot', '文件系统基础': 'Filesystem Basics', '文件操作': 'File Manipulation',
-            '分页器': 'The Pager', 'Vim神庙': 'Vim Temple', 'Git迷宫': 'Git Labyrinth',
-            '进程追踪': 'Process Hunt', '暗影网络': 'Shadow Network', 'Docker港湾': 'Docker Bay',
-            'Shell精通': 'Shell Mastery', '监控器': 'The Monitor', '红区': 'Red Zone',
-            '777博士': 'Doctor 777', '逃脱': 'The Escape', '幽灵协议': 'Ghost Protocol',
-            '终极终端': 'Final Terminal', '多路复用器': 'Multiplexer',
-          };
-          return map[m] || m;
-        }),
-        subtitle: meta.subtitle,
-        description: isZh ? meta.description : meta.description, // Keep Chinese for now
-        drills,
-        totalDrills: drills.length,
-        completedDrills,
-        domain: meta.domain,
-        domainColor: meta.domainColor,
-        totalXP,
-      };
-    });
-  }, [isZh]);
+    return buildLocalizedChapters(isZh, missionProgress);
+  }, [isZh, missionProgress]);
 }

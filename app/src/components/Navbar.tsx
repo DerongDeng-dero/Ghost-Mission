@@ -192,7 +192,7 @@ export default function Navbar() {
         <Link
           to="/settings"
           aria-label={t('nav.settings')}
-          className="hidden md:flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-[#4A6072] hover:text-[#E8EDF2] hover:bg-[rgba(0,229,255,0.08)] transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+          className="hidden md:flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-[#788DA1] hover:text-[#E8EDF2] hover:bg-[rgba(0,229,255,0.08)] transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
         >
           <Settings size={18} aria-hidden="true" />
         </Link>
@@ -201,7 +201,7 @@ export default function Navbar() {
         <Link
           to="/terminal/whoami-shell"
           aria-label={t('nav.terminal')}
-          className="hidden md:flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-[#4A6072] hover:text-[#00FF88] hover:bg-[rgba(0,255,136,0.08)] transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+          className="hidden md:flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-[#788DA1] hover:text-[#00FF88] hover:bg-[rgba(0,255,136,0.08)] transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
         >
           <Terminal size={18} aria-hidden="true" />
         </Link>

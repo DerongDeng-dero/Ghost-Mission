@@ -1,0 +1,19 @@
+[
+  { "id": "ch01", "title_en": "The Manual Is the Map", "title_zh": "手册即地图", "skill": "Help & Discovery" },
+  { "id": "ch02", "title_en": "Filesystem Movement", "title_zh": "文件系统漫游", "skill": "Navigation" },
+  { "id": "ch03", "title_en": "File Manipulation", "title_zh": "文件操控", "skill": "File Operations" },
+  { "id": "ch04", "title_en": "Permissions & Identity", "title_zh": "权限与身份", "skill": "Permissions" },
+  { "id": "ch05", "title_en": "Text Intelligence", "title_zh": "文本智能", "skill": "Text Processing" },
+  { "id": "ch06", "title_en": "Bash Language", "title_zh": "Bash语言", "skill": "Shell Scripting" },
+  { "id": "ch07", "title_en": "Pipes & IO", "title_zh": "管道与IO", "skill": "IO Redirection" },
+  { "id": "ch08", "title_en": "Keyboard Survival", "title_zh": "键盘求生", "skill": "Terminal Shortcuts" },
+  { "id": "ch09", "title_en": "Process & Resource", "title_zh": "进程与资源", "skill": "Process Management" },
+  { "id": "ch10", "title_en": "Storage & Filesystems", "title_zh": "存储与文件系统", "skill": "Storage" },
+  { "id": "ch11", "title_en": "Archives & Integrity", "title_zh": "归档与完整性", "skill": "Archives" },
+  { "id": "ch12", "title_en": "Network Diagnostics", "title_zh": "网络诊断", "skill": "Networking" },
+  { "id": "ch13", "title_en": "Services & Logs", "title_zh": "服务与日志", "skill": "Services" },
+  { "id": "ch14", "title_en": "Package & Runtime", "title_zh": "包与运行时", "skill": "Packages" },
+  { "id": "ch15", "title_en": "Editors & REPLs", "title_zh": "编辑器与REPL", "skill": "Editors" },
+  { "id": "ch16", "title_en": "Git Timeline", "title_zh": "Git时间线", "skill": "Git" },
+  { "id": "ch17", "title_en": "Multiplexer & Remote", "title_zh": "多路复用与远程", "skill": "Multiplexer" }
+]

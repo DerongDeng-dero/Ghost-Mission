@@ -27,6 +27,8 @@ export interface Hint {
 
 export interface ScoringConfig {
   max_score: number
+  par_actions: number
+  par_time_seconds: number
   objectives_weight: number
   safety_weight: number
   verification_weight: number
@@ -142,6 +144,10 @@ interface RawStory {
 interface RawScoring {
   ms?: number
   max_score?: number
+  pa?: number
+  par_actions?: number
+  pt?: number
+  par_time_seconds?: number
   ow?: number
   objectives_weight?: number
   sw?: number
@@ -156,6 +162,7 @@ interface RawScoring {
   review_weight?: number
   nh?: number
   no_hints_bonus?: number
+  penalties?: Partial<ScoringConfig['penalties']>
 }
 
 interface RawLevel {
@@ -287,8 +294,20 @@ function buildLevels(data: RawLevel[]): Record<string, MissionLevel> {
     }))
 
     const rsc = raw.sc ?? raw.scoring ?? {}
+    const timeMatch = estimated_time.match(/(\d+)(?:\s*-\s*(\d+))?\s*min/i)
+    const defaultParTime = Number(timeMatch?.[2] ?? timeMatch?.[1] ?? 10) * 60
+    const defaultPenalties: ScoringConfig['penalties'] = {
+      red_command: -20,
+      unverified_fix: -15,
+      dirty_git: -10,
+      kill_critical: -30,
+      excessive_perms: -20,
+    }
+    const rawPenalties = rsc.penalties ?? {}
     const scoring: ScoringConfig = {
       max_score: rsc.ms ?? rsc.max_score ?? 100,
+      par_actions: rsc.pa ?? rsc.par_actions ?? Math.max(1, checks.filter(check => check.type === 'command_used').length * 2),
+      par_time_seconds: rsc.pt ?? rsc.par_time_seconds ?? defaultParTime,
       objectives_weight: rsc.ow ?? rsc.objectives_weight ?? 40,
       safety_weight: rsc.sw ?? rsc.safety_weight ?? 20,
       verification_weight: rsc.vw ?? rsc.verification_weight ?? 15,
@@ -296,7 +315,12 @@ function buildLevels(data: RawLevel[]): Record<string, MissionLevel> {
       shortcuts_weight: rsc.sh ?? rsc.shortcuts_weight ?? 5,
       review_weight: rsc.rw ?? rsc.review_weight ?? 5,
       no_hints_bonus: rsc.nh ?? rsc.no_hints_bonus ?? 5,
-      penalties: { red_command: -20, unverified_fix: -15, dirty_git: -10, kill_critical: -30, excessive_perms: -20 },
+      penalties: Object.fromEntries(
+        Object.entries(defaultPenalties).map(([key, fallback]) => {
+          const configured = rawPenalties[key as keyof typeof rawPenalties]
+          return [key, Number.isFinite(configured) && configured! <= 0 ? configured : fallback]
+        }),
+      ) as ScoringConfig['penalties'],
     }
 
     const level: MissionLevel = {

@@ -65,7 +65,12 @@ export default function SkillTree({ chapter }: SkillTreeProps) {
             const isLocked = drill.status === 'locked'
 
             return (
-              <div key={drill.id} className="flex items-center" role="listitem">
+              <div
+                key={drill.id}
+                className="flex items-center"
+                role="listitem"
+                aria-label={`${drill.number}. ${drill.title}: ${t(`academy.drillStatus.${drill.status}`)}`}
+              >
                 {/* Node */}
                 <motion.div
                   initial={{ scale: 0 }}
@@ -85,16 +90,17 @@ export default function SkillTree({ chapter }: SkillTreeProps) {
                       width: isCurrent ? '16px' : isCompleted ? '12px' : '10px',
                       height: isCurrent ? '16px' : isCompleted ? '12px' : '10px',
                       backgroundColor: isCompleted ? '#00FF88' : isCurrent ? '#00E5FF' : 'transparent',
-                      borderColor: isCompleted ? '#00FF88' : isCurrent ? '#00E5FF' : isLocked ? '#1E2D3D' : '#4A6072',
+                      borderColor: isCompleted ? '#00FF88' : isCurrent ? '#00E5FF' : isLocked ? '#1E2D3D' : '#788DA1',
                       boxShadow: isCurrent ? '0 0 12px rgba(0,229,255,0.4)' : isCompleted ? '0 0 8px rgba(0,255,136,0.3)' : 'none',
                     }}
                   />
 
                   {/* Drill Number */}
                   <span
+                    aria-hidden="true"
                     className="font-fira text-xs mt-0.5"
                     style={{
-                      color: isCompleted ? '#00FF88' : isCurrent ? '#00E5FF' : '#4A6072',
+                      color: isCompleted ? '#00FF88' : isCurrent ? '#00E5FF' : '#788DA1',
                     }}
                   >
                     {drill.number}
@@ -102,6 +108,7 @@ export default function SkillTree({ chapter }: SkillTreeProps) {
 
                   {/* Drill Label (on hover / current / completed) */}
                   <span
+                    aria-hidden="true"
                     className="max-w-[72px] truncate text-center font-fira text-xs"
                     style={{
                       color: isCompleted ? '#00FF88' : isCurrent ? '#00E5FF' : 'transparent',
@@ -109,7 +116,6 @@ export default function SkillTree({ chapter }: SkillTreeProps) {
                   >
                     {drill.title.split(' ')[0]}
                   </span>
-                  <span className="sr-only">{t(`academy.drillStatus.${drill.status}`)}</span>
                 </motion.div>
 
                 {/* Connector Line (between nodes) */}
