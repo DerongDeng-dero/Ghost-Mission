@@ -1,12 +1,33 @@
-import { VFS } from './vfs'
+import { VFS, type VFSStateSnapshot, type VNode } from './vfs'
 import { createGitState, gitCommand, type GitState } from './git'
+import { RUN_REPORT_LIMITS } from './runReportLimits'
+import { truncateTextToUtf16Limit } from '../lib/textSegmentation'
 
 // Safety limits to prevent browser freeze from infinite loops / excessive output
-const MAX_OUTPUT_LENGTH = 10000
+export const MAX_SHELL_OUTPUT_CODE_UNITS = 10_000
 const TRUNCATION_MSG = '\n... (output truncated)\n'
 const MAX_GREP_INPUT = 50000
 const MAX_ARCHIVE_ENTRIES = 512
 const MAX_ARCHIVE_BYTES = 2_000_000
+export const MAX_SHELL_COMMAND_LENGTH = RUN_REPORT_LIMITS.traceCodeUnits
+export const MAX_SHELL_HISTORY_ENTRIES = 1_000
+export const MAX_SHELL_HISTORY_CODE_UNITS = 1 * 1_024 * 1_024
+export const MAX_SHELL_COMMAND_SEGMENTS = 100
+export const MAX_SIMULATOR_STATE_CODE_UNITS = 16 * 1_024 * 1_024
+export const MAX_SIMULATOR_STATE_ENTRIES = 20_000
+export const MAX_SYSTEM_LOG_CODE_UNITS = 1 * 1_024 * 1_024
+export const MAX_SYSTEM_LOG_ENTRIES = 1_000
+
+function boundShellOutput(output: string): string {
+  const bounded = truncateTextToUtf16Limit(output, MAX_SHELL_OUTPUT_CODE_UNITS)
+  return bounded.wasTruncated ? bounded.text + TRUNCATION_MSG : output
+}
+
+function appendBoundedProgressTraces(target: string[], traces: Iterable<string>): void {
+  for (const trace of traces) {
+    if (trace.length > 0 && trace.length <= MAX_SHELL_COMMAND_LENGTH) target.push(trace)
+  }
+}
 const SHELL_BUILTINS = new Set([
   'alias', 'cd', 'command', 'dirs', 'echo', 'env', 'exit', 'export', 'history', 'popd',
   'getopts', 'printenv', 'pushd', 'pwd', 'read', 'set', 'source', 'sudo', 'test', 'trap',
@@ -252,6 +273,168 @@ export function createShellState(): ShellState {
     dirStack: [],
     umask: 0o022,
     pipefail: false,
+  }
+}
+
+interface ShellExecutionSnapshot {
+  vfs: VFSStateSnapshot
+  stateTarget: ShellState
+  state: ShellState
+  servicesTarget: SimulatedServices
+  services: SimulatedServices
+  gitStateTarget: GitState
+  gitState: GitState
+  shellFunctions: Map<string, string>
+  shellTraps: Map<string, string>
+  shellArrays: Map<string, string[]>
+}
+
+export interface SimulatorStateUsage {
+  entries: number
+  codeUnits: number
+  valid: boolean
+}
+
+function measureStateGraph(roots: unknown[]): SimulatorStateUsage {
+  let entries = 0
+  let codeUnits = 0
+  let valid = true
+  const seen = new Set<object>()
+  const pending = [...roots]
+
+  while (pending.length > 0 && valid) {
+    const value = pending.pop()
+    if (typeof value === 'string') {
+      codeUnits += value.length
+    } else if (value === null || value === undefined || typeof value === 'number' || typeof value === 'boolean') {
+      // Primitive metadata has fixed-size storage in this bounded simulator.
+    } else if (typeof value !== 'object') {
+      valid = false
+    } else if (!seen.has(value)) {
+      seen.add(value)
+      if (value instanceof Date) {
+        valid = Number.isFinite(value.getTime())
+      } else if (value instanceof Map) {
+        entries += value.size
+        if (entries > MAX_SIMULATOR_STATE_ENTRIES) break
+        for (const [key, child] of value) pending.push(key, child)
+      } else if (value instanceof Set) {
+        entries += value.size
+        if (entries > MAX_SIMULATOR_STATE_ENTRIES) break
+        for (const child of value) pending.push(child)
+      } else if (Array.isArray(value)) {
+        entries += value.length
+        if (entries > MAX_SIMULATOR_STATE_ENTRIES) break
+        for (const child of value) pending.push(child)
+      } else {
+        const prototype = Object.getPrototypeOf(value)
+        if (prototype !== Object.prototype && prototype !== null) {
+          valid = false
+        } else {
+          const keys = Object.keys(value)
+          entries += keys.length
+          if (entries > MAX_SIMULATOR_STATE_ENTRIES) break
+          for (const key of keys) pending.push(key, (value as Record<string, unknown>)[key])
+        }
+      }
+    }
+    if (codeUnits > MAX_SIMULATOR_STATE_CODE_UNITS) break
+  }
+
+  return {
+    entries,
+    codeUnits,
+    valid: valid
+      && entries <= MAX_SIMULATOR_STATE_ENTRIES
+      && codeUnits <= MAX_SIMULATOR_STATE_CODE_UNITS,
+  }
+}
+
+function cloneShellState(state: ShellState): ShellState {
+  return {
+    ...state,
+    cwd: [...state.cwd],
+    env: { ...state.env },
+    history: [...state.history],
+    aliases: { ...state.aliases },
+    dirStack: state.dirStack.map(path => [...path]),
+  }
+}
+
+function cloneRecordMap<T extends object>(source: Map<string, T>): Map<string, T> {
+  return new Map(Array.from(source, ([key, value]) => [key, { ...value }]))
+}
+
+function cloneSimulatedServices(services: SimulatedServices): SimulatedServices {
+  return {
+    ...services,
+    npmPackages: new Map(services.npmPackages),
+    installedPackages: [...services.installedPackages],
+    services: cloneRecordMap(services.services),
+    dockerContainers: cloneRecordMap(services.dockerContainers),
+    dockerImages: cloneRecordMap(services.dockerImages),
+    dockerNetworks: cloneRecordMap(services.dockerNetworks),
+    dockerVolumes: new Map(services.dockerVolumes),
+    tmuxSessions: cloneRecordMap(services.tmuxSessions),
+    screenSessions: cloneRecordMap(services.screenSessions),
+    zellijSessions: cloneRecordMap(services.zellijSessions),
+    kubectlContexts: [...services.kubectlContexts],
+    kubectlPods: cloneRecordMap(services.kubectlPods),
+    kubectlNodes: cloneRecordMap(services.kubectlNodes),
+    kubectlServices: cloneRecordMap(services.kubectlServices),
+    kubectlDeployments: cloneRecordMap(services.kubectlDeployments),
+    cronJobs: new Map(services.cronJobs),
+    systemLogs: [...services.systemLogs],
+    containerLogs: new Map(Array.from(services.containerLogs, ([key, logs]) => [key, [...logs]])),
+    openFiles: services.openFiles.map(file => ({ ...file })),
+    systemPackages: cloneRecordMap(services.systemPackages),
+    pythonPackages: new Map(services.pythonPackages),
+    processNiceness: new Map(services.processNiceness),
+    terminatedProcesses: new Set(services.terminatedProcesses),
+    stoppedProcesses: new Set(services.stoppedProcesses),
+    remoteFiles: new Map(services.remoteFiles),
+    mounts: cloneRecordMap(services.mounts),
+    loopDevices: new Map(services.loopDevices),
+  }
+}
+
+function cloneGitState(state: GitState): GitState {
+  type GitCommit = GitState['commits'][number]
+  const commitClones = new Map<GitCommit, GitCommit>()
+  const cloneCommit = (commit: GitCommit): GitCommit => {
+    const existing = commitClones.get(commit)
+    if (existing) return existing
+    const cloned = { ...commit, changes: new Map(commit.changes) }
+    commitClones.set(commit, cloned)
+    return cloned
+  }
+
+  return {
+    ...state,
+    worktreeBaseline: new Set(state.worktreeBaseline),
+    branches: new Map(Array.from(state.branches, ([name, commits]) => [name, commits.map(cloneCommit)])),
+    stagingArea: new Map(state.stagingArea),
+    workingDirectory: new Map(state.workingDirectory),
+    commits: state.commits.map(cloneCommit),
+    stash: state.stash.map(entry => ({
+      ...entry,
+      changes: new Map(entry.changes),
+      stagedChanges: new Map(entry.stagedChanges),
+    })),
+    reflog: [...state.reflog],
+    tags: new Map(Array.from(state.tags, ([name, tag]) => [name, { ...tag }])),
+    remotes: new Map(state.remotes),
+    config: new Map(state.config),
+    submodules: new Map(state.submodules),
+    worktrees: new Map(state.worktrees),
+    bisect: state.bisect
+      ? {
+          ...state.bisect,
+          good: [...state.bisect.good],
+          bad: [...state.bisect.bad],
+          log: [...state.bisect.log],
+        }
+      : null,
   }
 }
 
@@ -897,11 +1080,62 @@ function permissionMode(permissions: string): number {
   return mode
 }
 
-export function isRedCommand(cmd: string): boolean {
-  const redCommands = new Set(['rm', 'dd', 'mkfs', 'fdisk', 'shutdown', 'reboot', 'kill', 'pkill', 'chmod', 'chown',
-    'docker', 'kubectl', 'systemctl', 'shred', 'apt', 'yum', 'dnf', 'pacman'])
+export function isRedCommand(cmd: string, args: string[] = []): boolean {
   const base = cmd.split('/').pop() || cmd
-  return redCommands.has(base)
+  const alwaysRed = new Set([
+    'rm', 'dd', 'mkfs', 'fdisk', 'shutdown', 'reboot', 'chmod', 'chown',
+    'shred', 'truncate',
+  ])
+  if (alwaysRed.has(base)) return true
+
+  if (base === 'kill' || base === 'pkill') return !args.includes('-0')
+  if (base === 'systemctl') {
+    const mutating = new Set(['start', 'stop', 'restart', 'reload', 'enable', 'disable', 'mask', 'unmask'])
+    const known = new Set([...mutating, 'status', 'is-active', 'is-enabled', 'list-units', 'list-timers', 'show', 'cat'])
+    const systemctlCommand = args.find(argument => known.has(argument))
+    return mutating.has(systemctlCommand ?? '')
+  }
+  if (base === 'docker') {
+    const mutating = new Set(['run', 'exec', 'stop', 'start', 'restart', 'rm', 'rmi', 'build', 'pull', 'push'])
+    const known = new Set([...mutating, 'compose', 'ps', 'images', 'logs', 'inspect', 'network', 'volume', 'stats', 'version', 'info'])
+    const dockerCommand = args.find(argument => known.has(argument))
+    if (dockerCommand === 'compose') {
+      const composeMutating = new Set([...mutating, 'up', 'down'])
+      const composeKnown = new Set([...composeMutating, 'ps', 'logs', 'config', 'images', 'top', 'events'])
+      const composeCommand = args.slice(args.indexOf('compose') + 1).find(argument => composeKnown.has(argument))
+      return composeMutating.has(composeCommand ?? '')
+    }
+    return mutating.has(dockerCommand ?? '')
+  }
+  if (base === 'kubectl') {
+    const mutating = new Set(['exec', 'apply', 'delete', 'create', 'replace', 'patch', 'scale', 'rollout', 'port-forward'])
+    const known = new Set([...mutating, 'config', 'get', 'describe', 'logs', 'top', 'api-resources', 'version', 'cluster-info'])
+    const kubectlCommand = args.find(argument => known.has(argument))
+    if (kubectlCommand === 'config') {
+      const configArgs = args.slice(args.indexOf('config') + 1)
+      return configArgs.includes('use-context') || configArgs.includes('set-context')
+    }
+    return mutating.has(kubectlCommand ?? '')
+  }
+  if (new Set(['apt', 'yum', 'dnf', 'pacman']).has(base)) {
+    const safe = new Set(['search', 'show', 'list', 'info', 'check', 'history'])
+    const known = args.find(argument => safe.has(argument) || new Set([
+      'install', 'remove', 'purge', 'upgrade', 'update', 'autoremove', 'clean', 'reinstall', 'downgrade',
+    ]).has(argument))
+    return known ? !safe.has(known) : false
+  }
+  if (base !== 'git') return false
+  const gitSubcommand = args[0]
+  const hasShortFlag = (flag: string) => args.some(argument => (
+    /^-[^-]/.test(argument) && argument.slice(1).includes(flag)
+  ))
+  return (
+    (gitSubcommand === 'clean'
+      && !args.includes('--dry-run')
+      && !hasShortFlag('n')
+      && (args.includes('--force') || hasShortFlag('f')))
+    || (gitSubcommand === 'reset' && args.includes('--hard'))
+  )
 }
 
 
@@ -916,6 +1150,9 @@ export class ShellEngine {
   private shellTraps = new Map<string, string>()
   private shellArrays = new Map<string, string[]>()
   private shellCallDepth = 0
+  private executionScopeDepth = 0
+  private executionSegmentsRemaining = MAX_SHELL_COMMAND_SEGMENTS
+  private executionBudgetExceeded = false
 
   constructor(
     vfs: VFS,
@@ -928,6 +1165,72 @@ export class ShellEngine {
     this.services = createSimulatedServices()
     this.gitState = gitState ?? createGitState()
     this.onRedCommand = onRedCommand
+  }
+
+  private createExecutionSnapshot(): ShellExecutionSnapshot {
+    const usage = this.getPersistentStateUsage()
+    if (!usage.valid) throw new Error('simulator: persistent state violates browser safety limits')
+    return {
+      vfs: this.vfs.createSnapshot(),
+      stateTarget: this.state,
+      state: cloneShellState(this.state),
+      servicesTarget: this.services,
+      services: cloneSimulatedServices(this.services),
+      gitStateTarget: this.gitState,
+      gitState: cloneGitState(this.gitState),
+      shellFunctions: new Map(this.shellFunctions),
+      shellTraps: new Map(this.shellTraps),
+      shellArrays: new Map(Array.from(this.shellArrays, ([name, values]) => [name, [...values]])),
+    }
+  }
+
+  getPersistentStateUsage(): SimulatorStateUsage {
+    return measureStateGraph([
+      this.state,
+      this.services,
+      this.gitState,
+      this.shellFunctions,
+      this.shellTraps,
+      this.shellArrays,
+    ])
+  }
+
+  private restoreExecutionSnapshot(snapshot: ShellExecutionSnapshot): void {
+    this.vfs.restoreSnapshot(snapshot.vfs)
+    Object.assign(snapshot.stateTarget, snapshot.state)
+    Object.assign(snapshot.servicesTarget, snapshot.services)
+    Object.assign(snapshot.gitStateTarget, snapshot.gitState)
+    this.state = snapshot.stateTarget
+    this.services = snapshot.servicesTarget
+    this.gitState = snapshot.gitStateTarget
+    this.shellFunctions = snapshot.shellFunctions
+    this.shellTraps = snapshot.shellTraps
+    this.shellArrays = snapshot.shellArrays
+  }
+
+  private getGitWorktreeSnapshot(): { files: Map<string, string>; root: string } {
+    const currentDirectory = `/${this.state.cwd.join('/')}`.replace(/\/$/, '') || '/'
+    const root = this.gitState.initialized && this.gitState.repositoryRoot
+      ? this.gitState.repositoryRoot
+      : currentDirectory
+    const files = new Map<string, string>()
+    const rootNode = this.vfs.lstat(root, []).node
+    const walk = (node: VNode, relativePath: string) => {
+      if (node.type === 'file') {
+        files.set(relativePath, node.content ?? '')
+        return
+      }
+      if (node.type === 'symlink') {
+        files.set(relativePath, node.target ?? '')
+        return
+      }
+      node.children?.forEach((child, name) => {
+        if (!relativePath && name === '.git') return
+        walk(child, relativePath ? `${relativePath}/${name}` : name)
+      })
+    }
+    if (rootNode?.type === 'directory') walk(rootNode, '')
+    return { files, root }
   }
 
   private ensureDirectory(path: string, cwd: string[] = this.state.cwd): { error?: string } {
@@ -1161,21 +1464,21 @@ export class ShellEngine {
       if (values.length === 0 || values.length > 100) return { stdout: '', stderr: 'bash: for requires 1 to 100 values', exitCode: 2 }
       const previous = this.state.env[variable]
       let stdout = ''
-      const events = new Set<string>(['for'])
+      const events = new Set<string>()
       for (const value of values) {
         this.state.env[variable] = value
         const result = this.execute(body, depth + 1, false)
         stdout += result.stdout
+        for (const event of result.successfulCommands ?? []) events.add(event)
         if (result.exitCode !== 0) {
           if (previous === undefined) delete this.state.env[variable]
           else this.state.env[variable] = previous
-          return { stdout, stderr: result.stderr, exitCode: result.exitCode, successfulCommands: [] }
+          return { stdout, stderr: result.stderr, exitCode: result.exitCode, successfulCommands: [...events] }
         }
-        for (const event of result.successfulCommands ?? []) events.add(event)
       }
       if (previous === undefined) delete this.state.env[variable]
       else this.state.env[variable] = previous
-      return { stdout, stderr: '', exitCode: 0, successfulCommands: [...events] }
+      return { stdout, stderr: '', exitCode: 0, successfulCommands: [...new Set(['for', ...events])] }
     }
 
     const whileReadMatch = line.match(/^while\s+read(?:\s+-r)?\s+([A-Za-z_]\w*)\s*;\s*do\s+(.+?)\s*;\s*done\s*<\s*(\S+)$/)
@@ -1186,15 +1489,22 @@ export class ShellEngine {
       const lines = read.content.split(/\r?\n/).filter((_, index, all) => index < all.length - 1 || all[index] !== '')
       if (lines.length > 1000) return { stdout: '', stderr: 'bash: while read input exceeds 1000 lines', exitCode: 2 }
       let stdout = ''
-      const events = new Set<string>(['while', 'read', 'while read'])
+      const events = new Set<string>()
       for (const value of lines) {
         this.state.env[variable] = value
         const result = this.execute(body, depth + 1, false)
         stdout += result.stdout
-        if (result.exitCode !== 0) return { stdout, stderr: result.stderr, exitCode: result.exitCode, successfulCommands: [] }
         for (const event of result.successfulCommands ?? []) events.add(event)
+        if (result.exitCode !== 0) {
+          return { stdout, stderr: result.stderr, exitCode: result.exitCode, successfulCommands: [...events] }
+        }
       }
-      return { stdout, stderr: '', exitCode: 0, successfulCommands: [...events] }
+      return {
+        stdout,
+        stderr: '',
+        exitCode: 0,
+        successfulCommands: [...new Set(['while', 'read', 'while read', ...events])],
+      }
     }
 
     const whileMatch = line.match(/^while\s+(false|test\s+.+?)\s*;\s*do\s+(.+?)\s*;\s*done$/)
@@ -1237,7 +1547,7 @@ export class ShellEngine {
     if (read.error) return { stdout: '', stderr: `bash: ${file}: No such readable file`, exitCode: 1 }
     const lines = read.content.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#'))
     if (lines.length === 0 || lines.length > 100) return { stdout: '', stderr: 'bash: script must contain 1 to 100 bounded statements', exitCode: 2 }
-    const events = new Set<string>(['bash'])
+    const events = new Set<string>()
     let stdout = ''
     for (const line of lines) {
       if (syntaxOnly) {
@@ -1266,10 +1576,12 @@ export class ShellEngine {
       const compound = this.executeBoundedCompoundSyntax(line, 0)
       const result = compound ?? this.execute(line, 1, false)
       stdout += result.stdout
-      if (result.exitCode !== 0) return { stdout, stderr: result.stderr, exitCode: result.exitCode, successfulCommands: [] }
       for (const event of result.successfulCommands ?? []) events.add(event)
+      if (result.exitCode !== 0) {
+        return { stdout, stderr: result.stderr, exitCode: result.exitCode, successfulCommands: [...events] }
+      }
     }
-    return { stdout, stderr: '', exitCode: 0, successfulCommands: [...events] }
+    return { stdout, stderr: '', exitCode: 0, successfulCommands: [...new Set(['bash', ...events])] }
   }
 
   private expandGlobToken(token: string): string[] {
@@ -1293,16 +1605,258 @@ export class ShellEngine {
       .map(name => `${prefix}${name}`)
   }
 
+  private recordHistory(line: string): void {
+    const previousHistory = [...this.state.history]
+    this.state.history.push(line)
+    if (this.state.history.length > MAX_SHELL_HISTORY_ENTRIES) {
+      this.state.history.splice(0, this.state.history.length - MAX_SHELL_HISTORY_ENTRIES)
+    }
+    let historyCodeUnits = this.state.history.reduce((total, entry) => total + entry.length, 0)
+    while (historyCodeUnits > MAX_SHELL_HISTORY_CODE_UNITS && this.state.history.length > 0) {
+      historyCodeUnits -= this.state.history.shift()!.length
+    }
+    if (!this.getPersistentStateUsage().valid) this.state.history = previousHistory
+  }
+
+  private estimateInvocationSegments(
+    rawTokens: string[],
+    depth: number,
+    seenFunctions: ReadonlySet<string>,
+  ): number {
+    const expanded = rawTokens.map(token => stripOuterQuotes(
+      expandVars(token, this.state.env, this.state.lastExitCode),
+    ))
+    const command = expanded[0]
+    if (!command) return 0
+
+    const alias = this.state.aliases[command]
+    if (alias) {
+      return this.estimateExecutionSegments(
+        [alias, ...expanded.slice(1)].join(' '),
+        depth + 1,
+        seenFunctions,
+      )
+    }
+
+    const functionBody = this.shellFunctions.get(command)
+    if (functionBody) {
+      // Runtime call depth produces the more specific recursion error; the
+      // shared execution budget still prevents recursive work from exploding.
+      if (seenFunctions.has(command)) return 1
+      return 1 + this.estimateExecutionSegments(
+        functionBody,
+        depth + 1,
+        new Set([...seenFunctions, command]),
+      )
+    }
+
+    if (command === 'bash' && !expanded.includes('-n')) {
+      const file = expanded.slice(1).find(argument => !argument.startsWith('-'))
+      if (file) {
+        const scriptKey = `bash:${file}`
+        if (seenFunctions.has(scriptKey)) return 1
+        const read = this.vfs.readFile(file, this.state.cwd)
+        if (!read.error) {
+          const lines = read.content
+            .split(/\r?\n/)
+            .map(scriptLine => scriptLine.trim())
+            .filter(scriptLine => scriptLine && !scriptLine.startsWith('#'))
+          let total = 0
+          for (const scriptLine of lines) {
+            total += this.estimateExecutionSegments(
+              scriptLine,
+              depth + 1,
+              new Set([...seenFunctions, scriptKey]),
+            )
+            if (total > MAX_SHELL_COMMAND_SEGMENTS) return MAX_SHELL_COMMAND_SEGMENTS + 1
+          }
+          return Math.min(MAX_SHELL_COMMAND_SEGMENTS + 1, 1 + total)
+        }
+      }
+    }
+    return 1
+  }
+
+  private estimateExecutionSegments(
+    line: string,
+    depth = 0,
+    seenFunctions: ReadonlySet<string> = new Set(),
+  ): number {
+    if (depth > 10) return MAX_SHELL_COMMAND_SEGMENTS + 1
+    const trimmed = line.trim()
+    if (!trimmed) return 0
+    const backgroundCommand = stripTrailingBackgroundOperator(trimmed)
+    if (backgroundCommand !== null) {
+      return backgroundCommand
+        ? this.estimateExecutionSegments(backgroundCommand, depth + 1, seenFunctions)
+        : 1
+    }
+
+    const functionMatch = trimmed.match(/^(?:function\s+)?([A-Za-z_]\w*)\s*(?:\(\s*\))?\s*\{\s*([^{}]*?)\s*;\s*\}\s*(?:;\s*(.*))?$/)
+    if (functionMatch && (trimmed.startsWith('function ') || trimmed.includes('()'))) {
+      const [, name, body, invocation] = functionMatch
+      if (!invocation) return 1
+      if (invocation.trim() === name) {
+        return Math.min(
+          MAX_SHELL_COMMAND_SEGMENTS + 1,
+          1 + this.estimateExecutionSegments(body, depth + 1, new Set([...seenFunctions, name])),
+        )
+      }
+      return this.estimateExecutionSegments(invocation, depth + 1, seenFunctions)
+    }
+
+    const ifMatch = trimmed.match(/^if\s+(.+?)\s*;\s*then\s+(.+?)(?:\s*;\s*else\s+(.+?))?\s*;\s*fi$/)
+    if (ifMatch) {
+      const thenCost = this.estimateExecutionSegments(ifMatch[2], depth + 1, seenFunctions)
+      const elseCost = ifMatch[3]
+        ? this.estimateExecutionSegments(ifMatch[3], depth + 1, seenFunctions)
+        : 0
+      return Math.min(MAX_SHELL_COMMAND_SEGMENTS + 1, 1 + Math.max(thenCost, elseCost))
+    }
+
+    const forMatch = trimmed.match(/^for\s+[A-Za-z_]\w*\s+in\s+(.+?)\s*;\s*do\s+(.+?)\s*;\s*done$/)
+    if (forMatch) {
+      try {
+        const valueCount = parseLine(forMatch[1])[0]?.length ?? 0
+        const bodyCost = this.estimateExecutionSegments(forMatch[2], depth + 1, seenFunctions)
+        return Math.min(MAX_SHELL_COMMAND_SEGMENTS + 1, valueCount * bodyCost)
+      } catch {
+        return 1
+      }
+    }
+
+    const whileReadMatch = trimmed.match(/^while\s+read(?:\s+-r)?\s+[A-Za-z_]\w*\s*;\s*do\s+(.+?)\s*;\s*done\s*<\s*(\S+)$/)
+    if (whileReadMatch) {
+      const read = this.vfs.readFile(stripOuterQuotes(whileReadMatch[2]), this.state.cwd)
+      if (read.error) return 1
+      const lineCount = read.content
+        .split(/\r?\n/)
+        .filter((_, index, all) => index < all.length - 1 || all[index] !== '')
+        .length
+      const bodyCost = this.estimateExecutionSegments(whileReadMatch[1], depth + 1, seenFunctions)
+      return Math.min(MAX_SHELL_COMMAND_SEGMENTS + 1, lineCount * bodyCost)
+    }
+
+    if (/^while\s+(?:false|test\s+.+?)\s*;\s*do\s+.+?\s*;\s*done$/.test(trimmed)) return 1
+
+    try {
+      const controlCommands = splitControlCommands(trimmed)
+      if (controlCommands.length > 1) {
+        let total = 0
+        for (const controlCommand of controlCommands) {
+          total += this.estimateExecutionSegments(controlCommand.command, depth + 1, seenFunctions)
+          if (total > MAX_SHELL_COMMAND_SEGMENTS) return MAX_SHELL_COMMAND_SEGMENTS + 1
+        }
+        return total
+      }
+
+      const pipeline = parseLine(trimmed)
+      let total = 0
+      for (const invocation of pipeline) {
+        total += this.estimateInvocationSegments(invocation, depth + 1, seenFunctions)
+        if (total > MAX_SHELL_COMMAND_SEGMENTS) return MAX_SHELL_COMMAND_SEGMENTS + 1
+      }
+      return total
+    } catch {
+      return 1
+    }
+  }
+
   execute(line: string, depth: number = 0, recordHistory = true): ShellResult {
+    if (this.executionScopeDepth !== 0) return this.executeCore(line, depth, recordHistory)
+
+    this.executionBudgetExceeded = false
+    let snapshot: ShellExecutionSnapshot
+    try {
+      snapshot = this.createExecutionSnapshot()
+    } catch (error) {
+      if (recordHistory) this.recordHistory(line)
+      this.state.lastExitCode = 1
+      return {
+        stdout: '',
+        stderr: error instanceof Error ? error.message : 'vfs: unable to create an execution snapshot',
+        exitCode: 1,
+        successfulCommands: [],
+        progressEligible: false,
+      }
+    }
+    const capacityFailureSerial = this.vfs.getCapacityFailureSerial()
+    const result = this.executeCore(line, depth, recordHistory)
+    const capacityExceeded = this.vfs.getCapacityFailureSerial() !== capacityFailureSerial
+    const persistentStateExceeded = !this.getPersistentStateUsage().valid
+    if (!this.executionBudgetExceeded && !capacityExceeded && !persistentStateExceeded) return result
+
+    // Delegated fan-out and batched writes can fail only after earlier segments
+    // changed the simulated machine. Roll back the complete root command so
+    // execution and storage limits remain atomic for xargs, make, scripts,
+    // redirects, split/csplit, and recursive copies.
+    this.restoreExecutionSnapshot(snapshot)
+    if (recordHistory) this.recordHistory(line)
+    if (persistentStateExceeded) {
+      this.state.lastExitCode = 1
+      return {
+        stdout: '',
+        stderr: 'simulator: persistent state limit exceeded; command rolled back',
+        exitCode: 1,
+        successfulCommands: [],
+        progressEligible: false,
+      }
+    }
+    if (capacityExceeded) {
+      this.state.lastExitCode = 1
+      return {
+        stdout: '',
+        stderr: this.vfs.getLastCapacityError() || 'vfs: simulator storage limit exceeded',
+        exitCode: 1,
+        successfulCommands: [],
+        progressEligible: false,
+      }
+    }
+    this.state.lastExitCode = 2
+    return {
+      stdout: '',
+      stderr: `bash: command exceeds the ${MAX_SHELL_COMMAND_SEGMENTS}-segment execution budget`,
+      exitCode: 2,
+      successfulCommands: [],
+      progressEligible: false,
+    }
+  }
+
+  private executeCore(line: string, depth: number = 0, recordHistory = true): ShellResult {
+    if (this.executionScopeDepth === 0) {
+      this.executionSegmentsRemaining = MAX_SHELL_COMMAND_SEGMENTS
+      if (this.estimateExecutionSegments(line) > MAX_SHELL_COMMAND_SEGMENTS) {
+        if (recordHistory) this.recordHistory(line)
+        const result = {
+          stdout: '',
+          stderr: `bash: command exceeds the ${MAX_SHELL_COMMAND_SEGMENTS}-segment simulator limit`,
+          exitCode: 2,
+          successfulCommands: [],
+        }
+        this.state.lastExitCode = result.exitCode
+        return result
+      }
+    }
+    this.executionScopeDepth += 1
     try {
       if (depth > 10) {
         return { stdout: '', stderr: 'alias: too many levels of recursion', exitCode: 1 }
       }
       if (line.trim() === '') return { stdout: '', stderr: '', exitCode: 0 }
+      if (line.length > MAX_SHELL_COMMAND_LENGTH) {
+        const result = {
+          stdout: '',
+          stderr: `bash: command exceeds ${MAX_SHELL_COMMAND_LENGTH} characters`,
+          exitCode: 2,
+          successfulCommands: [],
+        }
+        this.state.lastExitCode = result.exitCode
+        return result
+      }
 
       const trimmed = line.trim()
       if (hasUnsupportedBackgroundOperator(trimmed)) {
-        if (recordHistory) this.state.history.push(line)
+        if (recordHistory) this.recordHistory(line)
         const result = {
           stdout: '',
           stderr: "bash: only one trailing unquoted '&' is supported for background execution",
@@ -1317,7 +1871,7 @@ export class ShellEngine {
         if (!backgroundCommand) {
           return { stdout: '', stderr: "bash: syntax error near unexpected token '&'", exitCode: 2, successfulCommands: [] }
         }
-        if (recordHistory) this.state.history.push(line)
+        if (recordHistory) this.recordHistory(line)
         const result = this.execute(backgroundCommand, depth, false)
         if (result.exitCode !== 0) return result
         return {
@@ -1330,13 +1884,28 @@ export class ShellEngine {
       }
       const compoundResult = this.executeBoundedCompoundSyntax(trimmed, depth)
       if (compoundResult) {
-        if (recordHistory) this.state.history.push(line)
+        if (recordHistory) this.recordHistory(line)
         this.state.lastExitCode = compoundResult.exitCode
-        return compoundResult
+        return {
+          ...compoundResult,
+          stdout: boundShellOutput(compoundResult.stdout),
+          stderr: boundShellOutput(compoundResult.stderr),
+        }
       }
       const controlCommands = splitControlCommands(trimmed)
+      if (controlCommands.length > MAX_SHELL_COMMAND_SEGMENTS) {
+        if (recordHistory) this.recordHistory(line)
+        const result = {
+          stdout: '',
+          stderr: `bash: command exceeds the ${MAX_SHELL_COMMAND_SEGMENTS}-segment simulator limit`,
+          exitCode: 2,
+          successfulCommands: [],
+        }
+        this.state.lastExitCode = result.exitCode
+        return result
+      }
       if (controlCommands.length > 1) {
-        if (recordHistory) this.state.history.push(line)
+        if (recordHistory) this.recordHistory(line)
         let stdout = ''
         let stderr = ''
         let lastResult: ShellResult = { stdout: '', stderr: '', exitCode: 0 }
@@ -1353,14 +1922,14 @@ export class ShellEngine {
         }
         if (successfulCommands.length > 0) successfulCommands.push(...getShellSyntaxEvents(trimmed))
         return {
-          stdout,
-          stderr,
+          stdout: boundShellOutput(stdout),
+          stderr: boundShellOutput(stderr),
           exitCode: lastResult.exitCode,
           mode: lastResult.mode,
           successfulCommands: [...new Set(successfulCommands)],
         }
       }
-      if (recordHistory) this.state.history.push(line)
+      if (recordHistory) this.recordHistory(line)
       const aliasCmd = trimmed.split(' ')[0]
       if (this.state.aliases[aliasCmd]) {
         const expansion = this.state.aliases[aliasCmd] + trimmed.slice(aliasCmd.length)
@@ -1368,6 +1937,16 @@ export class ShellEngine {
       }
 
       const cmds = parseLine(trimmed)
+      if (cmds.length > MAX_SHELL_COMMAND_SEGMENTS) {
+        const result = {
+          stdout: '',
+          stderr: `bash: pipeline exceeds the ${MAX_SHELL_COMMAND_SEGMENTS}-segment simulator limit`,
+          exitCode: 2,
+          successfulCommands: [],
+        }
+        this.state.lastExitCode = result.exitCode
+        return result
+      }
       let prevStdout = ''
       let pipelineStderr = ''
       let pipelineFailure = 0
@@ -1427,13 +2006,9 @@ export class ShellEngine {
           result = { stdout: '', stderr: `internal error: ${msg}`, exitCode: 1 }
         }
 
-        // Truncate stdout/stderr if too long to prevent browser freeze
-        if (result.stdout.length > MAX_OUTPUT_LENGTH) {
-          result.stdout = result.stdout.slice(0, MAX_OUTPUT_LENGTH) + TRUNCATION_MSG
-        }
-        if (result.stderr.length > MAX_OUTPUT_LENGTH) {
-          result.stderr = result.stderr.slice(0, MAX_OUTPUT_LENGTH) + TRUNCATION_MSG
-        }
+        // Keep the UTF-16 memory budget without bisecting surrogate pairs.
+        result.stdout = boundShellOutput(result.stdout)
+        result.stderr = boundShellOutput(result.stderr)
 
         if (!redirectSetupError) {
           let stdoutRedirect: (typeof redirects)[number] | undefined
@@ -1460,13 +2035,15 @@ export class ShellEngine {
         }
 
         this.state.lastExitCode = result.exitCode
-        if (result.exitCode === 0 && args.length > 0) {
-          if (result.successfulCommands !== undefined) {
-            successfulCommands.push(...result.successfulCommands)
-          } else if (result.progressEligible !== false) {
-            successfulCommands.push(args.map(stripOuterQuotes).join(' '))
+        if (result.successfulCommands !== undefined) {
+          appendBoundedProgressTraces(successfulCommands, result.successfulCommands)
+        } else if (result.exitCode === 0 && args.length > 0) {
+          if (result.progressEligible !== false) {
+            appendBoundedProgressTraces(successfulCommands, [args.map(stripOuterQuotes).join(' ')])
           }
-          if (result.progressEligible !== false) successfulCommands.push(...globEvents)
+        }
+        if (result.exitCode === 0 && result.progressEligible !== false) {
+          appendBoundedProgressTraces(successfulCommands, globEvents)
         }
         if (result.exitCode !== 0) pipelineFailure = result.exitCode
         prevStdout = result.stdout
@@ -1474,10 +2051,9 @@ export class ShellEngine {
         finalMode = result.mode
       }
 
-      // Truncate final output if too long
-      if (prevStdout.length > MAX_OUTPUT_LENGTH) {
-        prevStdout = prevStdout.slice(0, MAX_OUTPUT_LENGTH) + TRUNCATION_MSG
-      }
+      // Enforce the same safe boundary on aggregate pipeline output.
+      prevStdout = boundShellOutput(prevStdout)
+      pipelineStderr = boundShellOutput(pipelineStderr)
 
       const exitCode = this.state.pipefail && pipelineFailure !== 0
         ? pipelineFailure
@@ -1495,12 +2071,25 @@ export class ShellEngine {
       const msg = e instanceof Error ? e.message : String(e)
       this.state.lastExitCode = 1
       return { stdout: '', stderr: `shell error: ${msg}`, exitCode: 1, successfulCommands: [] }
+    } finally {
+      this.executionScopeDepth -= 1
     }
   }
 
   private runCommand(args: string[], stdin: string): ShellResult {
     try {
       if (args.length === 0) return { stdout: '', stderr: '', exitCode: 0 }
+      if (this.executionSegmentsRemaining <= 0) {
+        this.executionBudgetExceeded = true
+        return {
+          stdout: '',
+          stderr: `bash: command exceeds the ${MAX_SHELL_COMMAND_SEGMENTS}-segment execution budget`,
+          exitCode: 2,
+          successfulCommands: [],
+          progressEligible: false,
+        }
+      }
+      this.executionSegmentsRemaining -= 1
 
       const expanded = args.map(a => {
         return stripOuterQuotes(a)
@@ -1512,7 +2101,7 @@ export class ShellEngine {
         return { ...this.cmdHelp(cmd), successfulCommands: ['--help'] }
       }
 
-      if (isRedCommand(cmd) && this.onRedCommand) {
+      if (isRedCommand(cmd, cargs) && this.onRedCommand) {
         this.onRedCommand(expanded.join(' '))
       }
 
@@ -1691,18 +2280,22 @@ export class ShellEngine {
       // === GIT ===
       case 'git': {
         const gitArgs = args.slice(1)
-        if (gitArgs[0] === 'add') {
-          const paths = gitArgs.slice(1).filter(argument => !argument.startsWith('-') && argument !== '.')
-          const missing = paths.find(path => !this.vfs.lstat(path, this.state.cwd).node)
-          if (missing) {
-            return {
-              stdout: '',
-              stderr: `fatal: pathspec '${missing}' did not match any files`,
-              exitCode: 128,
-            }
+        const snapshot = this.getGitWorktreeSnapshot()
+        const result = gitCommand(this.gitState, gitArgs, `/${this.state.cwd.join('/')}`, snapshot)
+        for (const relativePath of result.deletedDirectories ?? []) {
+          const absolutePath = `${snapshot.root.replace(/\/$/, '')}/${relativePath}`
+          const removed = this.vfs.deleteDirectory(absolutePath, [], true)
+          if (removed.error) {
+            return { stdout: '', stderr: `git clean: ${removed.error}`, exitCode: 1 }
           }
         }
-        const result = gitCommand(this.gitState, gitArgs, `/${this.state.cwd.join('/')}`)
+        for (const relativePath of result.deletedFiles ?? []) {
+          const absolutePath = `${snapshot.root.replace(/\/$/, '')}/${relativePath}`
+          const removed = this.vfs.deleteFile(absolutePath, [])
+          if (removed.error) {
+            return { stdout: '', stderr: `git clean: ${removed.error}`, exitCode: 1 }
+          }
+        }
         this.gitState = result.state
         return { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode }
       }
@@ -3447,7 +4040,7 @@ tmpfs            4096000    51200   4044800   2% /tmp
           if (created.error) return { stdout: '', stderr: `npm error ${created.error}\n`, exitCode: 1 }
           const marker = this.vfs.writeFile(`${packageDirectory}/package.json`, this.state.cwd, JSON.stringify({ name, version: '1.0.0' }, null, 2))
           if (marker.error) return { stdout: '', stderr: `npm error ${marker.error}\n`, exitCode: 1 }
-          this.services.installedPackages.push(name)
+          if (!this.services.installedPackages.includes(name)) this.services.installedPackages.push(name)
           this.services.npmPackages.set(name, '1.0.0')
         }
         const lock = this.vfs.writeFile(
@@ -3624,7 +4217,12 @@ tmpfs            4096000    51200   4044800   2% /tmp
           JSON.stringify({ lockfileVersion: lock.lockfileVersion, installed: Object.keys(manifestDependencies).sort() }, null, 2),
         )
         if (snapshot.error) return { stdout: '', stderr: `npm error ${snapshot.error}\n`, exitCode: 1 }
-        for (const name of Object.keys(manifestDependencies)) this.services.npmPackages.set(name, String(lockedRootDependencies[name] ?? 'locked'))
+        const installedNames = Object.keys(manifestDependencies)
+        this.services.installedPackages = [...installedNames]
+        this.services.npmPackages = new Map(installedNames.map(name => [
+          name,
+          String(lockedRootDependencies[name] ?? lockedRootDevDependencies[name] ?? lockedRootOptionalDependencies[name] ?? 'locked'),
+        ]))
         return { stdout: `added ${Object.keys(manifestDependencies).length} packages in 1s\n`, stderr: '', exitCode: 0 }
       }
       case 'test': {
@@ -3825,6 +4423,13 @@ tmpfs            4096000    51200   4044800   2% /tmp
     const msg = args.filter((a, i) => a !== '-t' && (tagIdx < 0 || i !== tagIdx + 1)).join(' ') || 'log entry'
     const entry = `${new Date().toISOString().slice(0, 19).replace('T', ' ')} ${this.vfs.getCurrentUser()} ${tag}: ${msg}`
     this.services.systemLogs.push(entry)
+    let logCodeUnits = this.services.systemLogs.reduce((total, line) => total + line.length, 0)
+    while (
+      this.services.systemLogs.length > MAX_SYSTEM_LOG_ENTRIES
+      || logCodeUnits > MAX_SYSTEM_LOG_CODE_UNITS
+    ) {
+      logCodeUnits -= this.services.systemLogs.shift()!.length
+    }
     return { stdout: '', stderr: '', exitCode: 0 }
   }
 
@@ -7061,4 +7666,65 @@ Change: ${n.mtime.toISOString()}
     if (cmd.startsWith('zellij')) return 'zellij'
     return undefined
   }
+}
+
+export interface GitBisectSeedResult {
+  ok: boolean
+  commitCount: number
+  error?: string
+}
+
+/**
+ * Build the real five-commit fixture used by bisect lessons. Files are written
+ * into the VFS before each add, so the training history exercises the same
+ * Shell/VFS/Git integration path as a learner instead of manufacturing state.
+ */
+export function seedGitBisectTrainingRepository(shell: ShellEngine): GitBisectSeedResult {
+  const fixtures = [
+    ['training-base.txt', 'known-good baseline\n'],
+    ['checkpoint-1.txt', 'checkpoint 1: healthy\n'],
+    ['checkpoint-2.txt', 'checkpoint 2: healthy\n'],
+    ['checkpoint-3.txt', 'checkpoint 3: suspicious\n'],
+    ['checkpoint-4.txt', 'checkpoint 4: regression reproduced\n'],
+  ] as const
+  const initialCommitCount = shell.gitState.commits.length
+
+  for (const [index, [path, content]] of fixtures.entries()) {
+    const written = shell.vfs.writeFile(path, shell.state.cwd, content)
+    if (written.error) {
+      return { ok: false, commitCount: shell.gitState.commits.length - initialCommitCount, error: written.error }
+    }
+    const added = shell.execute(`git add ${path}`, 0, false)
+    if (added.exitCode !== 0) {
+      return {
+        ok: false,
+        commitCount: shell.gitState.commits.length - initialCommitCount,
+        error: added.stderr || `failed to add ${path}`,
+      }
+    }
+    const message = index === 0 ? 'known good baseline' : `training checkpoint ${index}`
+    const committed = shell.execute(`git commit -m "${message}"`, 0, false)
+    if (committed.exitCode !== 0) {
+      return {
+        ok: false,
+        commitCount: shell.gitState.commits.length - initialCommitCount,
+        error: committed.stderr || `failed to commit ${path}`,
+      }
+    }
+    if (index === 0) {
+      const tagged = shell.execute('git tag v1.0', 0, false)
+      if (tagged.exitCode !== 0) {
+        return {
+          ok: false,
+          commitCount: shell.gitState.commits.length - initialCommitCount,
+          error: tagged.stderr || 'failed to tag the known-good baseline',
+        }
+      }
+    }
+  }
+
+  const commitCount = shell.gitState.commits.length - initialCommitCount
+  return commitCount === fixtures.length
+    ? { ok: true, commitCount }
+    : { ok: false, commitCount, error: `expected ${fixtures.length} commits, received ${commitCount}` }
 }

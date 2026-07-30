@@ -11,9 +11,16 @@ import {
 const assetExtensions = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.mp4', '.webm'])
 const sourceExtensions = new Set(['.css', '.html', '.js', '.jsx', '.md', '.mjs', '.ts', '.tsx'])
 const failures = []
-const warnings = []
 const referencedPublicFiles = new Set()
 const referencedAssets = new Map()
+const publicDirectory = path.resolve(appRoot, 'public')
+
+// Public files are copied to every production build, so every intentional
+// exception needs a reviewable reason. Keep this list empty unless a file is
+// deliberately consumed by a system that cannot be discovered from source.
+const unreferencedPublicAssetAllowlist = new Map([
+  // ['example.png', 'Consumed by an external integration documented in README.md.'],
+])
 
 function inspectPng(buffer) {
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
@@ -113,10 +120,10 @@ async function collectReferences(filePath) {
   while ((match = pattern.exec(text)) !== null) {
     const reference = decodeURIComponent(match[1])
     const resolved = reference.startsWith('/') && filePath.startsWith(path.resolve(appRoot, 'src'))
-      ? path.resolve(appRoot, 'public', reference.slice(1))
+      ? path.resolve(publicDirectory, reference.slice(1))
       : path.resolve(path.dirname(filePath), reference)
     referencedAssets.set(resolved, { reference, source: filePath })
-    if (resolved.startsWith(path.resolve(appRoot, 'public') + path.sep)) {
+    if (resolved.startsWith(publicDirectory + path.sep)) {
       referencedPublicFiles.add(resolved)
       if (reference.startsWith('/') && filePath.startsWith(path.resolve(appRoot, 'src'))) {
         failures.push(
@@ -130,7 +137,7 @@ async function collectReferences(filePath) {
   const publicAssetPattern = /publicAssetUrl\(\s*['"]([^'"]+\.(?:png|jpe?g|gif|webp|svg|mp4|webm))['"]\s*\)/gim
   while ((match = publicAssetPattern.exec(text)) !== null) {
     const reference = decodeURIComponent(match[1])
-    const resolved = path.resolve(appRoot, 'public', reference.replace(/^\/+/, ''))
+    const resolved = path.resolve(publicDirectory, reference.replace(/^\/+/, ''))
     referencedAssets.set(resolved, { reference, source: filePath })
     referencedPublicFiles.add(resolved)
   }
@@ -188,9 +195,38 @@ if (metrics.publicBytes > 16 * 1024 * 1024) {
   failures.push('public/: exceeds the 16 MiB total budget')
 }
 
+for (const [relativePath, reason] of unreferencedPublicAssetAllowlist) {
+  const resolved = path.resolve(publicDirectory, relativePath)
+  const normalizedRelative = path.relative(publicDirectory, resolved)
+  if (
+    normalizedRelative.startsWith('..' + path.sep) ||
+    normalizedRelative === '..' ||
+    path.isAbsolute(normalizedRelative)
+  ) {
+    failures.push('Invalid public asset allowlist path: ' + relativePath)
+    continue
+  }
+  if (typeof reason !== 'string' || reason.trim().length === 0) {
+    failures.push('Public asset allowlist entry needs a reason: ' + relativePath)
+  }
+  try {
+    if (!(await stat(resolved)).isFile()) {
+      failures.push('Public asset allowlist entry is not a file: ' + relativePath)
+    } else if (referencedPublicFiles.has(resolved)) {
+      failures.push('Public asset allowlist entry is now referenced and should be removed: ' + relativePath)
+    }
+  } catch {
+    failures.push('Public asset allowlist entry does not exist: ' + relativePath)
+  }
+}
+
 for (const publicFile of metrics.publicFiles) {
-  if (!referencedPublicFiles.has(publicFile)) {
-    warnings.push('Unreferenced public asset: ' + path.relative(appRoot, publicFile))
+  const relativePath = path.relative(publicDirectory, publicFile).replaceAll('\\', '/')
+  if (
+    !referencedPublicFiles.has(publicFile) &&
+    !unreferencedPublicAssetAllowlist.has(relativePath)
+  ) {
+    failures.push('Unreferenced public asset is not allowlisted: public/' + relativePath)
   }
 }
 
@@ -205,5 +241,3 @@ if (failures.length > 0) {
       ' README images, ' + referencedAssets.size + ' local references.',
   )
 }
-
-for (const warning of warnings) console.warn('- ' + warning)

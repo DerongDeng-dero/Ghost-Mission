@@ -31,6 +31,10 @@ export interface GitBisectState {
 
 export interface GitState {
   initialized: boolean
+  /** Absolute VFS path that acts as the repository worktree root. */
+  repositoryRoot: string
+  /** Simulator fixture files present before `git init`; explicit add still tracks them. */
+  worktreeBaseline: Set<string>
   branches: Map<string, Commit[]>
   currentBranch: string
   stagingArea: Map<string, string>
@@ -47,9 +51,32 @@ export interface GitState {
   bisect: GitBisectState | null
 }
 
+export interface GitWorktreeSnapshot {
+  /** File contents keyed by a normalized path relative to repositoryRoot. */
+  files: ReadonlyMap<string, string>
+}
+
+export interface GitCommandResult {
+  stdout: string
+  stderr: string
+  exitCode: number
+  state: GitState
+  /** Relative VFS paths that a successful `git clean` asks the shell to remove. */
+  deletedFiles?: string[]
+  /** Relative VFS directories that a successful `git clean -d` removes recursively. */
+  deletedDirectories?: string[]
+}
+
+// Map values are strings throughout the compact Git model. A private sentinel
+// lets the same maps represent a staged/unstaged deletion without changing the
+// public serialization shape used by the simulator and regression suite.
+const DELETED_FILE = '\u0000ghostops-deleted\u0000'
+
 export function createGitState(): GitState {
   const st: GitState = {
     initialized: false,
+    repositoryRoot: '',
+    worktreeBaseline: new Set(),
     branches: new Map(),
     currentBranch: 'main',
     stagingArea: new Map(),
@@ -123,11 +150,80 @@ function buildLinearHistory(state: GitState, tip: Commit): Commit[] {
   return history.reverse()
 }
 
+function applyChanges(tree: Map<string, string>, changes: ReadonlyMap<string, string>): Map<string, string> {
+  const next = new Map(tree)
+  changes.forEach((content, path) => {
+    if (content === DELETED_FILE) next.delete(path)
+    else next.set(path, content)
+  })
+  return next
+}
+
+function getHeadTree(state: GitState): Map<string, string> {
+  const tip = resolveCommitReference(state, 'HEAD')
+  if (!tip) return new Map()
+  return buildLinearHistory(state, tip).reduce(
+    (tree, commit) => applyChanges(tree, commit.changes),
+    new Map<string, string>(),
+  )
+}
+
+function getIndexTree(state: GitState): Map<string, string> {
+  return applyChanges(getHeadTree(state), state.stagingArea)
+}
+
+function getTreeDelta(base: ReadonlyMap<string, string>, current: ReadonlyMap<string, string>): Map<string, string> {
+  const delta = new Map<string, string>()
+  const paths = new Set([...base.keys(), ...current.keys()])
+  for (const path of paths) {
+    const before = base.get(path)
+    const after = current.get(path)
+    if (before === after) continue
+    delta.set(path, after === undefined ? DELETED_FILE : after)
+  }
+  return delta
+}
+
+function synchronizeWorktree(state: GitState, snapshot?: GitWorktreeSnapshot): GitState {
+  if (!snapshot || !state.initialized) return state
+  const indexTree = getIndexTree(state)
+  const observableFiles = new Map(
+    [...snapshot.files].filter(([path]) => !state.worktreeBaseline.has(path) || indexTree.has(path)),
+  )
+  return {
+    ...state,
+    workingDirectory: getTreeDelta(indexTree, observableFiles),
+  }
+}
+
+function normalizeRepoPath(path: string, cwd: string, repositoryRoot: string): string | null {
+  const normalizeParts = (parts: string[]) => {
+    const normalized: string[] = []
+    for (const part of parts) {
+      if (!part || part === '.') continue
+      if (part === '..') normalized.pop()
+      else normalized.push(part)
+    }
+    return normalized
+  }
+  const rootParts = normalizeParts(repositoryRoot.split('/'))
+  const absoluteParts = path.startsWith('/')
+    ? normalizeParts(path.split('/'))
+    : normalizeParts([...cwd.split('/'), ...path.split('/')])
+  if (rootParts.some((part, index) => absoluteParts[index] !== part)) return null
+  return absoluteParts.slice(rootParts.length).join('/')
+}
+
 function repositoryError(state: GitState) {
   return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128, state }
 }
 
-export function gitCommand(state: GitState, args: string[], cwd: string): { stdout: string; stderr: string; exitCode: number; state: GitState } {
+export function gitCommand(
+  state: GitState,
+  args: string[],
+  cwd: string,
+  snapshot?: GitWorktreeSnapshot,
+): GitCommandResult {
   const cmd = args[0]
   const cargs = args.slice(1)
   if (!cmd) return { stdout: '', stderr: 'usage: git <command> [<args>]', exitCode: 1, state }
@@ -139,56 +235,65 @@ export function gitCommand(state: GitState, args: string[], cwd: string): { stdo
   ])
   if (!state.initialized && repositoryCommands.has(cmd)) return repositoryError(state)
 
+  const synchronizedState = synchronizeWorktree(state, snapshot)
+
   switch (cmd) {
-    case 'init': return gitInit(state, cargs, cwd)
-    case 'status': return gitStatus(state, cargs, cwd)
-    case 'add': return gitAdd(state, cargs, cwd)
-    case 'commit': return gitCommit(state, cargs, cwd)
-    case 'diff': return gitDiff(state, cargs, cwd)
-    case 'log': return gitLog(state, cargs, cwd)
-    case 'show': return gitShow(state, cargs, cwd)
-    case 'blame': return gitBlame(state, cargs, cwd)
-    case 'branch': return gitBranch(state, cargs, cwd)
-    case 'switch': return gitSwitch(state, cargs, cwd)
-    case 'checkout': return gitCheckout(state, cargs, cwd)
-    case 'merge': return gitMerge(state, cargs, cwd)
-    case 'rebase': return gitRebase(state, cargs, cwd)
-    case 'stash': return gitStash(state, cargs, cwd)
-    case 'restore': return gitRestore(state, cargs, cwd)
-    case 'reset': return gitReset(state, cargs, cwd)
-    case 'revert': return gitRevert(state, cargs, cwd)
-    case 'reflog': return gitReflog(state, cargs, cwd)
-    case 'cherry-pick': return gitCherryPick(state, cargs, cwd)
-    case 'bisect': return gitBisect(state, cargs, cwd)
-    case 'tag': return gitTag(state, cargs, cwd)
-    case 'remote': return gitRemote(state, cargs, cwd)
-    case 'fetch': return gitFetch(state, cargs, cwd)
-    case 'pull': return gitPull(state, cargs, cwd)
-    case 'push': return gitPush(state, cargs, cwd)
-    case 'clean': return gitClean(state, cargs, cwd)
-    case 'worktree': return gitWorktree(state, cargs, cwd)
-    case 'submodule': return gitSubmodule(state, cargs, cwd)
-    case 'config': return gitConfig(state, cargs, cwd)
-    case 'shortlog': return gitShortlog(state, cargs, cwd)
-    case 'archive': return gitArchive(state, cargs, cwd)
-    case '--version': return { stdout: 'git version 2.34.1', stderr: '', exitCode: 0, state }
+    case 'init': return gitInit(state, cargs, cwd, snapshot)
+    case 'status': return gitStatus(synchronizedState, cargs, cwd)
+    case 'add': return gitAdd(synchronizedState, cargs, cwd, snapshot)
+    case 'commit': return gitCommit(synchronizedState, cargs, cwd, snapshot)
+    case 'diff': return gitDiff(synchronizedState, cargs, cwd)
+    case 'log': return gitLog(synchronizedState, cargs, cwd)
+    case 'show': return gitShow(synchronizedState, cargs, cwd)
+    case 'blame': return gitBlame(synchronizedState, cargs, cwd)
+    case 'branch': return gitBranch(synchronizedState, cargs, cwd)
+    case 'switch': return gitSwitch(synchronizedState, cargs, cwd)
+    case 'checkout': return gitCheckout(synchronizedState, cargs, cwd)
+    case 'merge': return gitMerge(synchronizedState, cargs, cwd)
+    case 'rebase': return gitRebase(synchronizedState, cargs, cwd)
+    case 'stash': return gitStash(synchronizedState, cargs, cwd)
+    case 'restore': return gitRestore(synchronizedState, cargs, cwd)
+    case 'reset': return gitReset(synchronizedState, cargs, cwd)
+    case 'revert': return gitRevert(synchronizedState, cargs, cwd)
+    case 'reflog': return gitReflog(synchronizedState, cargs, cwd)
+    case 'cherry-pick': return gitCherryPick(synchronizedState, cargs, cwd)
+    case 'bisect': return gitBisect(synchronizedState, cargs, cwd)
+    case 'tag': return gitTag(synchronizedState, cargs, cwd)
+    case 'remote': return gitRemote(synchronizedState, cargs, cwd)
+    case 'fetch': return gitFetch(synchronizedState, cargs, cwd)
+    case 'pull': return gitPull(synchronizedState, cargs, cwd)
+    case 'push': return gitPush(synchronizedState, cargs, cwd)
+    case 'clean': return gitClean(synchronizedState, cargs, cwd)
+    case 'worktree': return gitWorktree(synchronizedState, cargs, cwd)
+    case 'submodule': return gitSubmodule(synchronizedState, cargs, cwd)
+    case 'config': return gitConfig(synchronizedState, cargs, cwd)
+    case 'shortlog': return gitShortlog(synchronizedState, cargs, cwd)
+    case 'archive': return gitArchive(synchronizedState, cargs, cwd)
+    case '--version': return { stdout: 'git version 2.34.1', stderr: '', exitCode: 0, state: synchronizedState }
     default:
-      return { stdout: '', stderr: `git: '${cmd}' is not a git command.`, exitCode: 1, state }
+      return { stdout: '', stderr: `git: '${cmd}' is not a git command.`, exitCode: 1, state: synchronizedState }
   }
 }
 
-function gitInit(state: GitState, _args: string[], _cwd: string) {
+function gitInit(state: GitState, _args: string[], _cwd: string, snapshot?: GitWorktreeSnapshot) {
   if (state.initialized) {
     return { stdout: `Reinitialized existing Git repository in ${_cwd}/.git/`, stderr: '', exitCode: 0, state }
   }
   const newState: GitState = {
     ...state,
     initialized: true,
+    repositoryRoot: _cwd,
+    worktreeBaseline: new Set(snapshot?.files.keys() ?? []),
     branches: new Map([['main', []]]),
     currentBranch: 'main',
     reflog: [`${generateHash()} HEAD@{0}: initialize`],
   }
-  return { stdout: `Initialized empty Git repository in ${_cwd}/.git/`, stderr: '', exitCode: 0, state: newState }
+  return {
+    stdout: `Initialized empty Git repository in ${_cwd}/.git/`,
+    stderr: '',
+    exitCode: 0,
+    state: synchronizeWorktree(newState, snapshot),
+  }
 }
 
 function gitStatus(state: GitState, _args: string[], _cwd: string) {
@@ -204,40 +309,97 @@ function gitStatus(state: GitState, _args: string[], _cwd: string) {
   if (state.stagingArea.size === 0 && state.workingDirectory.size === 0) {
     stdout += 'nothing to commit, working tree clean\n'
   } else {
+    const headTree = getHeadTree(state)
+    const indexTree = getIndexTree(state)
     if (state.stagingArea.size > 0) {
       stdout += `\nChanges to be committed:\n  (use "git restore --staged <file>..." to unstage)\n`
-      state.stagingArea.forEach((_s, path) => { stdout += `\tnew file:   ${path}\n` })
+      state.stagingArea.forEach((content, path) => {
+        const label = content === DELETED_FILE ? 'deleted' : headTree.has(path) ? 'modified' : 'new file'
+        stdout += `\t${label}:   ${path}\n`
+      })
     }
     if (state.workingDirectory.size > 0) {
-      stdout += `\nChanges not staged for commit:\n  (use "git add <file>..." to update)\n`
-      state.workingDirectory.forEach((_, path) => { stdout += `\tmodified:   ${path}\n` })
+      const trackedChanges = [...state.workingDirectory].filter(([path]) => indexTree.has(path))
+      const untrackedChanges = [...state.workingDirectory].filter(([path, content]) => (
+        !indexTree.has(path) && content !== DELETED_FILE
+      ))
+      if (trackedChanges.length > 0) {
+        stdout += `\nChanges not staged for commit:\n  (use "git add <file>..." to update)\n`
+        trackedChanges.forEach(([path, content]) => {
+          stdout += `\t${content === DELETED_FILE ? 'deleted' : 'modified'}:   ${path}\n`
+        })
+      }
+      if (untrackedChanges.length > 0) {
+        stdout += `\nUntracked files:\n  (use "git add <file>..." to include in what will be committed)\n`
+        untrackedChanges.forEach(([path]) => { stdout += `\t${path}\n` })
+      }
     }
   }
   return { stdout, stderr: '', exitCode: 0, state }
 }
 
-function gitAdd(state: GitState, args: string[], _cwd: string) {
-  void _cwd
+function gitAdd(state: GitState, args: string[], _cwd: string, snapshot?: GitWorktreeSnapshot) {
   if (!state.initialized) return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128, state }
   if (args.length === 0) return { stdout: '', stderr: 'Nothing specified, nothing added.', exitCode: 0, state }
+  const root = state.repositoryRoot || _cwd
+  const headTree = getHeadTree(state)
   const newState = {
     ...state,
     stagingArea: new Map(state.stagingArea),
     workingDirectory: new Map(state.workingDirectory),
   }
-  for (const f of args) {
-    if (f === '.') {
-      state.workingDirectory.forEach((value, path) => { newState.stagingArea.set(path, value) })
-      newState.workingDirectory.clear()
-    } else {
-      newState.stagingArea.set(f, state.workingDirectory.get(f) ?? f)
-      newState.workingDirectory.delete(f)
+
+  if (!snapshot) {
+    for (const f of args) {
+      if (f === '.') {
+        state.workingDirectory.forEach((value, path) => { newState.stagingArea.set(path, value) })
+        newState.workingDirectory.clear()
+      } else {
+        newState.stagingArea.set(f, state.workingDirectory.get(f) ?? f)
+        newState.workingDirectory.delete(f)
+      }
+    }
+    return { stdout: '', stderr: '', exitCode: 0, state: newState }
+  }
+
+  const stagePath = (path: string): string | null => {
+    const content = snapshot.files.get(path)
+    if (content === undefined && !headTree.has(path)) return path
+    if (content === headTree.get(path)) newState.stagingArea.delete(path)
+    else newState.stagingArea.set(path, content === undefined ? DELETED_FILE : content)
+    return null
+  }
+
+  const stageAll = args.includes('.') || args.includes('-A') || args.includes('--all')
+  const updateTracked = args.includes('-u') || args.includes('--update')
+  if (stageAll || updateTracked) {
+    const paths = stageAll
+      ? new Set([...headTree.keys(), ...state.workingDirectory.keys()])
+      : new Set(headTree.keys())
+    paths.forEach(path => { stagePath(path) })
+  }
+
+  const fileArgs = args.filter(arg => arg !== '.' && !arg.startsWith('-'))
+  for (const file of fileArgs) {
+    const path = normalizeRepoPath(file, _cwd, root)
+    if (path === null || path === '') {
+      return { stdout: '', stderr: `fatal: pathspec '${file}' did not match any files`, exitCode: 128, state }
+    }
+    const missing = stagePath(path)
+    if (missing) {
+      return { stdout: '', stderr: `fatal: pathspec '${file}' did not match any files`, exitCode: 128, state }
     }
   }
-  return { stdout: '', stderr: '', exitCode: 0, state: newState }
+
+  return {
+    stdout: '',
+    stderr: '',
+    exitCode: 0,
+    state: synchronizeWorktree(newState, snapshot),
+  }
 }
 
-function gitCommit(state: GitState, args: string[], _cwd: string) {
+function gitCommit(state: GitState, args: string[], _cwd: string, snapshot?: GitWorktreeSnapshot) {
   void _cwd
   if (!state.initialized) return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128, state }
   let message = ''
@@ -269,7 +431,12 @@ function gitCommit(state: GitState, args: string[], _cwd: string) {
     reflog: [...state.reflog, `${hash} HEAD@{${state.commits.length}}: commit: ${message}`],
     branches,
   }
-  return { stdout: `[${newState.currentBranch} ${shortHash(hash)}] ${message}\n ${state.stagingArea.size} file(s) changed`, stderr: '', exitCode: 0, state: newState }
+  return {
+    stdout: `[${newState.currentBranch} ${shortHash(hash)}] ${message}\n ${state.stagingArea.size} file(s) changed`,
+    stderr: '',
+    exitCode: 0,
+    state: synchronizeWorktree(newState, snapshot),
+  }
 }
 
 function gitDiff(state: GitState, _args: string[], _cwd: string) {
@@ -947,9 +1114,84 @@ function gitPush(state: GitState, _args: string[], _cwd: string) {
 
 function gitClean(state: GitState, args: string[], _cwd: string) {
   void _cwd
-  const force = args.includes('-f') || args.includes('-fd')
-  if (!force) return { stdout: '', stderr: 'fatal: clean.requireForce defaults to true and neither -i, -n, nor -f given;\nrefusing to clean', exitCode: 1, state }
-  return { stdout: 'Removing untracked files...\n', stderr: '', exitCode: 0, state: { ...state, workingDirectory: new Map() } }
+  let force = false
+  let dryRun = false
+  let includeDirectories = false
+  for (const argument of args) {
+    if (argument === '--force') force = true
+    else if (argument === '--dry-run') dryRun = true
+    else if (argument === '--directories') includeDirectories = true
+    else if (/^-[^-]/.test(argument)) {
+      for (const flag of argument.slice(1)) {
+        if (flag === 'f') force = true
+        else if (flag === 'n') dryRun = true
+        else if (flag === 'd') includeDirectories = true
+        else {
+          return {
+            stdout: '',
+            stderr: `error: unknown switch \`${flag}'\nusage: git clean [-d] [-f] [-n]`,
+            exitCode: 129,
+            state,
+          }
+        }
+      }
+    } else {
+      return {
+        stdout: '',
+        stderr: `fatal: pathspec '${argument}' is not supported by this simulator`,
+        exitCode: 128,
+        state,
+      }
+    }
+  }
+  if (!force && !dryRun) return { stdout: '', stderr: 'fatal: clean.requireForce defaults to true and neither -i, -n, nor -f given;\nrefusing to clean', exitCode: 1, state }
+  const headTree = getHeadTree(state)
+  const indexTree = getIndexTree(state)
+  const untrackedFiles = [...state.workingDirectory]
+    .filter(([path, content]) => !headTree.has(path) && !indexTree.has(path) && content !== DELETED_FILE)
+    .map(([path]) => path)
+    .sort()
+  const knownDirectories = new Set<string>()
+  for (const file of untrackedFiles) {
+    const parts = file.split('/')
+    for (let length = 1; length < parts.length; length += 1) {
+      knownDirectories.add(parts.slice(0, length).join('/'))
+    }
+  }
+  const trackedFiles = [...indexTree.keys()]
+  const untrackedDirectoryRoots = [...knownDirectories]
+    .filter(directory => !trackedFiles.some(path => path.startsWith(`${directory}/`)))
+    .filter(directory => {
+      const parent = directory.split('/').slice(0, -1).join('/')
+      return !parent || trackedFiles.some(path => path.startsWith(`${parent}/`))
+    })
+    .sort()
+  const fileIsInsideUntrackedDirectory = (file: string) => untrackedDirectoryRoots.some(
+    directory => file.startsWith(`${directory}/`),
+  )
+  const deletedDirectories = includeDirectories ? untrackedDirectoryRoots : []
+  const deletedFiles = untrackedFiles.filter(file => !fileIsInsideUntrackedDirectory(file))
+  const displayPaths = [
+    ...deletedDirectories.map(directory => `${directory}/`),
+    ...deletedFiles,
+  ].sort()
+  const stdout = displayPaths.map(path => `Would remove ${path}\n`).join('')
+  if (dryRun) return { stdout, stderr: '', exitCode: 0, state }
+  const workingDirectory = new Map(state.workingDirectory)
+  deletedDirectories.forEach(directory => {
+    for (const path of workingDirectory.keys()) {
+      if (path.startsWith(`${directory}/`)) workingDirectory.delete(path)
+    }
+  })
+  deletedFiles.forEach(path => workingDirectory.delete(path))
+  return {
+    stdout: displayPaths.map(path => `Removing ${path}\n`).join(''),
+    stderr: '',
+    exitCode: 0,
+    state: { ...state, workingDirectory },
+    deletedFiles,
+    deletedDirectories,
+  }
 }
 
 function gitWorktree(state: GitState, args: string[], _cwd: string) {

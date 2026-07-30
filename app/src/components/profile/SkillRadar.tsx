@@ -35,8 +35,7 @@ export default function SkillRadar({ skills, size = 400 }: SkillRadarProps) {
     return <p className="font-inter text-body text-[#8B9EB0]">{t('profile.noSkillData')}</p>;
   }
 
-  // Use exactly 5 axes for a pentagon radar, matching design.md
-  const displaySkills = skills.slice(0, 5);
+  const displaySkills = skills;
   const count = displaySkills.length;
   const center = size / 2;
   const radius = size * 0.35;
@@ -126,19 +125,6 @@ export default function SkillRadar({ skills, size = 400 }: SkillRadarProps) {
             strokeWidth={1}
           />
         ))}
-
-        {/* Average player polygon (reference) */}
-        <polygon
-          points={displaySkills.map((_, i) => {
-            const pt = pointFor(i, 50, 100);
-            return `${pt.x},${pt.y}`;
-          }).join(' ')}
-          fill="rgba(139, 158, 176, 0.05)"
-          stroke="#788DA1"
-          strokeOpacity={0.3}
-          strokeWidth={1}
-          strokeDasharray="4 4"
-        />
 
         {/* Skill polygon */}
         <motion.polygon

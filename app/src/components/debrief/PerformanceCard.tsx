@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { motion, useInView } from 'framer-motion'
 import type { LucideIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface Stat {
   label: string
@@ -14,14 +15,15 @@ interface PerformanceCardProps {
 }
 
 export default function PerformanceCard({ stats }: PerformanceCardProps) {
+  const { t } = useTranslation()
   const ref = useRef<HTMLDivElement>(null)
   const isInView = useInView(ref, { once: true, margin: '-60px' })
 
   return (
     <section ref={ref} className="max-w-[960px] mx-auto px-space-4 mt-space-8">
-      <h2 className="font-jetbrains text-h2 text-[#E8EDF2] mb-space-6">Performance</h2>
+      <h2 className="font-jetbrains text-h2 text-[#E8EDF2] mb-space-6">{t('debrief.performance')}</h2>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-space-4">
+      <dl className="grid grid-cols-2 sm:grid-cols-3 gap-space-4">
         {stats.map((stat, i) => {
           const Icon = stat.icon
           const color = stat.color || '#00FF88'
@@ -40,21 +42,16 @@ export default function PerformanceCard({ stats }: PerformanceCardProps) {
                 delay: i * 0.08,
                 ease: [0.16, 1, 0.3, 1] as [number, number, number, number],
               }}
-              whileHover={{
-                y: -2,
-                boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                borderColor: '#2A4365',
-              }}
             >
-              <Icon size={22} style={{ color }} className="mb-space-2" />
-              <span className="font-jetbrains text-h3" style={{ color: '#E8EDF2' }}>
+              <Icon size={22} style={{ color }} className="mb-space-2" aria-hidden="true" />
+              <dt className="order-2 font-inter text-body-sm text-[#8B9EB0] mt-space-1">{stat.label}</dt>
+              <dd className="order-1 font-jetbrains text-h3" style={{ color: '#E8EDF2' }}>
                 {stat.value}
-              </span>
-              <span className="font-inter text-body-sm text-[#8B9EB0] mt-space-1">{stat.label}</span>
+              </dd>
             </motion.div>
           )
         })}
-      </div>
+      </dl>
     </section>
   )
 }

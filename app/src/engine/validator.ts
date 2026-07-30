@@ -191,7 +191,7 @@ function compileContentPattern(pattern: string): RegExp | null {
   }
 }
 
-function getEffectiveChecks(level: MissionLevel): LevelCheck[] {
+export function getEffectiveChecks(level: MissionLevel): LevelCheck[] {
   if (level.checks.some(check => Boolean(check.objectiveId))) return level.checks
   const legacyObjectives = level.objectives.filter(
     objective => objective.required && /^obj-\d+$/.test(objective.id),
@@ -212,6 +212,44 @@ function getEffectiveChecks(level: MissionLevel): LevelCheck[] {
   })
 }
 
+export function getObjectiveChecks(level: MissionLevel, objectiveId: string): LevelCheck[] {
+  const effectiveChecks = getEffectiveChecks(level)
+  const hasExplicitBindings = effectiveChecks.some(check => Boolean(check.objectiveId))
+
+  if (hasExplicitBindings) {
+    const explicitBindingsValid = effectiveChecks.every(check => {
+      if (!check.objectiveId) return false
+      const objective = level.objectives.find(candidate => candidate.id === check.objectiveId)
+      if (!objective) return false
+      return check.type !== 'no_red_command_used' || objective.required
+    })
+    return explicitBindingsValid
+      ? effectiveChecks.filter(check => check.objectiveId === objectiveId)
+      : []
+  }
+
+  // Legacy catalog contract: required obj-N entries correspond, in order,
+  // to progress checks. The one required non-numeric objective summarizes
+  // every effective check, including the safety check. Optional objectives
+  // intentionally stay unbound.
+  const progressChecks = effectiveChecks.filter(check => check.type !== 'no_red_command_used')
+  const legacySkillObjectives = level.objectives.filter(
+    objective => objective.required && /^obj-\d+$/.test(objective.id),
+  )
+  const objectiveIndex = legacySkillObjectives.findIndex(objective => objective.id === objectiveId)
+  if (objectiveIndex >= 0) {
+    const check = progressChecks[objectiveIndex]
+    return check ? [check] : []
+  }
+
+  const legacyAggregateObjectives = level.objectives.filter(
+    objective => objective.required && !/^obj-\d+$/.test(objective.id),
+  )
+  return legacyAggregateObjectives.length === 1 && legacyAggregateObjectives[0].id === objectiveId
+    ? effectiveChecks
+    : []
+}
+
 function matchesAuthorizedRedCommand(command: string, pattern: string): boolean {
   const expectedTokens = stripCommandPrefixes(tokenizeAction(pattern))
   const actualTokens = stripCommandPrefixes(tokenizeAction(command))
@@ -229,53 +267,13 @@ export function getUnexpectedRedCommands(level: MissionLevel, redCommands: strin
 }
 
 export function validateMission(level: MissionLevel, state: MissionState): ValidationResult[] {
-  const effectiveChecks = getEffectiveChecks(level)
-  const hasExplicitBindings = effectiveChecks.some(check => Boolean(check.objectiveId))
-  const explicitBindingsValid = !hasExplicitBindings || effectiveChecks.every(check => {
-    if (!check.objectiveId) return false
-    const objective = level.objectives.find(candidate => candidate.id === check.objectiveId)
-    if (!objective) return false
-    return check.type !== 'no_red_command_used' || objective.required
-  })
-  const progressChecks = effectiveChecks.filter(check => check.type !== 'no_red_command_used')
-  const legacySkillObjectives = level.objectives.filter(
-    objective => objective.required && /^obj-\d+$/.test(objective.id),
-  )
-  const legacyAggregateObjectives = level.objectives.filter(
-    objective => objective.required && !/^obj-\d+$/.test(objective.id),
-  )
-
   const results: ValidationResult[] = []
   for (const obj of level.objectives) {
-    let completed = false
-
-    if (hasExplicitBindings) {
-      if (explicitBindingsValid) {
-        const relevantChecks = effectiveChecks.filter(check => check.objectiveId === obj.id)
-        completed = (
-          relevantChecks.length > 0
-          && relevantChecks.every(check => evaluateCheck(check, state, level))
-        )
-      }
-    } else {
-      // Legacy catalog contract: required obj-N entries correspond, in order,
-      // to progress checks. The one required non-numeric objective summarizes
-      // the whole mission. Optional objectives intentionally stay unbound.
-      const objectiveIndex = legacySkillObjectives.findIndex(objective => objective.id === obj.id)
-      if (objectiveIndex >= 0) {
-        const check = progressChecks[objectiveIndex]
-        completed = Boolean(check && evaluateCheck(check, state, level))
-      } else if (
-        obj.required &&
-        legacyAggregateObjectives.length === 1 &&
-        legacyAggregateObjectives[0].id === obj.id
-      ) {
-        completed = (
-          progressChecks.length > 0
-          && effectiveChecks.every(check => evaluateCheck(check, state, level))
-        )
-      }
-    }
+    const relevantChecks = getObjectiveChecks(level, obj.id)
+    const completed = (
+      relevantChecks.length > 0
+      && relevantChecks.every(check => evaluateCheck(check, state, level))
+    )
 
     results.push({ objectiveId: obj.id, completed, label: obj.getLabel('en') })
   }

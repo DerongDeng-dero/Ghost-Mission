@@ -3610,8 +3610,8 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of truncate",
-        "label_zh": "掌握 truncate 的使用",
+        "label_en": "Master the use of truncate -s 16 /home/ghost/truncate-demo.txt",
+        "label_zh": "掌握 truncate -s 16 /home/ghost/truncate-demo.txt 的使用",
         "required": true
       },
       {
@@ -3624,7 +3624,7 @@
     "checks": [
       {
         "type": "command_used",
-        "pattern": "truncate"
+        "pattern": "truncate -s 16 /home/ghost/truncate-demo.txt"
       },
       {
         "type": "no_red_command_used"
@@ -3633,8 +3633,8 @@
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what 'truncate' does in a Linux environment.",
-        "text_zh": "想想 'truncate' 在Linux环境中是做什么的。"
+        "text_en": "Use a dedicated practice file and an explicit size; never experiment on shell configuration files.",
+        "text_zh": "使用专用练习文件和明确大小；不要在 shell 配置文件上试验。"
       },
       {
         "level": 2,
@@ -3643,18 +3643,18 @@
       },
       {
         "level": 3,
-        "text_en": "Try running 'truncate' and observe the output carefully.",
-        "text_zh": "试着运行 'truncate' 并仔细观察输出。"
+        "text_en": "Try creating /home/ghost/truncate-demo.txt at exactly 16 bytes with truncate.",
+        "text_zh": "尝试用 truncate 创建恰好 16 字节的 /home/ghost/truncate-demo.txt。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: truncate. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: truncate。使用适当的参数执行它。"
+        "text_en": "The exact safe command is: truncate -s 16 /home/ghost/truncate-demo.txt.",
+        "text_zh": "准确的安全命令是：truncate -s 16 /home/ghost/truncate-demo.txt。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'truncate' to complete the objective.",
-        "text_zh": "完整解答: 使用 'truncate' 来完成目标。"
+        "text_en": "Full solution: truncate -s 16 /home/ghost/truncate-demo.txt",
+        "text_zh": "完整解答：运行 'truncate -s 16 /home/ghost/truncate-demo.txt'。"
       }
     ],
     "scoring": {
@@ -3705,14 +3705,14 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of rm -i",
-        "label_zh": "掌握 rm -i 的使用",
+        "label_en": "Master the use of rm -i /tmp/session.lock",
+        "label_zh": "掌握 rm -i /tmp/session.lock 的使用",
         "required": true
       },
       {
         "id": "obj-2",
-        "label_en": "Master the use of cp",
-        "label_zh": "掌握 cp 的使用",
+        "label_en": "Master the use of cp /etc/hosts /home/ghost/hosts.backup",
+        "label_zh": "掌握 cp /etc/hosts /home/ghost/hosts.backup 的使用",
         "required": true
       },
       {
@@ -3731,11 +3731,11 @@
     "checks": [
       {
         "type": "command_used",
-        "pattern": "rm"
+        "pattern": "rm -i /tmp/session.lock"
       },
       {
         "type": "command_used",
-        "pattern": "cp"
+        "pattern": "cp /etc/hosts /home/ghost/hosts.backup"
       },
       {
         "type": "no_red_command_used"
@@ -3744,8 +3744,8 @@
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what 'rm -i' does in a Linux environment.",
-        "text_zh": "想想 'rm -i' 在Linux环境中是做什么的。"
+        "text_en": "Use interactive removal on the harmless lock-file fixture, then preserve /etc/hosts as a backup.",
+        "text_zh": "对无害的锁文件样例使用交互式删除，然后备份 /etc/hosts。"
       },
       {
         "level": 2,
@@ -3754,18 +3754,18 @@
       },
       {
         "level": 3,
-        "text_en": "Try running 'rm -i' and observe the output carefully.",
-        "text_zh": "试着运行 'rm -i' 并仔细观察输出。"
+        "text_en": "Try 'rm -i /tmp/session.lock' and observe that the simulator safely answers no.",
+        "text_zh": "尝试执行 'rm -i /tmp/session.lock'，观察模拟器如何安全地回答 no。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: rm -i. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: rm -i。使用适当的参数执行它。"
+        "text_en": "Use the exact safe target, then copy /etc/hosts to /home/ghost/hosts.backup.",
+        "text_zh": "使用指定的安全目标，然后把 /etc/hosts 复制到 /home/ghost/hosts.backup。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'rm -i' to complete the objective.",
-        "text_zh": "完整解答: 使用 'rm -i' 来完成目标。"
+        "text_en": "Full solution: rm -i /tmp/session.lock && cp /etc/hosts /home/ghost/hosts.backup",
+        "text_zh": "完整解答：先运行 'rm -i /tmp/session.lock'，再运行 'cp /etc/hosts /home/ghost/hosts.backup'。"
       }
     ],
     "scoring": {
@@ -4235,14 +4235,14 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of chmod u+x",
-        "label_zh": "掌握 chmod u+x 的使用",
+        "label_en": "Master the use of chmod u+x /home/ghost/projects/README.md",
+        "label_zh": "掌握 chmod u+x /home/ghost/projects/README.md 的使用",
         "required": true
       },
       {
         "id": "obj-2",
-        "label_en": "Master the use of chmod g-w",
-        "label_zh": "掌握 chmod g-w 的使用",
+        "label_en": "Master the use of chmod g-w /home/ghost/projects/README.md",
+        "label_zh": "掌握 chmod g-w /home/ghost/projects/README.md 的使用",
         "required": true
       },
       {
@@ -4255,11 +4255,11 @@
     "checks": [
       {
         "type": "command_used",
-        "pattern": "chmod"
+        "pattern": "chmod u+x /home/ghost/projects/README.md"
       },
       {
         "type": "command_used",
-        "pattern": "chmod"
+        "pattern": "chmod g-w /home/ghost/projects/README.md"
       },
       {
         "type": "no_red_command_used"
@@ -4268,8 +4268,8 @@
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what 'chmod u+x' does in a Linux environment.",
-        "text_zh": "想想 'chmod u+x' 在Linux环境中是做什么的。"
+        "text_en": "Apply only the requested owner and group permission changes to the practice README.",
+        "text_zh": "只对练习 README 应用指定的所有者和组权限变更。"
       },
       {
         "level": 2,
@@ -4278,18 +4278,18 @@
       },
       {
         "level": 3,
-        "text_en": "Try running 'chmod u+x' and observe the output carefully.",
-        "text_zh": "试着运行 'chmod u+x' 并仔细观察输出。"
+        "text_en": "Try 'chmod u+x /home/ghost/projects/README.md', then remove group write without changing other bits.",
+        "text_zh": "尝试执行 'chmod u+x /home/ghost/projects/README.md'，然后只移除组写权限。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: chmod u+x. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: chmod u+x。使用适当的参数执行它。"
+        "text_en": "Use chmod u+x and chmod g-w on /home/ghost/projects/README.md.",
+        "text_zh": "在 /home/ghost/projects/README.md 上依次使用 chmod u+x 和 chmod g-w。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'chmod u+x' to complete the objective.",
-        "text_zh": "完整解答: 使用 'chmod u+x' 来完成目标。"
+        "text_en": "Full solution: chmod u+x /home/ghost/projects/README.md && chmod g-w /home/ghost/projects/README.md",
+        "text_zh": "完整解答：先运行 'chmod u+x /home/ghost/projects/README.md'，再运行 'chmod g-w /home/ghost/projects/README.md'。"
       }
     ],
     "scoring": {
@@ -4339,14 +4339,14 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of chmod 644",
-        "label_zh": "掌握 chmod 644 的使用",
+        "label_en": "Master the use of chmod 644 /home/ghost/projects/README.md",
+        "label_zh": "掌握 chmod 644 /home/ghost/projects/README.md 的使用",
         "required": true
       },
       {
         "id": "obj-2",
-        "label_en": "Master the use of chmod 755",
-        "label_zh": "掌握 chmod 755 的使用",
+        "label_en": "Master the use of chmod 755 /home/ghost/projects/README.md",
+        "label_zh": "掌握 chmod 755 /home/ghost/projects/README.md 的使用",
         "required": true
       },
       {
@@ -4359,11 +4359,11 @@
     "checks": [
       {
         "type": "command_used",
-        "pattern": "chmod"
+        "pattern": "chmod 644 /home/ghost/projects/README.md"
       },
       {
         "type": "command_used",
-        "pattern": "chmod"
+        "pattern": "chmod 755 /home/ghost/projects/README.md"
       },
       {
         "type": "no_red_command_used"
@@ -4372,8 +4372,8 @@
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what 'chmod 644' does in a Linux environment.",
-        "text_zh": "想想 'chmod 644' 在Linux环境中是做什么的。"
+        "text_en": "Practice exact numeric modes on the existing project README so every command has a real target.",
+        "text_zh": "在现有项目 README 上练习精确的数字权限，确保每条命令都有真实目标。"
       },
       {
         "level": 2,
@@ -4382,18 +4382,18 @@
       },
       {
         "level": 3,
-        "text_en": "Try running 'chmod 644' and observe the output carefully.",
-        "text_zh": "试着运行 'chmod 644' 并仔细观察输出。"
+        "text_en": "Try mode 644 on /home/ghost/projects/README.md, then compare it with mode 755.",
+        "text_zh": "先对 /home/ghost/projects/README.md 使用 644，再与 755 模式比较。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: chmod 644. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: chmod 644。使用适当的参数执行它。"
+        "text_en": "Run chmod 644 and chmod 755 against /home/ghost/projects/README.md.",
+        "text_zh": "对 /home/ghost/projects/README.md 依次运行 chmod 644 和 chmod 755。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'chmod 644' to complete the objective.",
-        "text_zh": "完整解答: 使用 'chmod 644' 来完成目标。"
+        "text_en": "Full solution: chmod 644 /home/ghost/projects/README.md && chmod 755 /home/ghost/projects/README.md",
+        "text_zh": "完整解答：先运行 'chmod 644 /home/ghost/projects/README.md'，再运行 'chmod 755 /home/ghost/projects/README.md'。"
       }
     ],
     "scoring": {
@@ -4836,8 +4836,8 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of chmod +t",
-        "label_zh": "掌握 chmod +t 的使用",
+        "label_en": "Master the use of chmod +t /home/ghost/projects",
+        "label_zh": "掌握 chmod +t /home/ghost/projects 的使用",
         "required": true
       },
       {
@@ -4850,7 +4850,7 @@
     "checks": [
       {
         "type": "command_used",
-        "pattern": "chmod"
+        "pattern": "chmod +t /home/ghost/projects"
       },
       {
         "type": "no_red_command_used"
@@ -4859,8 +4859,8 @@
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what 'chmod +t' does in a Linux environment.",
-        "text_zh": "想想 'chmod +t' 在Linux环境中是做什么的。"
+        "text_en": "Apply the sticky bit to the owned practice directory, not to an unspecified system path.",
+        "text_zh": "把粘滞位应用到自己拥有的练习目录，而不是未指定的系统路径。"
       },
       {
         "level": 2,
@@ -4869,18 +4869,18 @@
       },
       {
         "level": 3,
-        "text_en": "Try running 'chmod +t' and observe the output carefully.",
-        "text_zh": "试着运行 'chmod +t' 并仔细观察输出。"
+        "text_en": "Try 'chmod +t /home/ghost/projects' and inspect the directory permissions.",
+        "text_zh": "尝试执行 'chmod +t /home/ghost/projects' 并检查目录权限。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: chmod +t. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: chmod +t。使用适当的参数执行它。"
+        "text_en": "The exact command is: chmod +t /home/ghost/projects.",
+        "text_zh": "准确命令是：chmod +t /home/ghost/projects。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'chmod +t' to complete the objective.",
-        "text_zh": "完整解答: 使用 'chmod +t' 来完成目标。"
+        "text_en": "Full solution: chmod +t /home/ghost/projects",
+        "text_zh": "完整解答：运行 'chmod +t /home/ghost/projects'。"
       }
     ],
     "scoring": {
@@ -16205,8 +16205,8 @@
     "objectives": [
       {
         "id": "obj-1",
-        "label_en": "Master the use of systemctl restart",
-        "label_zh": "掌握 systemctl restart 的使用",
+        "label_en": "Master the use of systemctl restart nginx",
+        "label_zh": "掌握 systemctl restart nginx 的使用",
         "required": true
       },
       {
@@ -16219,7 +16219,7 @@
     "checks": [
       {
         "type": "command_used",
-        "pattern": "systemctl"
+        "pattern": "systemctl restart nginx"
       },
       {
         "type": "no_red_command_used"
@@ -16228,8 +16228,8 @@
     "hints": [
       {
         "level": 1,
-        "text_en": "Think about what 'systemctl restart' does in a Linux environment.",
-        "text_zh": "想想 'systemctl restart' 在Linux环境中是做什么的。"
+        "text_en": "A restart requires an explicit unit; use the simulated nginx service.",
+        "text_zh": "重启必须指定明确的单元；请使用模拟的 nginx 服务。"
       },
       {
         "level": 2,
@@ -16238,18 +16238,18 @@
       },
       {
         "level": 3,
-        "text_en": "Try running 'systemctl restart' and observe the output carefully.",
-        "text_zh": "试着运行 'systemctl restart' 并仔细观察输出。"
+        "text_en": "Try 'systemctl restart nginx', then inspect its exit status.",
+        "text_zh": "尝试执行 'systemctl restart nginx'，然后检查退出状态。"
       },
       {
         "level": 4,
-        "text_en": "The command you need is: systemctl restart. Execute it with appropriate flags.",
-        "text_zh": "你需要的命令是: systemctl restart。使用适当的参数执行它。"
+        "text_en": "The exact command is: systemctl restart nginx.",
+        "text_zh": "准确命令是：systemctl restart nginx。"
       },
       {
         "level": 5,
-        "text_en": "Full solution: Use 'systemctl restart' to complete the objective.",
-        "text_zh": "完整解答: 使用 'systemctl restart' 来完成目标。"
+        "text_en": "Full solution: systemctl restart nginx",
+        "text_zh": "完整解答：运行 'systemctl restart nginx'。"
       }
     ],
     "scoring": {

@@ -16,8 +16,7 @@ export const achievements: Achievement[] = [
     description: 'Exit 10 terminal traps using proper escape sequences',
     tier: 'bronze',
     icon: 'KeyRound',
-    unlocked: true,
-    unlockedAt: '2024-01-15',
+    unlocked: false,
     category: 'Terminal Survival',
   },
   {
@@ -26,8 +25,7 @@ export const achievements: Achievement[] = [
     description: 'Master less — navigate, search, and filter within pagers',
     tier: 'silver',
     icon: 'BookOpen',
-    unlocked: true,
-    unlockedAt: '2024-01-20',
+    unlocked: false,
     category: 'Terminal Survival',
   },
   {
@@ -36,8 +34,7 @@ export const achievements: Achievement[] = [
     description: 'Survive the Vim Temple — complete all Vim escape challenges',
     tier: 'gold',
     icon: 'Sword',
-    unlocked: true,
-    unlockedAt: '2024-02-01',
+    unlocked: false,
     category: 'Vim Warrior',
   },
   {
@@ -46,8 +43,7 @@ export const achievements: Achievement[] = [
     description: 'Perform 50 successful git operations without errors',
     tier: 'gold',
     icon: 'GitBranch',
-    unlocked: true,
-    unlockedAt: '2024-02-10',
+    unlocked: false,
     category: 'Git Mastery',
   },
   {
@@ -56,8 +52,7 @@ export const achievements: Achievement[] = [
     description: 'Create and manage 20 tmux sessions with multiple panes',
     tier: 'silver',
     icon: 'LayoutGrid',
-    unlocked: true,
-    unlockedAt: '2024-02-15',
+    unlocked: false,
     category: 'Terminal Survival',
   },
   {
@@ -66,8 +61,7 @@ export const achievements: Achievement[] = [
     description: 'Chain 5+ commands in a single pipeline successfully',
     tier: 'silver',
     icon: 'Merge',
-    unlocked: true,
-    unlockedAt: '2024-01-25',
+    unlocked: false,
     category: 'Process Control',
   },
   {
@@ -76,8 +70,7 @@ export const achievements: Achievement[] = [
     description: 'Fix 10 permission issues using least-privilege principle',
     tier: 'bronze',
     icon: 'ShieldCheck',
-    unlocked: true,
-    unlockedAt: '2024-01-18',
+    unlocked: false,
     category: 'Process Control',
   },
   {
@@ -86,8 +79,7 @@ export const achievements: Achievement[] = [
     description: 'Extract critical intel from system logs under time pressure',
     tier: 'silver',
     icon: 'Search',
-    unlocked: true,
-    unlockedAt: '2024-02-05',
+    unlocked: false,
     category: 'Process Control',
   },
   {
@@ -96,8 +88,7 @@ export const achievements: Achievement[] = [
     description: 'Identify and resolve 5 network port conflicts',
     tier: 'silver',
     icon: 'Network',
-    unlocked: true,
-    unlockedAt: '2024-02-12',
+    unlocked: false,
     category: 'Process Control',
   },
   {
@@ -115,8 +106,7 @@ export const achievements: Achievement[] = [
     description: 'Complete a mission in under 30 seconds',
     tier: 'gold',
     icon: 'Zap',
-    unlocked: true,
-    unlockedAt: '2024-02-20',
+    unlocked: false,
     category: 'Speed Runners',
   },
   {
@@ -134,8 +124,7 @@ export const achievements: Achievement[] = [
     description: 'Unlock commands in 10 different domains',
     tier: 'bronze',
     icon: 'Compass',
-    unlocked: true,
-    unlockedAt: '2024-02-22',
+    unlocked: false,
     category: 'Explorer',
   },
   {
@@ -144,18 +133,16 @@ export const achievements: Achievement[] = [
     description: 'Maintain a 7-day training streak',
     tier: 'silver',
     icon: 'Flame',
-    unlocked: true,
-    unlockedAt: '2024-02-18',
+    unlocked: false,
     category: 'Speed Runners',
   },
   {
     id: 'command-encyclopedia',
     title: 'Command Encyclopedia',
-    description: 'Learn 50+ commands in the Command Atlas',
+    description: 'Validate 50 distinct command patterns by completing missions',
     tier: 'gold',
     icon: 'BookMarked',
-    unlocked: true,
-    unlockedAt: '2024-03-01',
+    unlocked: false,
     category: 'Explorer',
   },
   {
@@ -191,8 +178,7 @@ export const achievements: Achievement[] = [
     description: 'Complete missions after midnight local time',
     tier: 'bronze',
     icon: 'Moon',
-    unlocked: true,
-    unlockedAt: '2024-03-05',
+    unlocked: false,
     category: 'Explorer',
   },
   {
@@ -201,8 +187,7 @@ export const achievements: Achievement[] = [
     description: 'Free up 10GB of disk space using terminal commands',
     tier: 'silver',
     icon: 'Trash2',
-    unlocked: true,
-    unlockedAt: '2024-03-10',
+    unlocked: false,
     category: 'Process Control',
   },
 ];
@@ -231,6 +216,49 @@ export function getTierCount(tier: string): number {
   return achievements.filter((a) => a.tier === tier).length;
 }
 
-export function getUnlockedCount(): number {
-  return achievements.filter((a) => a.unlocked).length;
+export interface AchievementEvidence {
+  hasPerfectScore: boolean;
+  currentStreak: number;
+  longestStreak: number;
+  validatedActions: number;
+}
+
+const EVIDENCE_BACKED_ACHIEVEMENT_IDS = new Set([
+  'perfect-score',
+  'week-warrior',
+  'command-encyclopedia',
+]);
+
+export function resolveAchievements(evidence: AchievementEvidence): Achievement[] {
+  const unlockedIds = new Set<string>();
+  if (evidence.hasPerfectScore) unlockedIds.add('perfect-score');
+  if (evidence.longestStreak >= 7) unlockedIds.add('week-warrior');
+  if (evidence.validatedActions >= 50) unlockedIds.add('command-encyclopedia');
+
+  return achievements
+    .filter((achievement) => EVIDENCE_BACKED_ACHIEVEMENT_IDS.has(achievement.id))
+    .map((achievement) => ({
+      ...achievement,
+      unlocked: unlockedIds.has(achievement.id),
+    }));
+}
+
+export function getUnlockedCount(items: Achievement[] = achievements): number {
+  return items.filter((achievement) => achievement.unlocked).length;
+}
+
+export const MISSION_COMPLETION_XP = 120;
+export const ACHIEVEMENT_XP = 100;
+
+export function calculateTotalXP(missionsCompleted: number, items: Achievement[]): number {
+  return Math.max(0, Math.trunc(missionsCompleted)) * MISSION_COMPLETION_XP
+    + getUnlockedCount(items) * ACHIEVEMENT_XP;
+}
+
+export type ProgressRank = 'recruit' | 'operator' | 'ghost';
+
+export function deriveProgressRank(totalXP: number): ProgressRank {
+  if (totalXP >= 20_000) return 'ghost';
+  if (totalXP >= 10_000) return 'operator';
+  return 'recruit';
 }

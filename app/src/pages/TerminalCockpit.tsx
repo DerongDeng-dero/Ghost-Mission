@@ -1,16 +1,26 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { HelpCircle, ArrowLeft, Timer, Trophy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { VFS, type VNode } from '@/engine/vfs'
-import { ShellEngine } from '@/engine/shell'
+import { ShellEngine, seedGitBisectTrainingRepository } from '@/engine/shell'
 import { getLevelById } from '@/engine/levels'
 import { validateMission, calculateScore, isMissionComplete, type ValidationResult, type MissionState } from '@/engine/validator'
 import { createHintState, revealHint, getTotalPenalty } from '@/engine/hints'
 import { saveMissionRunReport, type MissionRunAction } from '@/engine/runReport'
 import { useGameStore } from '@/store/gameStore'
+import {
+  MAX_MISSION_ACTION_RED_COMMANDS,
+  createMissionRunEvidence,
+  isMissionDebriefAvailable,
+  persistMissionCompletion,
+  scheduleCoalescedTask,
+  tryRecordMissionAction,
+  tryRecordMissionRedCommand,
+  type MissionRunEvidence,
+} from '@/lib/missionCompletion'
 
 import TerminalEmulator, { type TerminalAction } from '@/components/terminal/TerminalEmulator'
 import ObjectivesPanel from '@/components/terminal/ObjectivesPanel'
@@ -30,8 +40,6 @@ interface CockpitState {
   score: number
   timerSeconds: number
   commandCount: number
-  redCommandsUsed: string[]
-  commandHistory: string[]
   completedObjectiveIds: Set<string>
   hintsRevealed: Set<number>
   hintState: ReturnType<typeof createHintState>
@@ -43,6 +51,9 @@ interface CockpitState {
   showRedWarning: boolean
   showTutorial: boolean
   showTerminalHelp: boolean
+  runReportPersisted: boolean | null
+  progressRecorded: boolean | null
+  runEvidenceExhausted: boolean
 }
 
 function createInitialCockpitState(phase: CockpitState['phase'] = 'loading'): CockpitState {
@@ -52,8 +63,6 @@ function createInitialCockpitState(phase: CockpitState['phase'] = 'loading'): Co
     score: 0,
     timerSeconds: 0,
     commandCount: 0,
-    redCommandsUsed: [],
-    commandHistory: [],
     completedObjectiveIds: new Set(),
     hintsRevealed: new Set(),
     hintState: createHintState(),
@@ -65,6 +74,9 @@ function createInitialCockpitState(phase: CockpitState['phase'] = 'loading'): Co
     showRedWarning: false,
     showTutorial: false,
     showTerminalHelp: true,
+    runReportPersisted: null,
+    progressRecorded: null,
+    runEvidenceExhausted: false,
   }
 }
 
@@ -117,6 +129,11 @@ export default function TerminalCockpit() {
         requiredObjectives: '必需目标',
         viewDebrief: '查看复盘',
         replay: '重新挑战',
+        progressNotSaved: '任务已在当前页面完成，但浏览器拒绝保存长期进度；刷新后本次成绩可能丢失。',
+        progressNotRecorded: '本次训练结果有效，但未能加入成长记录；请重试任务或先导出当前进度。',
+        reportNotSaved: '本次运行报告未保存，复盘暂不可用。',
+        debriefUnavailable: '复盘未保存',
+        evidenceLimitReached: '本次任务的可验证操作已达到安全上限，后续操作不会计入成绩。请重新挑战以生成可信复盘。',
       }
     : {
         dashboard: 'Dashboard',
@@ -132,22 +149,33 @@ export default function TerminalCockpit() {
         requiredObjectives: 'Required Objectives',
         viewDebrief: 'View Debrief',
         replay: 'Replay',
+        progressNotSaved: 'The mission completed in this page, but the browser rejected durable progress storage. This result may be lost after reload.',
+        progressNotRecorded: 'This run is valid, but it could not be added to progression. Retry the mission or export current progress first.',
+        reportNotSaved: 'The run report was not saved, so debrief is unavailable.',
+        debriefUnavailable: 'Debrief Not Saved',
+        evidenceLimitReached: 'This run reached the safe evidence limit. Further actions cannot be scored; replay to generate a trustworthy debrief.',
       }
   const level = useMemo(() => getLevelById(missionId || ''), [missionId])
   const startMissionProgress = useGameStore(state => state.startMission)
   const completeMissionProgress = useGameStore(state => state.completeMission)
+  const progressPersistenceStatus = useGameStore(state => state.progressPersistenceStatus)
+  const missionProgressCompleted = useGameStore(state => (
+    missionId ? state.missionProgress[missionId]?.status === 'completed' : false
+  ))
 
   const vfsRef = useRef(new VFS())
   const shellRef = useRef<ShellEngine | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const redWarningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const validationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const completionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const validationResultsRef = useRef<ValidationResult[]>([])
-  const validationTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
   const missionCompleteRef = useRef(false)
-  const successfulActionHistoryRef = useRef<string[]>([])
-  const attemptedActionHistoryRef = useRef<string[]>([])
-  const attemptedActionsRef = useRef<MissionRunAction[]>([])
-  const redCommandsUsedRef = useRef<string[]>([])
+  const debriefButtonRef = useRef<HTMLButtonElement>(null)
+  const replayButtonRef = useRef<HTMLButtonElement>(null)
+  const runEvidenceRef = useRef<MissionRunEvidence<MissionRunAction>>(createMissionRunEvidence())
+  const runEvidenceFailureHandledRef = useRef(false)
   const pendingRedCommandsRef = useRef<string[]>([])
   const missionStartedAtRef = useRef<number | null>(null)
 
@@ -184,25 +212,47 @@ export default function TerminalCockpit() {
     stateRef.current = state
   }, [state])
 
+  const failRunEvidence = useCallback(() => {
+    runEvidenceRef.current.exhausted = true
+    if (runEvidenceFailureHandledRef.current) return
+    runEvidenceFailureHandledRef.current = true
+    if (validationTimerRef.current !== null) {
+      clearTimeout(validationTimerRef.current)
+      validationTimerRef.current = null
+    }
+    if (pulseTimerRef.current !== null) {
+      clearTimeout(pulseTimerRef.current)
+      pulseTimerRef.current = null
+    }
+    setState(current => current.runEvidenceExhausted
+      ? current
+      : {
+          ...current,
+          commandCount: runEvidenceRef.current.attemptedActions.length,
+          runEvidenceExhausted: true,
+          successPulse: false,
+          showTerminalHelp: false,
+          showTutorial: false,
+        })
+  }, [])
+
   // Initialize shell and load level
   useEffect(() => {
     if (!level) return
     const vfs = new VFS()
     vfsRef.current = vfs
     const nextShell = new ShellEngine(vfs, undefined, (cmd) => {
-      pendingRedCommandsRef.current = [...pendingRedCommandsRef.current, cmd]
-      if (!redCommandsUsedRef.current.includes(cmd)) {
-        redCommandsUsedRef.current = [...redCommandsUsedRef.current, cmd]
+      const evidence = runEvidenceRef.current
+      if (
+        evidence.exhausted
+        || pendingRedCommandsRef.current.length >= MAX_MISSION_ACTION_RED_COMMANDS
+        || !tryRecordMissionRedCommand(evidence, cmd)
+      ) {
+        failRunEvidence()
+        return
       }
-      setState(s => {
-        if (s.redCommandsUsed.includes(cmd)) return s
-        return {
-          ...s,
-          lastRedCommand: cmd,
-          showRedWarning: true,
-          redCommandsUsed: [...s.redCommandsUsed, cmd],
-       }
-     })
+      pendingRedCommandsRef.current.push(cmd)
+      setState(s => ({ ...s, lastRedCommand: cmd, showRedWarning: true }))
       if (redWarningTimeoutRef.current) clearTimeout(redWarningTimeoutRef.current)
       redWarningTimeoutRef.current = setTimeout(() => {
         setState(s => ({ ...s, showRedWarning: false }))
@@ -224,12 +274,9 @@ export default function TerminalCockpit() {
     if (level.chapter_skill.toLowerCase() === 'git') {
       nextShell.execute('git init', 0, false)
       if (level.checks.some(check => check.pattern?.toLowerCase().startsWith('git bisect'))) {
-        nextShell.execute('git add training-base.txt', 0, false)
-        nextShell.execute('git commit -m "known good baseline"', 0, false)
-        nextShell.execute('git tag v1.0', 0, false)
-        for (let checkpoint = 1; checkpoint <= 4; checkpoint++) {
-          nextShell.execute(`git add checkpoint-${checkpoint}.txt`, 0, false)
-          nextShell.execute(`git commit -m "training checkpoint ${checkpoint}"`, 0, false)
+        const seeded = seedGitBisectTrainingRepository(nextShell)
+        if (!seeded.ok) {
+          console.error('Failed to seed Git bisect training repository:', seeded.error)
         }
       }
     }
@@ -240,24 +287,30 @@ export default function TerminalCockpit() {
     setState(createInitialCockpitState('briefing'))
     missionCompleteRef.current = false
     validationResultsRef.current = []
-    successfulActionHistoryRef.current = []
-    attemptedActionHistoryRef.current = []
-    attemptedActionsRef.current = []
-    redCommandsUsedRef.current = []
+    runEvidenceRef.current = createMissionRunEvidence()
+    runEvidenceFailureHandledRef.current = false
     pendingRedCommandsRef.current = []
     missionStartedAtRef.current = null
-    validationTimersRef.current.forEach(t => clearTimeout(t))
-    validationTimersRef.current = []
+    if (validationTimerRef.current !== null) clearTimeout(validationTimerRef.current)
+    if (pulseTimerRef.current !== null) clearTimeout(pulseTimerRef.current)
+    if (completionTimerRef.current !== null) clearTimeout(completionTimerRef.current)
+    validationTimerRef.current = null
+    pulseTimerRef.current = null
+    completionTimerRef.current = null
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
       if (redWarningTimeoutRef.current) clearTimeout(redWarningTimeoutRef.current)
-      validationTimersRef.current.forEach(t => clearTimeout(t))
-      validationTimersRef.current = []
+      if (validationTimerRef.current !== null) clearTimeout(validationTimerRef.current)
+      if (pulseTimerRef.current !== null) clearTimeout(pulseTimerRef.current)
+      if (completionTimerRef.current !== null) clearTimeout(completionTimerRef.current)
       timerRef.current = null
       redWarningTimeoutRef.current = null
-   }
-  }, [level, runVersion])
+      validationTimerRef.current = null
+      pulseTimerRef.current = null
+      completionTimerRef.current = null
+    }
+  }, [failRunEvidence, level, runVersion])
 
   // Timer
   useEffect(() => {
@@ -272,110 +325,150 @@ export default function TerminalCockpit() {
  }, [state.phase])
 
   const handleCommandExecuted = useCallback((action: TerminalAction) => {
-    if (stateRef.current.phase !== 'active') return
+    const evidence = runEvidenceRef.current
+    if (
+      stateRef.current.phase !== 'active'
+      || missionCompleteRef.current
+      || evidence.exhausted
+    ) return
     const { command, exitCode } = action
+    const successfulCommands = action.successfulCommands ?? (exitCode === 0 ? [command] : [])
     const redCommands = [...pendingRedCommandsRef.current]
     pendingRedCommandsRef.current = []
-    attemptedActionHistoryRef.current = [...attemptedActionHistoryRef.current, command]
+    for (const redCommand of redCommands) {
+      if (!tryRecordMissionRedCommand(evidence, redCommand)) {
+        failRunEvidence()
+        return
+      }
+    }
     const startedAt = missionStartedAtRef.current
     const timestampSeconds = startedAt === null
       ? stateRef.current.timerSeconds
       : Math.max(0, Math.round((performance.now() - startedAt) / 1000))
-    attemptedActionsRef.current = [...attemptedActionsRef.current, {
-      id: String(attemptedActionsRef.current.length + 1),
+    const runAction: MissionRunAction = {
+      id: String(evidence.attemptedActions.length + 1),
       timestampSeconds,
       command,
       exitCode,
       kind: action.kind,
       cwd: shellRef.current ? `/${shellRef.current.state.cwd.join('/')}` : '/',
       mode: stateRef.current.mode,
+      successfulCommands: [...successfulCommands],
       redCommands,
-    }]
-    const successfulCommands = action.successfulCommands ?? (exitCode === 0 ? [command] : [])
-    if (successfulCommands.length > 0) {
-      successfulActionHistoryRef.current = [...successfulActionHistoryRef.current, ...successfulCommands]
+    }
+    if (!tryRecordMissionAction(evidence, runAction)) {
+      failRunEvidence()
+      return
     }
 
-    // Step 1: Update command history immediately
-    setState(s => ({
-      ...s,
-      commandHistory: [...attemptedActionHistoryRef.current],
-      commandCount: s.commandCount + 1,
-      showTerminalHelp: false,
-      showTutorial: false,
-    }))
+    // One pending validation observes the latest evidence. A pasted command
+    // burst therefore creates one timer, not one timer per parsed command.
+    if (validationTimerRef.current !== null) return
+    scheduleCoalescedTask(
+      validationTimerRef,
+      task => setTimeout(task, 100),
+      () => {
+        const currentEvidence = runEvidenceRef.current
+        if (
+          !level
+          || !shellRef.current
+          || currentEvidence.exhausted
+          || missionCompleteRef.current
+        ) return
 
-    // Step 2: After state settles, run validation
-    const validationTimer = setTimeout(() => {
-      if (!level || !shellRef.current) return
-
-      // Build mission state from CURRENT refs
-      const currentCmdHistory = [...successfulActionHistoryRef.current]
-      const missionState: MissionState = {
-        commandHistory: currentCmdHistory,
-        attemptedCommandHistory: [...attemptedActionHistoryRef.current],
-        gitState: shellRef.current.gitState,
-        vfs: { files: getVfsStateSnapshot() },
-        redCommandsUsed: [],
-        hintsUsed: 0,
-        objectivesCompleted: new Set(),
-      }
-
-      const currentState = stateRef.current
-      const currentTimerSeconds = missionStartedAtRef.current === null
-        ? currentState.timerSeconds
-        : Math.max(0, Math.round((performance.now() - missionStartedAtRef.current) / 1000))
-      const currentCommandCount = attemptedActionHistoryRef.current.length
-      missionState.redCommandsUsed = [...redCommandsUsedRef.current]
-      missionState.hintsUsed = currentState.hintsRevealed.size
-      missionState.objectivesCompleted = new Set(currentState.completedObjectiveIds)
-
-      try {
-        const results = validateMission(level, missionState)
-        validationResultsRef.current = results
-        const completedIds = new Set(results.filter(r => r.completed).map(r => r.objectiveId))
-        missionState.objectivesCompleted = completedIds
-
-        // Step 3: Update completed objectives and pulse
-        setState(s => ({ ...s, completedObjectiveIds: completedIds, successPulse: true }))
-
-        // Step 4: Check mission completion (separate setState)
-        if (isMissionComplete(level, results) && !missionCompleteRef.current) {
-          missionCompleteRef.current = true
-          const scoreResult = calculateScore(level, results, missionState, currentTimerSeconds, currentCommandCount)
-          saveMissionRunReport({
-            version: 1,
-            missionId: level.id,
-            completed: true,
-            completedAt: new Date().toISOString(),
-            elapsedSeconds: currentTimerSeconds,
-            hintsUsed: missionState.hintsUsed,
-            redCommandsUsed: [...missionState.redCommandsUsed],
-            attemptedActions: [...attemptedActionsRef.current],
-            successfulActions: [...successfulActionHistoryRef.current],
-            validationResults: results,
-            scoreResult,
-          })
-          completeMissionProgress(level.id, scoreResult.total)
-          setState(s2 => ({ ...s2, phase: 'completing', score: scoreResult.total, timerSeconds: currentTimerSeconds }))
-          const completionTimer = setTimeout(() => {
-            setState(s2 => ({ ...s2, phase: 'completed', score: scoreResult.total, timerSeconds: currentTimerSeconds }))
-          }, 500)
-          validationTimersRef.current.push(completionTimer)
+        const missionState: MissionState = {
+          commandHistory: currentEvidence.successfulCommands,
+          attemptedCommandHistory: currentEvidence.attemptedCommands,
+          gitState: shellRef.current.gitState,
+          vfs: { files: getVfsStateSnapshot() },
+          redCommandsUsed: currentEvidence.redCommandsUsed,
+          hintsUsed: 0,
+          objectivesCompleted: new Set(),
         }
 
-        // Step 5: Clear success pulse
-        const pulseTimer = setTimeout(() => {
-          setState(s => ({ ...s, successPulse: false }))
-        }, 600)
-        validationTimersRef.current.push(pulseTimer)
-      } catch (err) {
-        console.error('Validation error:', err)
-      }
-    }, 100)
+        const currentState = stateRef.current
+        const currentTimerSeconds = missionStartedAtRef.current === null
+          ? currentState.timerSeconds
+          : Math.max(0, Math.round((performance.now() - missionStartedAtRef.current) / 1000))
+        const currentCommandCount = currentEvidence.attemptedActions.length
+        missionState.hintsUsed = currentState.hintsRevealed.size
+        missionState.objectivesCompleted = new Set(currentState.completedObjectiveIds)
 
-    validationTimersRef.current.push(validationTimer)
-  }, [completeMissionProgress, level])
+        try {
+          const results = validateMission(level, missionState)
+          validationResultsRef.current = results
+          const completedIds = new Set(results.filter(r => r.completed).map(r => r.objectiveId))
+          const hasNewCompletion = results.some(result => (
+            result.completed && !currentState.completedObjectiveIds.has(result.objectiveId)
+          ))
+          missionState.objectivesCompleted = completedIds
+
+          setState(current => ({
+            ...current,
+            commandCount: currentCommandCount,
+            completedObjectiveIds: completedIds,
+            successPulse: hasNewCompletion ? true : current.successPulse,
+            showTerminalHelp: false,
+            showTutorial: false,
+          }))
+
+          if (isMissionComplete(level, results)) {
+            missionCompleteRef.current = true
+            const scoreResult = calculateScore(level, results, missionState, currentTimerSeconds, currentCommandCount)
+            // A debrief is meaningful only for a completion that still exists in
+            // canonical progress. A reset from another tab can invalidate the
+            // active attempt, so persist progress first and never create an orphan
+            // report when that precondition fails.
+            const { progressRecorded, runReportPersisted } = persistMissionCompletion(
+              () => completeMissionProgress(level.id, scoreResult.total),
+              () => saveMissionRunReport({
+                version: 1,
+                missionId: level.id,
+                completed: true,
+                completedAt: new Date().toISOString(),
+                elapsedSeconds: currentTimerSeconds,
+                hintsUsed: missionState.hintsUsed,
+                redCommandsUsed: [...currentEvidence.redCommandsUsed],
+                attemptedActions: [...currentEvidence.attemptedActions],
+                successfulActions: [...currentEvidence.successfulCommands],
+                validationResults: results,
+                scoreResult,
+              }),
+            )
+            setState(current => ({
+              ...current,
+              phase: 'completing',
+              score: scoreResult.total,
+              timerSeconds: currentTimerSeconds,
+              runReportPersisted,
+              progressRecorded,
+            }))
+            completionTimerRef.current = setTimeout(() => {
+              completionTimerRef.current = null
+              setState(current => ({
+                ...current,
+                phase: 'completed',
+                score: scoreResult.total,
+                timerSeconds: currentTimerSeconds,
+                runReportPersisted,
+                progressRecorded,
+              }))
+            }, 500)
+          }
+
+          if (hasNewCompletion) {
+            if (pulseTimerRef.current !== null) clearTimeout(pulseTimerRef.current)
+            pulseTimerRef.current = setTimeout(() => {
+              pulseTimerRef.current = null
+              setState(current => ({ ...current, successPulse: false }))
+            }, 600)
+          }
+        } catch (err) {
+          console.error('Validation error:', err)
+        }
+      },
+    )
+  }, [completeMissionProgress, failRunEvidence, level])
 
   const handleModeChange = useCallback((mode: string) => {
     setState(s => ({ ...s, mode }))
@@ -408,6 +501,27 @@ export default function TerminalCockpit() {
   const handleReplay = useCallback(() => {
     setRunVersion(version => version + 1)
   }, [])
+
+  const progressionAvailable = state.progressRecorded === true && missionProgressCompleted
+  const debriefAvailable = isMissionDebriefAvailable(state.runReportPersisted, progressionAvailable)
+
+  const handleCompletionDialogKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab') return
+    const focusable = [
+      debriefAvailable ? debriefButtonRef.current : null,
+      replayButtonRef.current,
+    ].filter((button): button is HTMLButtonElement => button !== null)
+    if (focusable.length === 0) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (focusable.length === 1 || (event.shiftKey && document.activeElement === first)) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }, [debriefAvailable])
 
   const handleToggleHintPanel = useCallback(() => {
     setState(s => ({ ...s, isHintPanelOpen: !s.isHintPanelOpen }))
@@ -596,6 +710,21 @@ export default function TerminalCockpit() {
         {/* Center - Terminal */}
         <div className="flex-1 relative flex flex-col min-w-0">
           <div className="flex-1 relative">
+            {state.runEvidenceExhausted && (
+              <div
+                className="absolute inset-x-3 top-3 z-20 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#FFB020]/50 bg-[#20170A]/95 p-3 font-inter text-body-sm text-[#FFD27A] shadow-lg"
+                role="alert"
+              >
+                <span>{labels.evidenceLimitReached}</span>
+                <button
+                  type="button"
+                  onClick={handleReplay}
+                  className="min-h-11 rounded-md border border-[#FFD27A]/50 px-4 font-jetbrains text-body font-semibold text-[#FFE2A8] transition-colors hover:bg-[#FFB020]/15"
+                >
+                  {labels.replay}
+                </button>
+              </div>
+            )}
             {shell && state.phase === 'active' ? (
               <TerminalEmulator
                 shell={shell}
@@ -680,6 +809,7 @@ export default function TerminalCockpit() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="mission-complete-title"
+              onKeyDown={handleCompletionDialogKeyDown}
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] as [number, number, number, number] }}
@@ -719,19 +849,42 @@ export default function TerminalCockpit() {
                 ))}
               </div>
 
+              {(
+                progressPersistenceStatus === 'error'
+                || state.runReportPersisted === false
+                || !progressionAvailable
+              ) && (
+                <div
+                  className="mb-5 space-y-1 rounded-md border border-[#FFB020]/40 bg-[#FFB020]/10 p-3 font-inter text-body-sm text-[#FFD27A]"
+                  role="alert"
+                >
+                  {!progressionAvailable && <p>{labels.progressNotRecorded}</p>}
+                  {progressPersistenceStatus === 'error' && <p>{labels.progressNotSaved}</p>}
+                  {state.runReportPersisted === false && <p>{labels.reportNotSaved}</p>}
+                </div>
+              )}
+
               <div className="flex justify-center gap-3">
                 <button
+                  ref={debriefButtonRef}
                   onClick={() => navigate(`/debrief/${missionId}`)}
+                  disabled={!debriefAvailable}
                   className="min-h-11 px-5 py-2.5 rounded-md font-jetbrains text-body font-semibold transition-all"
-                  style={{ backgroundColor: 'var(--neon-green)', color: '#0A0E14' }}
-                  autoFocus
+                  style={{
+                    backgroundColor: debriefAvailable ? 'var(--neon-green)' : 'var(--bg-tertiary)',
+                    color: debriefAvailable ? '#0A0E14' : 'var(--text-muted)',
+                    cursor: debriefAvailable ? 'pointer' : 'not-allowed',
+                  }}
+                  autoFocus={debriefAvailable}
                 >
-                  {labels.viewDebrief} &rarr;
+                  {debriefAvailable ? labels.viewDebrief : labels.debriefUnavailable} &rarr;
                 </button>
                 <button
+                  ref={replayButtonRef}
                   onClick={handleReplay}
                   className="min-h-11 px-4 py-2.5 rounded-md font-jetbrains text-body transition-colors"
                   style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' }}
+                  autoFocus={!debriefAvailable}
                 >
                   {labels.replay}
                 </button>

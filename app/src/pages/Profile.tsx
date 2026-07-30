@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   BarChart3,
@@ -8,7 +8,6 @@ import {
   Zap,
   Target,
   BookOpen,
-  Lock,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '@/store/gameStore';
@@ -17,8 +16,25 @@ import AchievementGrid from '@/components/profile/AchievementGrid';
 import StatsPanel from '@/components/profile/StatsPanel';
 import ActivityHeatmap from '@/components/profile/ActivityHeatmap';
 import SkillTreeMini from '@/components/profile/SkillTreeMini';
-import { achievements, getUnlockedCount, tierColors } from '@/data/achievements';
+import {
+  calculateTotalXP,
+  deriveProgressRank,
+  getUnlockedCount,
+  resolveAchievements,
+  tierColors,
+} from '@/data/achievements';
 import { publicAssetUrl } from '@/lib/publicAsset';
+import {
+  PROGRESS_CATALOG,
+  buildProgressChapters,
+  buildProgressMissions,
+} from '@/data/progressCatalog';
+import {
+  deriveMissionActivity,
+  deriveProgressMetrics,
+  deriveSkillGroups,
+} from '@/lib/progressMetrics';
+import { useCurrentLocalDay } from '@/hooks/useCurrentLocalDay';
 
 const rankLabels: Record<string, { titleKey: string; color: string }> = {
   recruit: { titleKey: 'profile.rank.recruit', color: '#CD7F32' },
@@ -40,28 +56,125 @@ function ProfileSkeleton() {
 }
 
 export default function Profile() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(true);
-  const {
-    callsign,
-    rank,
-    missionsCompleted,
-    commandsLearned,
-    currentStreak,
-    skills,
-    activities,
-  } = useGameStore();
+  const [historyVisibleCount, setHistoryVisibleCount] = useState(50);
+  const callsign = useGameStore((state) => state.callsign);
+  const missionProgress = useGameStore((state) => state.missionProgress);
+  const progressMilestones = useGameStore((state) => state.progressMilestones);
+  const currentLocalDay = useCurrentLocalDay();
+  const progressLanguage = i18n.resolvedLanguage ?? i18n.language;
+  const missions = useMemo(
+    () => buildProgressMissions(progressLanguage, missionProgress),
+    [missionProgress, progressLanguage],
+  );
+  const chapters = useMemo(
+    () => buildProgressChapters(progressLanguage, missionProgress),
+    [missionProgress, progressLanguage],
+  );
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 150)
     return () => clearTimeout(timer)
   }, [])
 
-  const rankInfo = rankLabels[rank] || rankLabels.recruit;
-  const unlockedCount = getUnlockedCount();
-  const totalAchievements = achievements.length;
-  const totalXP = missionsCompleted * 250 + commandsLearned * 15 + unlockedCount * 100;
+  const progressMetrics = useMemo(
+    () => deriveProgressMetrics(
+      PROGRESS_CATALOG,
+      missionProgress,
+      `${currentLocalDay}T12:00:00`,
+      progressMilestones,
+    ),
+    [currentLocalDay, missionProgress, progressMilestones],
+  );
+  const skills = useMemo(() => deriveSkillGroups(chapters).map((skill) => ({
+    ...skill,
+    name: t(`skills.${skill.domain}`),
+  })), [chapters, t]);
+  const resolvedAchievements = useMemo(
+    () => resolveAchievements(progressMetrics),
+    [progressMetrics],
+  );
+  const unlockedCount = getUnlockedCount(resolvedAchievements);
+  const totalAchievements = resolvedAchievements.length;
+  const totalXP = calculateTotalXP(progressMetrics.missionsCompleted, resolvedAchievements);
+  const level = Math.floor(totalXP / 1000) + 1;
+  const currentLevelXP = totalXP % 1000;
+  const xpToNextLevel = 1000;
+  const rank = deriveProgressRank(totalXP);
+  const rankInfo = rankLabels[rank];
+  const dateTimeFormatter = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short' }),
+    [i18n.language],
+  );
+  const dateFormatter = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium' }),
+    [i18n.language],
+  );
+  const operativeSinceLabel = progressMetrics.firstStartedAt
+    ? t('profile.operativeSince', { date: dateFormatter.format(new Date(progressMetrics.firstStartedAt)) })
+    : t('profile.notStarted');
+  const completedMissions = useMemo(() => missions.flatMap((mission) => {
+    const progress = missionProgress[mission.id];
+    return progress?.status === 'completed' ? [{ mission, progress }] : [];
+  }).sort((left, right) => Date.parse(right.progress.completedAt) - Date.parse(left.progress.completedAt)), [missionProgress, missions]);
+  const activities = useMemo(() => missions.flatMap((mission) => {
+    const progress = missionProgress[mission.id];
+    if (!progress) return [];
+    if (progress.status === 'completed') {
+      return progress.completionHistory.map((attempt, index) => ({
+        id: `${mission.id}-${attempt.completedAt}-${index}`,
+        description: t('profile.activity.completed', { title: mission.title, score: attempt.score }),
+        type: 'complete',
+        timestamp: dateTimeFormatter.format(new Date(attempt.completedAt)),
+        sortTime: Date.parse(attempt.completedAt),
+      }));
+    }
+    return [{
+      id: mission.id,
+      description: t('profile.activity.started', { title: mission.title }),
+      type: 'in-progress',
+      timestamp: dateTimeFormatter.format(new Date(progress.startedAt)),
+      sortTime: Date.parse(progress.startedAt),
+    }];
+  }).sort((left, right) => right.sortTime - left.sortTime), [dateTimeFormatter, missionProgress, missions, t]);
+  const completionLog = useMemo(() => completedMissions.flatMap(({ mission, progress }) => {
+    const firstStoredAttemptNumber = progress.completedAttempts - progress.completionHistory.length + 1;
+    return progress.completionHistory.map((attempt, index) => ({
+      mission,
+      attempt,
+      attemptNumber: firstStoredAttemptNumber + index,
+    }));
+  }).sort((left, right) => Date.parse(right.attempt.completedAt) - Date.parse(left.attempt.completedAt)), [completedMissions]);
+  const activityData = useMemo(
+    () => deriveMissionActivity(PROGRESS_CATALOG, missionProgress, `${currentLocalDay}T12:00:00`),
+    [currentLocalDay, missionProgress],
+  );
+  const hasTruncatedCompletionHistory = useMemo(
+    () => missions.some((mission) => {
+      const progress = missionProgress[mission.id];
+      return progress?.status === 'completed'
+        && progress.completedAttempts > progress.completionHistory.length;
+    }),
+    [missionProgress, missions],
+  );
+  const topSkills = useMemo(
+    () => progressMetrics.missionsCompleted === 0
+      ? []
+      : [...skills].filter((skill) => skill.score > 0).sort((a, b) => b.score - a.score).slice(0, 3),
+    [progressMetrics.missionsCompleted, skills],
+  );
+  const focusSkills = useMemo(
+    () => [...skills].filter((skill) => skill.score < 100).sort((a, b) => a.score - b.score).slice(0, 3),
+    [skills],
+  );
+  const missionModePresentation = (mode: string) => {
+    if (mode === 'operation') return { label: t('academy.operations'), color: '#FF6B35' };
+    if (mode === 'nightmare') return { label: t('academy.nightmareMode'), color: '#C77DFF' };
+    if (mode === 'red-zone') return { label: t('academy.bossBattles'), color: '#FF4757' };
+    return { label: t('academy.trainingDrills'), color: '#00E5FF' };
+  };
 
   const tabs = [
     { id: 'overview', label: t('profile.tabs.overview'), icon: BarChart3 },
@@ -96,7 +209,7 @@ export default function Profile() {
               >
                 <img
                   src={publicAssetUrl('avatar-default.png')}
-                  alt="Avatar"
+                  alt={t('profile.avatarAlt', { callsign })}
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
@@ -124,7 +237,7 @@ export default function Profile() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.4, delay: 0.1 }}
               >
-                <h1 className="font-jetbrains text-h1 text-[#E8EDF2]">
+                <h1 className="max-w-full break-words font-jetbrains text-h1 text-[#E8EDF2]">
                   {callsign}
                 </h1>
                 <div className="flex items-center gap-3 mt-1 flex-wrap">
@@ -139,7 +252,7 @@ export default function Profile() {
                     {t(rankInfo.titleKey)}
                   </span>
                   <span className="font-jetbrains text-body-sm text-[#788DA1]">
-                    {t('profile.operativeSince', { date: 'March 2024' })}
+                    {operativeSinceLabel}
                   </span>
                 </div>
               </motion.div>
@@ -147,12 +260,12 @@ export default function Profile() {
               {/* XP + Stats */}
               <div className="mt-4">
                 <StatsPanel
-                  missionsCompleted={missionsCompleted}
-                  commandsLearned={commandsLearned}
-                  currentStreak={currentStreak}
-                  totalXP={totalXP}
-                  level={12}
-                  xpToNextLevel={5000}
+                  missionsCompleted={progressMetrics.missionsCompleted}
+                  commandsLearned={progressMetrics.validatedActions}
+                  currentStreak={progressMetrics.currentStreak}
+                  currentLevelXP={currentLevelXP}
+                  level={level}
+                  xpToNextLevel={xpToNextLevel}
                 />
               </div>
             </div>
@@ -241,10 +354,9 @@ export default function Profile() {
                     {t('profile.topSkills')}
                   </h3>
                   <div className="space-y-3">
-                    {[...skills]
-                      .sort((a, b) => b.score - a.score)
-                      .slice(0, 3)
-                      .map((skill) => (
+                    {topSkills.length === 0 ? (
+                      <p className="font-inter text-body text-[#8B9EB0]">{t('profile.noSkillData')}</p>
+                    ) : topSkills.map((skill) => (
                         <div key={skill.name} className="flex items-center gap-3">
                           <span className="font-jetbrains text-body text-[#E8EDF2] w-28 flex-shrink-0">
                             {skill.name}
@@ -280,10 +392,9 @@ export default function Profile() {
                     {t('profile.focusAreas')}
                   </h3>
                   <div className="space-y-3">
-                    {[...skills]
-                      .sort((a, b) => a.score - b.score)
-                      .slice(0, 3)
-                      .map((skill) => (
+                    {focusSkills.length === 0 ? (
+                      <p className="font-inter text-body text-[#8B9EB0]">{t('profile.allSkillsMastered')}</p>
+                    ) : focusSkills.map((skill) => (
                         <div key={skill.name} className="flex items-center gap-3">
                           <span className="font-jetbrains text-body text-[#E8EDF2] w-28 flex-shrink-0">
                             {skill.name}
@@ -319,6 +430,11 @@ export default function Profile() {
                     border: '1px solid #1E2D3D',
                   }}
                 >
+                  {activities.length === 0 ? (
+                    <p className="font-inter text-body text-[#8B9EB0]">
+                      {t('profile.activity.empty')}
+                    </p>
+                  ) : (
                   <div className="relative pl-6">
                     {/* Timeline line */}
                     <div
@@ -360,6 +476,7 @@ export default function Profile() {
                       );
                     })}
                   </div>
+                  )}
                 </div>
               </section>
             </motion.div>
@@ -377,7 +494,7 @@ export default function Profile() {
                 <TreePine size={20} className="text-[#00FF88]" />
                 {t('profile.skillDepartments')}
               </h2>
-              <SkillTreeMini />
+              <SkillTreeMini chapters={chapters} />
             </motion.div>
           )}
 
@@ -409,7 +526,7 @@ export default function Profile() {
                 <div className="w-px h-8 bg-[#1E2D3D] hidden sm:block" />
                 <div className="flex items-center gap-4">
                   {(['platinum', 'gold', 'silver', 'bronze'] as const).map((tier) => {
-                    const count = achievements.filter((a) => a.tier === tier && a.unlocked).length;
+                    const count = resolvedAchievements.filter((achievement) => achievement.tier === tier && achievement.unlocked).length;
                     return (
                       <div key={tier} className="flex items-center gap-1.5">
                         <span
@@ -417,7 +534,7 @@ export default function Profile() {
                           style={{ backgroundColor: tierColors[tier] }}
                         />
                         <span className="font-jetbrains text-body-sm text-[#8B9EB0] capitalize">
-                          {tier}: {count}
+                          {t(`profile.achievementTiers.${tier}`)}: {count}
                         </span>
                       </div>
                     );
@@ -425,22 +542,7 @@ export default function Profile() {
                 </div>
               </div>
 
-              {unlockedCount === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="flex flex-col items-center justify-center py-16 gap-3 text-center"
-                >
-                  <Lock size={48} className="opacity-30" style={{ color: 'var(--text-muted, #788DA1)' }} />
-                  <p className="font-jetbrains text-body text-[#8B9EB0]">{t('profile.achievements.noneYet')}</p>
-                  <p className="font-inter text-body-sm text-[#788DA1] max-w-sm">
-                    {t('profile.achievements.noneDescription')}
-                  </p>
-                </motion.div>
-              ) : (
-                <AchievementGrid />
-              )}
+              <AchievementGrid items={resolvedAchievements} />
             </motion.div>
           )}
 
@@ -466,7 +568,10 @@ export default function Profile() {
                     border: '1px solid #1E2D3D',
                   }}
                 >
-                  <ActivityHeatmap />
+                  <ActivityHeatmap
+                    data={activityData}
+                    isHistoryTruncated={hasTruncatedCompletionHistory}
+                  />
                 </div>
               </section>
 
@@ -483,7 +588,12 @@ export default function Profile() {
                     border: '1px solid #1E2D3D',
                   }}
                 >
-                  <div className="overflow-x-auto">
+                  <div
+                    className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+                    tabIndex={0}
+                    role="region"
+                    aria-label={t('profile.missionCompletionLog')}
+                  >
                     <table className="w-full">
                       <thead>
                         <tr style={{ borderBottom: '1px solid #1E2D3D' }}>
@@ -497,6 +607,7 @@ export default function Profile() {
                           ].map((h) => (
                             <th
                               key={h}
+                              scope="col"
                               className="px-4 py-3 text-left font-jetbrains text-body-sm text-[#788DA1] uppercase tracking-wider"
                             >
                               {h}
@@ -505,62 +616,72 @@ export default function Profile() {
                         </tr>
                       </thead>
                       <tbody>
-                        {[
-                          { name: 'NeonMall Infiltration', type: 'Operation', score: 92, time: '8m 32s', date: '2024-03-10', status: 'passed' },
-                          { name: 'grep basics', type: 'Academy', score: 100, time: '3m 15s', date: '2024-03-09', status: 'passed' },
-                          { name: 'Vim Escape Challenge', type: 'Academy', score: 65, time: '5m 48s', date: '2024-03-08', status: 'passed' },
-                          { name: 'Log Hunter', type: 'Operation', score: 88, time: '12m 20s', date: '2024-03-07', status: 'passed' },
-                          { name: 'Pipe Alchemist', type: 'Academy', score: 45, time: '6m 10s', date: '2024-03-06', status: 'failed' },
-                          { name: 'tmux Pane Dancer', type: 'Academy', score: 78, time: '4m 55s', date: '2024-03-05', status: 'passed' },
-                          { name: 'Process Hunt', type: 'Operation', score: 95, time: '15m 02s', date: '2024-03-04', status: 'passed' },
-                          { name: 'Git Surgeon', type: 'Academy', score: 82, time: '7m 30s', date: '2024-03-03', status: 'passed' },
-                        ].map((mission, i) => (
+                        {completionLog.slice(0, historyVisibleCount).map(({ mission, attempt, attemptNumber }, i) => {
+                          const presentation = missionModePresentation(mission.mode)
+                          return (
                           <motion.tr
-                            key={i}
+                            key={`${mission.id}-${attempt.completedAt}-${attemptNumber}`}
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            transition={{ delay: i * 0.05 }}
+                            transition={{ delay: Math.min(i * 0.03, 0.6) }}
                             className="transition-colors hover:bg-[#1E2A3A]"
                             style={{ borderBottom: '1px solid #1E2D3D' }}
                           >
                             <td className="px-4 py-3 font-jetbrains text-body text-[#E8EDF2]">
-                              {mission.name}
+                              {mission.title}
                             </td>
                             <td className="px-4 py-3">
                               <span
                                 className="font-jetbrains text-badge uppercase px-1.5 py-0.5 rounded-sm"
                                 style={{
-                                  color: mission.type === 'Operation' ? '#FF6B35' : '#00E5FF',
-                                  backgroundColor: mission.type === 'Operation' ? 'rgba(255,107,53,0.1)' : 'rgba(0,229,255,0.1)',
+                                  color: presentation.color,
+                                  backgroundColor: `${presentation.color}1A`,
                                 }}
                               >
-                                {mission.type === 'Operation' ? t('profile.missionType.operation') : t('profile.missionType.academy')}
+                                {presentation.label}
                               </span>
                             </td>
-                            <td className="px-4 py-3 font-jetbrains text-body" style={{ color: mission.score >= 70 ? '#00FF88' : '#FFD166' }}>
-                              {mission.score}
+                            <td className="px-4 py-3 font-jetbrains text-body" style={{ color: attempt.score >= 70 ? '#00FF88' : '#FFD166' }}>
+                              {attempt.score}
                             </td>
                             <td className="px-4 py-3 font-jetbrains text-body-sm text-[#8B9EB0]">
-                              {mission.time}
+                              #{attemptNumber}
                             </td>
                             <td className="px-4 py-3 font-jetbrains text-body-sm text-[#788DA1]">
-                              {mission.date}
+                              {dateFormatter.format(new Date(attempt.completedAt))}
                             </td>
                             <td className="px-4 py-3">
                               <span
                                 className="font-jetbrains text-badge uppercase"
-                                style={{
-                                  color: mission.status === 'passed' ? '#00FF88' : '#FF4757',
-                                }}
+                                style={{ color: '#00FF88' }}
                               >
-                                {mission.status === 'passed' ? `\u2713 ${t('profile.pass')}` : `\u2717 ${t('profile.fail')}`}
+                                {`\u2713 ${t('profile.pass')}`}
                               </span>
                             </td>
                           </motion.tr>
-                        ))}
+                          )
+                        })}
+                        {completionLog.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-8 text-center font-inter text-body text-[#8B9EB0]">
+                              {t('profile.historyEmpty')}
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
+                  {completionLog.length > historyVisibleCount && (
+                    <div className="flex justify-center border-t border-[#1E2D3D] p-3">
+                      <button
+                        type="button"
+                        onClick={() => setHistoryVisibleCount((count) => Math.min(count + 50, completionLog.length))}
+                        className="min-h-11 rounded-radius-sm px-4 font-jetbrains text-body-sm text-[#00E5FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+                      >
+                        {t('missionBoard.loadMore', { count: Math.min(50, completionLog.length - historyVisibleCount) })}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </section>
             </motion.div>

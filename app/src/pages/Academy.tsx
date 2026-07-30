@@ -8,16 +8,26 @@ import TrainingCard from '@/components/academy/TrainingCard'
 import EnemyGallery from '@/components/academy/EnemyGallery'
 import { enemies } from '@/data/academy'
 import { useLocalizedChapters } from '@/hooks/useLocalizedData'
+import { useGameStore } from '@/store/gameStore'
+import { PROGRESS_CATALOG } from '@/data/progressCatalog'
+import { deriveProgressMetrics } from '@/lib/progressMetrics'
+import { calculateTotalXP, resolveAchievements } from '@/data/achievements'
 
 export default function Academy() {
   const { t } = useTranslation()
   const chapters = useLocalizedChapters()
+  const missionProgress = useGameStore((state) => state.missionProgress)
+  const progressMilestones = useGameStore((state) => state.progressMilestones)
   const [activeChapter, setActiveChapter] = useState(1)
   const chapter = chapters.find((c) => c.id === activeChapter) || chapters[0]
 
   // Stats
   const totalDrills = useMemo(() => chapters.reduce((acc, c) => acc + c.totalDrills, 0), [chapters])
   const completedDrills = useMemo(() => chapters.reduce((acc, c) => acc + c.completedDrills, 0), [chapters])
+  const totalXP = useMemo(() => {
+    const metrics = deriveProgressMetrics(PROGRESS_CATALOG, missionProgress, undefined, progressMilestones)
+    return calculateTotalXP(metrics.missionsCompleted, resolveAchievements(metrics))
+  }, [missionProgress, progressMilestones])
 
 
   // Scroll chapter tabs
@@ -81,7 +91,7 @@ export default function Academy() {
                 <Trophy size={16} className="text-[#00FF88]" />
                 <div>
                   <span className="font-jetbrains text-h4 text-[#00FF88]" style={{ fontSize: '1rem' }}>
-                    {completedDrills * 120}
+                    {totalXP}
                   </span>
                   <span className="font-jetbrains text-body-sm text-[#788DA1] ml-1">{t('academy.xp')}</span>
                 </div>
@@ -220,7 +230,7 @@ export default function Academy() {
             <StatCard
               icon={<Trophy size={18} />}
               label={t('academy.totalXP')}
-              value={`${completedDrills * 120}`}
+              value={`${totalXP}`}
               color="#00E5FF"
             />
             <StatCard

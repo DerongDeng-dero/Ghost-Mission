@@ -1,6 +1,8 @@
 import { getLevelById, type LevelCheck, type MissionLevel } from './levels'
+import { RUN_REPORT_LIMITS } from './runReportLimits'
 import {
   getScoreRating,
+  getEffectiveChecks,
   getUnexpectedRedCommands,
   isMissionComplete,
   matchesMissionCommand,
@@ -16,6 +18,8 @@ export interface MissionRunAction {
   kind: 'command' | 'interaction'
   cwd: string
   mode: string
+  /** Exact progress-eligible traces emitted by the engine for this action. */
+  successfulCommands: string[]
   /** Exact red-command callbacks emitted while this action executed. */
   redCommands?: string[]
 }
@@ -34,8 +38,18 @@ export interface MissionRunReport {
   scoreResult: ScoreResult
 }
 
+const MAX_RUN_DURATION_SECONDS = 30 * 24 * 60 * 60
+const EARLIEST_RUN_REPORT_TIMESTAMP = Date.UTC(2020, 0, 1)
+const LATEST_RUN_REPORT_TIMESTAMP = Date.UTC(2100, 0, 1)
+const RUN_REPORT_FUTURE_TOLERANCE_MS = 5 * 60 * 1000
+
 function storageKey(missionId: string): string {
   return `ghostops_run_report:${missionId}`
+}
+
+function isWithinReportStorageBudget(serialized: string): boolean {
+  return serialized.length <= RUN_REPORT_LIMITS.storageBytes
+    && new TextEncoder().encode(serialized).byteLength <= RUN_REPORT_LIMITS.storageBytes
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -50,12 +64,6 @@ const VERIFICATION_TYPES = new Set<LevelCheck['type']>([
   'file_exists', 'file_contains', 'file_not_contains',
   'git_clean', 'git_branch', 'git_commit_exists',
 ])
-const GENERATED_COMMAND_TRACES = new Set([
-  '--help', '\\', '$?', '$VAR', '"', "'", '*', '?',
-  '|', '>', '>>', '2>', '&&', '||', '&', '<<', '<()',
-  'array', 'function', 'if', 'test', 'for', 'while', 'read',
-])
-
 function isShortcutCheck(check: LevelCheck): boolean {
   return check.type === 'command_used'
     && Boolean(check.pattern)
@@ -64,9 +72,9 @@ function isShortcutCheck(check: LevelCheck): boolean {
 
 function isStringArray(
   value: unknown,
-  maxLength = 10_000,
-  maxItemLength = 20_000,
-  allowEmptyItems = true,
+  maxLength: number = RUN_REPORT_LIMITS.successfulActions,
+  maxItemLength: number = RUN_REPORT_LIMITS.traceCodeUnits,
+  allowEmptyItems: boolean = true,
 ): value is string[] {
   return Array.isArray(value)
     && value.length <= maxLength
@@ -88,20 +96,40 @@ function isMissionRunAction(value: unknown, elapsedSeconds: number): value is Mi
   return typeof value.id === 'string'
     && value.id.length > 0
     && isFiniteNumber(value.timestampSeconds)
+    && Number.isInteger(value.timestampSeconds)
     && value.timestampSeconds >= 0
     && value.timestampSeconds <= elapsedSeconds + 5
     && typeof value.command === 'string'
     && value.command.length > 0
-    && value.command.length <= 20_000
+    && value.command.length <= RUN_REPORT_LIMITS.traceCodeUnits
     && Number.isInteger(value.exitCode)
     && (value.kind === 'command' || value.kind === 'interaction')
     && typeof value.cwd === 'string'
     && value.cwd.startsWith('/')
-    && value.cwd.length <= 4_096
+    && value.cwd.length <= RUN_REPORT_LIMITS.cwdCodeUnits
     && typeof value.mode === 'string'
     && value.mode.length > 0
-    && value.mode.length <= 100
-    && isStringArray(value.redCommands, 100, 20_000, false)
+    && value.mode.length <= RUN_REPORT_LIMITS.modeCodeUnits
+    && isStringArray(
+      value.successfulCommands,
+      RUN_REPORT_LIMITS.actionSuccessfulCommands,
+      RUN_REPORT_LIMITS.traceCodeUnits,
+      false,
+    )
+    && (
+      value.kind === 'command'
+      || (
+        value.exitCode === 0
+          ? sameStringArray(value.successfulCommands, [value.command])
+          : value.successfulCommands.length === 0
+      )
+    )
+    && isStringArray(
+      value.redCommands,
+      RUN_REPORT_LIMITS.actionRedCommands,
+      RUN_REPORT_LIMITS.traceCodeUnits,
+      false,
+    )
 }
 
 function isValidationResult(value: unknown): value is ValidationResult {
@@ -141,12 +169,20 @@ function getExpectedScore(level: MissionLevel, report: MissionRunReport): ScoreR
   }
   const excludedCategories: string[] = []
 
-  const verificationChecks = level.checks.filter(check => VERIFICATION_TYPES.has(check.type))
+  const effectiveChecks = getEffectiveChecks(level)
+  const verificationChecks = effectiveChecks.filter(check => VERIFICATION_TYPES.has(check.type))
   if (verificationChecks.length > 0) {
-    const hasExplicitBindings = level.checks.some(check => Boolean(check.objectiveId))
+    const hasExplicitBindings = effectiveChecks.some(check => Boolean(check.objectiveId))
     const validationById = new Map(report.validationResults.map(result => [result.objectiveId, result.completed]))
+    // State-backed checks cannot be replayed from a compact report. A completed
+    // objective proves all of its bound checks; an incomplete optional objective
+    // does not reveal which subset passed, so its verification score is not
+    // reconstructible and the report must fail closed.
     const verificationProven = hasExplicitBindings
-      ? verificationChecks.every(check => Boolean(check.objectiveId && validationById.get(check.objectiveId)))
+      ? verificationChecks.every(check => (
+          Boolean(check.objectiveId)
+          && validationById.get(check.objectiveId!) === true
+        ))
       : level.objectives.some(objective => (
           objective.required
           && !/^obj-\d+$/.test(objective.id)
@@ -159,7 +195,7 @@ function getExpectedScore(level: MissionLevel, report: MissionRunReport): ScoreR
     excludedCategories.push('verification')
   }
 
-  const commandChecks = level.checks.filter(check => check.type === 'command_used')
+  const commandChecks = effectiveChecks.filter(check => check.type === 'command_used')
   const expectedCommands = level.scoring.par_actions ?? Math.max(1, commandChecks.length * 2)
   const commandRatio = Math.min(1, expectedCommands / Math.max(1, report.attemptedActions.length))
   const expectedSeconds = level.scoring.par_time_seconds ?? 600
@@ -167,7 +203,7 @@ function getExpectedScore(level: MissionLevel, report: MissionRunReport): ScoreR
   breakdown.efficiency = Math.round(level.scoring.efficiency_weight * Math.sqrt(commandRatio * timeRatio))
   breakdownMax.efficiency = level.scoring.efficiency_weight
 
-  const shortcutChecks = level.checks.filter(isShortcutCheck)
+  const shortcutChecks = effectiveChecks.filter(isShortcutCheck)
   if (shortcutChecks.length > 0) {
     const shortcutsPassed = shortcutChecks.filter(check =>
       report.successfulActions.some(action => matchesMissionCommand(action, check.pattern!)),
@@ -231,25 +267,82 @@ function hasConsistentActionSources(report: MissionRunReport): boolean {
   const actions = report.attemptedActions
   if (actions.some((action, index) => action.id !== String(index + 1))) return false
   if (actions.some((action, index) => index > 0 && action.timestampSeconds < actions[index - 1].timestampSeconds)) return false
-  if (report.successfulActions.length > 0 && actions.length === 0) return false
-
   const emittedRedCommands = [...new Set(actions.flatMap(action => action.redCommands ?? []))]
   if (!sameStringArray(report.redCommandsUsed, emittedRedCommands)) return false
 
-  const successfulActionCounts = new Map<string, number>()
-  for (const action of report.successfulActions) {
-    successfulActionCounts.set(action, (successfulActionCounts.get(action) ?? 0) + 1)
+  // The engine is the source of truth for command/interaction traces. Preserve
+  // their action order and duplicates across separate actions; never infer
+  // success from command text or a compound command's final exit code.
+  const emittedSuccessfulCommands = actions.flatMap(action => action.successfulCommands)
+  return sameStringArray(report.successfulActions, emittedSuccessfulCommands)
+}
+
+type ReconstructedCheckResult = boolean | null
+
+function reconstructCheckResult(
+  level: MissionLevel,
+  check: LevelCheck,
+  report: MissionRunReport,
+): ReconstructedCheckResult {
+  if (check.type === 'command_used') {
+    if (!check.pattern) return false
+    return report.successfulActions.some(action => matchesMissionCommand(action, check.pattern!))
   }
-  const successfulInteractions = actions.filter(action => action.kind === 'interaction' && action.exitCode === 0)
-  for (const action of successfulInteractions) {
-    const count = successfulActionCounts.get(action.command) ?? 0
-    if (count <= 0) return false
-    successfulActionCounts.set(action.command, count - 1)
+  if (check.type === 'command_not_used') {
+    if (!check.pattern) return false
+    return !report.attemptedActions.some(action => matchesMissionCommand(action.command, check.pattern!))
   }
-  if (!actions.some(action => action.kind === 'command')) {
-    return [...successfulActionCounts.values()].every(count => count === 0)
+  if (check.type === 'no_red_command_used') {
+    return getUnexpectedRedCommands(level, report.redCommandsUsed).length === 0
   }
-  return true
+  // File and Git checks depend on terminal state that the compact report does
+  // not persist. A v1 report containing any such check is rejected below until
+  // the schema carries a bounded state snapshot that can reproduce it.
+  return null
+}
+
+function reconstructObjectiveCompletion(
+  level: MissionLevel,
+  objectiveId: string,
+  report: MissionRunReport,
+): ReconstructedCheckResult {
+  const checks = getEffectiveChecks(level)
+  const hasExplicitBindings = checks.some(check => Boolean(check.objectiveId))
+
+  if (hasExplicitBindings) {
+    const relevantChecks = checks.filter(check => check.objectiveId === objectiveId)
+    if (relevantChecks.length === 0) return false
+    const results = relevantChecks.map(check => reconstructCheckResult(level, check, report))
+    if (results.includes(false)) return false
+    return results.every(result => result === true) ? true : null
+  }
+
+  const objective = level.objectives.find(candidate => candidate.id === objectiveId)
+  if (!objective) return false
+  const progressChecks = checks.filter(check => check.type !== 'no_red_command_used')
+  const skillObjectives = level.objectives.filter(candidate => candidate.required && /^obj-\d+$/.test(candidate.id))
+  const skillIndex = skillObjectives.findIndex(candidate => candidate.id === objectiveId)
+  if (skillIndex >= 0) {
+    const check = progressChecks[skillIndex]
+    return check ? reconstructCheckResult(level, check, report) : false
+  }
+
+  const aggregateObjectives = level.objectives.filter(
+    candidate => candidate.required && !/^obj-\d+$/.test(candidate.id),
+  )
+  if (
+    objective.required
+    && aggregateObjectives.length === 1
+    && aggregateObjectives[0].id === objectiveId
+  ) {
+    if (progressChecks.length === 0) return false
+    const results = checks.map(check => reconstructCheckResult(level, check, report))
+    if (results.includes(false)) return false
+    return results.every(result => result === true) ? true : null
+  }
+
+  // Legacy optional objectives are intentionally unbound in validateMission.
+  return false
 }
 
 function hasConsistentMissionEvidence(level: MissionLevel, report: MissionRunReport): boolean {
@@ -266,44 +359,51 @@ function hasConsistentMissionEvidence(level: MissionLevel, report: MissionRunRep
   })) return false
   if (!isMissionComplete(level, report.validationResults)) return false
 
-  const attemptedCommands = report.attemptedActions.map(action => action.command)
-  const hasCommandAction = report.attemptedActions.some(action => action.kind === 'command')
-  const hasExplicitBindings = level.checks.some(check => Boolean(check.objectiveId))
-  const checksProvenComplete = hasExplicitBindings
-    ? level.checks.filter(check => Boolean(check.objectiveId && validationById.get(check.objectiveId)?.completed))
-    : level.checks
-  for (const check of checksProvenComplete) {
-    const pattern = check.pattern
-    if (!pattern) continue
-    if (check.type === 'command_used') {
-      if (!report.successfulActions.some(action => matchesMissionCommand(action, pattern))) return false
-      const hasDirectSource = attemptedCommands.some(action => matchesMissionCommand(action, pattern))
-      if (!hasDirectSource && !(hasCommandAction && GENERATED_COMMAND_TRACES.has(pattern))) return false
-    }
-    if (
-      check.type === 'command_not_used'
-      && attemptedCommands.some(action => matchesMissionCommand(action, pattern))
-    ) return false
-  }
-  return true
+  return level.objectives.every(objective => {
+    const expected = reconstructObjectiveCompletion(level, objective.id, report)
+    return expected !== null && validationById.get(objective.id)?.completed === expected
+  })
 }
 
 function isMissionRunReport(value: unknown, missionId: string): value is MissionRunReport {
   if (!isRecord(value) || value.version !== 1 || value.missionId !== missionId) return false
+  const completedTimestamp = typeof value.completedAt === 'string'
+    ? Date.parse(value.completedAt)
+    : Number.NaN
+  const validationNow = Date.now()
   if (
     value.completed !== true
     || typeof value.completedAt !== 'string'
-    || !Number.isFinite(Date.parse(value.completedAt))
+    || !Number.isFinite(completedTimestamp)
+    || new Date(completedTimestamp).toISOString() !== value.completedAt
+    || completedTimestamp < EARLIEST_RUN_REPORT_TIMESTAMP
+    || !Number.isFinite(validationNow)
+    || completedTimestamp > Math.min(
+      validationNow + RUN_REPORT_FUTURE_TOLERANCE_MS,
+      LATEST_RUN_REPORT_TIMESTAMP,
+    )
     || !isFiniteNumber(value.elapsedSeconds)
+    || !Number.isInteger(value.elapsedSeconds)
     || value.elapsedSeconds < 0
+    || value.elapsedSeconds > MAX_RUN_DURATION_SECONDS
     || !isFiniteNumber(value.hintsUsed)
     || !Number.isInteger(value.hintsUsed)
     || value.hintsUsed < 0
-    || !isStringArray(value.redCommandsUsed, 1_000, 20_000, false)
+    || !isStringArray(
+      value.redCommandsUsed,
+      RUN_REPORT_LIMITS.redCommands,
+      RUN_REPORT_LIMITS.traceCodeUnits,
+      false,
+    )
     || new Set(value.redCommandsUsed).size !== value.redCommandsUsed.length
-    || !isStringArray(value.successfulActions, 10_000, 20_000, false)
+    || !isStringArray(
+      value.successfulActions,
+      RUN_REPORT_LIMITS.successfulActions,
+      RUN_REPORT_LIMITS.traceCodeUnits,
+      false,
+    )
     || !Array.isArray(value.attemptedActions)
-    || value.attemptedActions.length > 10_000
+    || value.attemptedActions.length > RUN_REPORT_LIMITS.actions
     || !value.attemptedActions.every(action => isMissionRunAction(action, value.elapsedSeconds as number))
     || new Set(value.attemptedActions.map(action => (action as MissionRunAction).id)).size !== value.attemptedActions.length
     || !Array.isArray(value.validationResults)
@@ -312,7 +412,12 @@ function isMissionRunReport(value: unknown, missionId: string): value is Mission
   ) return false
   const report = value as unknown as MissionRunReport
   const level = getLevelById(missionId)
-  if (!level || !hasConsistentActionSources(report) || !hasConsistentMissionEvidence(level, report)) return false
+  if (
+    !level
+    || report.hintsUsed > level.hints.length
+    || !hasConsistentActionSources(report)
+    || !hasConsistentMissionEvidence(level, report)
+  ) return false
   const expectedScore = getExpectedScore(level, report)
   return Boolean(expectedScore && isScoreResult(report.scoreResult, expectedScore))
 }
@@ -320,7 +425,9 @@ function isMissionRunReport(value: unknown, missionId: string): value is Mission
 export function saveMissionRunReport(report: MissionRunReport): boolean {
   try {
     if (!isMissionRunReport(report, report.missionId)) return false
-    sessionStorage.setItem(storageKey(report.missionId), JSON.stringify(report))
+    const serialized = JSON.stringify(report)
+    if (!isWithinReportStorageBudget(serialized)) return false
+    sessionStorage.setItem(storageKey(report.missionId), serialized)
     return true
   } catch {
     return false
@@ -330,7 +437,7 @@ export function saveMissionRunReport(report: MissionRunReport): boolean {
 export function loadMissionRunReport(missionId: string): MissionRunReport | null {
   try {
     const raw = sessionStorage.getItem(storageKey(missionId))
-    if (!raw) return null
+    if (!raw || !isWithinReportStorageBudget(raw)) return null
     const report: unknown = JSON.parse(raw)
     return isMissionRunReport(report, missionId) ? report : null
   } catch {

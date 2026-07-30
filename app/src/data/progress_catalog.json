@@ -1,0 +1,4498 @@
+[
+  {
+    "i": "whoami-shell",
+    "te": "Who Am I in This Shell",
+    "tz": "我在哪个Shell里",
+    "c": "ch01",
+    "cte": "The Manual Is the Map",
+    "ctz": "手册即地图",
+    "cs": "Help & Discovery",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "whoami",
+      "id",
+      "type"
+    ],
+    "r": "green",
+    "a": [
+      "whoami",
+      "id"
+    ]
+  },
+  {
+    "i": "find-the-command",
+    "te": "Find the Command",
+    "tz": "找到那个命令",
+    "c": "ch01",
+    "cte": "The Manual Is the Map",
+    "ctz": "手册即地图",
+    "cs": "Help & Discovery",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "which",
+      "command -v"
+    ],
+    "r": "green",
+    "a": [
+      "which",
+      "command -v"
+    ]
+  },
+  {
+    "i": "man-page-door",
+    "te": "Man Page Door",
+    "tz": "手册页之门",
+    "c": "ch01",
+    "cte": "The Manual Is the Map",
+    "ctz": "手册即地图",
+    "cs": "Help & Discovery",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "man"
+    ],
+    "r": "green",
+    "a": [
+      "man"
+    ]
+  },
+  {
+    "i": "apropos-oracle",
+    "te": "Apropos Oracle",
+    "tz": "apropos神谕",
+    "c": "ch01",
+    "cte": "The Manual Is the Map",
+    "ctz": "手册即地图",
+    "cs": "Help & Discovery",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "apropos"
+    ],
+    "r": "blue",
+    "a": [
+      "apropos"
+    ]
+  },
+  {
+    "i": "builtin-or-binary",
+    "te": "Builtin or Binary",
+    "tz": "内建还是外部",
+    "c": "ch01",
+    "cte": "The Manual Is the Map",
+    "ctz": "手册即地图",
+    "cs": "Help & Discovery",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "type",
+      "which"
+    ],
+    "r": "blue",
+    "a": [
+      "type",
+      "which"
+    ]
+  },
+  {
+    "i": "history-echo",
+    "te": "History Echo",
+    "tz": "历史回响",
+    "c": "ch01",
+    "cte": "The Manual Is the Map",
+    "ctz": "手册即地图",
+    "cs": "Help & Discovery",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "history"
+    ],
+    "r": "green",
+    "a": [
+      "history"
+    ]
+  },
+  {
+    "i": "alias-trap",
+    "te": "Alias Trap",
+    "tz": "别名陷阱",
+    "c": "ch01",
+    "cte": "The Manual Is the Map",
+    "ctz": "手册即地图",
+    "cs": "Help & Discovery",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "alias",
+      "type"
+    ],
+    "r": "blue",
+    "a": [
+      "alias",
+      "type"
+    ]
+  },
+  {
+    "i": "help-no-internet",
+    "te": "Help Without Internet",
+    "tz": "断网求生",
+    "c": "ch01",
+    "cte": "The Manual Is the Map",
+    "ctz": "手册即地图",
+    "cs": "Help & Discovery",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "man",
+      "--help"
+    ],
+    "r": "blue",
+    "a": [
+      "man",
+      "--help"
+    ]
+  },
+  {
+    "i": "option-maze",
+    "te": "Option Maze",
+    "tz": "参数迷宫",
+    "c": "ch01",
+    "cte": "The Manual Is the Map",
+    "ctz": "手册即地图",
+    "cs": "Help & Discovery",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "--help",
+      "man"
+    ],
+    "r": "blue",
+    "a": [
+      "--help",
+      "man"
+    ]
+  },
+  {
+    "i": "wrong-which",
+    "te": "The Wrong Which",
+    "tz": "which的局限",
+    "c": "ch01",
+    "cte": "The Manual Is the Map",
+    "ctz": "手册即地图",
+    "cs": "Help & Discovery",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "type -a",
+      "which"
+    ],
+    "r": "blue",
+    "a": [
+      "type -a",
+      "which"
+    ]
+  },
+  {
+    "i": "briefing-recovery",
+    "te": "Briefing Recovery",
+    "tz": "简报恢复",
+    "c": "ch01",
+    "cte": "The Manual Is the Map",
+    "ctz": "手册即地图",
+    "cs": "Help & Discovery",
+    "m": "operation",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "man",
+      "apropos",
+      "which"
+    ],
+    "r": "yellow",
+    "a": [
+      "man",
+      "apropos"
+    ]
+  },
+  {
+    "i": "boss-silent-manual",
+    "te": "Boss: The Silent Manual",
+    "tz": "Boss: 静默手册",
+    "c": "ch01",
+    "cte": "The Manual Is the Map",
+    "ctz": "手册即地图",
+    "cs": "Help & Discovery",
+    "m": "boss",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "man",
+      "--help",
+      "info"
+    ],
+    "r": "red",
+    "a": [
+      "man",
+      "--help"
+    ]
+  },
+  {
+    "i": "nightmare-lost-search",
+    "te": "Nightmare: Lost Without Search",
+    "tz": "噩梦: 无搜索之境",
+    "c": "ch01",
+    "cte": "The Manual Is the Map",
+    "ctz": "手册即地图",
+    "cs": "Help & Discovery",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "man",
+      "apropos",
+      "type"
+    ],
+    "r": "purple",
+    "a": [
+      "man",
+      "apropos"
+    ]
+  },
+  {
+    "i": "wake-in-srv",
+    "te": "Wake in /srv",
+    "tz": "醒于/srv",
+    "c": "ch02",
+    "cte": "Filesystem Movement",
+    "ctz": "文件系统漫游",
+    "cs": "Navigation",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "pwd",
+      "ls",
+      "cd"
+    ],
+    "r": "green",
+    "a": [
+      "pwd",
+      "ls"
+    ]
+  },
+  {
+    "i": "hidden-door",
+    "te": "Hidden Door",
+    "tz": "隐藏之门",
+    "c": "ch02",
+    "cte": "Filesystem Movement",
+    "ctz": "文件系统漫游",
+    "cs": "Navigation",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "ls -a"
+    ],
+    "r": "green",
+    "a": [
+      "ls -a"
+    ]
+  },
+  {
+    "i": "backtrack",
+    "te": "Backtrack",
+    "tz": "回溯",
+    "c": "ch02",
+    "cte": "Filesystem Movement",
+    "ctz": "文件系统漫游",
+    "cs": "Navigation",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "cd .."
+    ],
+    "r": "green",
+    "a": [
+      "cd .."
+    ]
+  },
+  {
+    "i": "dash-portal",
+    "te": "The Dash Portal",
+    "tz": "cd-传送门",
+    "c": "ch02",
+    "cte": "Filesystem Movement",
+    "ctz": "文件系统漫游",
+    "cs": "Navigation",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "cd -"
+    ],
+    "r": "blue",
+    "a": [
+      "cd -"
+    ]
+  },
+  {
+    "i": "directory-stack",
+    "te": "Directory Stack",
+    "tz": "目录栈",
+    "c": "ch02",
+    "cte": "Filesystem Movement",
+    "ctz": "文件系统漫游",
+    "cs": "Navigation",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "pushd",
+      "popd",
+      "dirs"
+    ],
+    "r": "blue",
+    "a": [
+      "pushd",
+      "popd"
+    ]
+  },
+  {
+    "i": "file-type-scanner",
+    "te": "File Type Scanner",
+    "tz": "文件类型扫描",
+    "c": "ch02",
+    "cte": "Filesystem Movement",
+    "ctz": "文件系统漫游",
+    "cs": "Navigation",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "file",
+      "stat"
+    ],
+    "r": "blue",
+    "a": [
+      "file",
+      "stat"
+    ]
+  },
+  {
+    "i": "symlink-trace",
+    "te": "Symlink Trace",
+    "tz": "追踪符号链接",
+    "c": "ch02",
+    "cte": "Filesystem Movement",
+    "ctz": "文件系统漫游",
+    "cs": "Navigation",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "readlink",
+      "realpath"
+    ],
+    "r": "blue",
+    "a": [
+      "readlink",
+      "realpath"
+    ]
+  },
+  {
+    "i": "basename-cipher",
+    "te": "Basename Cipher",
+    "tz": "basename密码",
+    "c": "ch02",
+    "cte": "Filesystem Movement",
+    "ctz": "文件系统漫游",
+    "cs": "Navigation",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "basename",
+      "dirname"
+    ],
+    "r": "blue",
+    "a": [
+      "basename",
+      "dirname"
+    ]
+  },
+  {
+    "i": "tree-clues",
+    "te": "Tree of Clues",
+    "tz": "线索之树",
+    "c": "ch02",
+    "cte": "Filesystem Movement",
+    "ctz": "文件系统漫游",
+    "cs": "Navigation",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "tree",
+      "find"
+    ],
+    "r": "blue",
+    "a": [
+      "tree",
+      "find"
+    ]
+  },
+  {
+    "i": "glob-storm",
+    "te": "Glob Storm",
+    "tz": "通配符风暴",
+    "c": "ch02",
+    "cte": "Filesystem Movement",
+    "ctz": "文件系统漫游",
+    "cs": "Navigation",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "*",
+      "?"
+    ],
+    "r": "blue",
+    "a": [
+      "*",
+      "?"
+    ]
+  },
+  {
+    "i": "op-symlink-labyrinth",
+    "te": "Operation: Symlink Labyrinth",
+    "tz": "行动: 符号链接迷宫",
+    "c": "ch02",
+    "cte": "Filesystem Movement",
+    "ctz": "文件系统漫游",
+    "cs": "Navigation",
+    "m": "operation",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "readlink",
+      "find",
+      "cd"
+    ],
+    "r": "yellow",
+    "a": [
+      "readlink",
+      "find"
+    ]
+  },
+  {
+    "i": "boss-recursive-maze",
+    "te": "Boss: Recursive Maze",
+    "tz": "Boss: 递归迷宫",
+    "c": "ch02",
+    "cte": "Filesystem Movement",
+    "ctz": "文件系统漫游",
+    "cs": "Navigation",
+    "m": "boss",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "find",
+      "tree",
+      "cd"
+    ],
+    "r": "red",
+    "a": [
+      "find",
+      "tree"
+    ]
+  },
+  {
+    "i": "nightmare-wrong-dir",
+    "te": "Nightmare: Wrong Directory Panic",
+    "tz": "噩梦: 错误目录恐慌",
+    "c": "ch02",
+    "cte": "Filesystem Movement",
+    "ctz": "文件系统漫游",
+    "cs": "Navigation",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "cd",
+      "pwd",
+      "ls",
+      "find"
+    ],
+    "r": "purple",
+    "a": [
+      "cd",
+      "pwd"
+    ]
+  },
+  {
+    "i": "touch-signal",
+    "te": "Touch Signal",
+    "tz": "touch信号",
+    "c": "ch03",
+    "cte": "File Manipulation",
+    "ctz": "文件操控",
+    "cs": "File Operations",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "touch -t",
+      "stat"
+    ],
+    "r": "green",
+    "a": [
+      "touch -t 202401010830 signal.conf",
+      "stat signal.conf"
+    ]
+  },
+  {
+    "i": "safe-rooms",
+    "te": "Make Safe Rooms",
+    "tz": "安全创建目录",
+    "c": "ch03",
+    "cte": "File Manipulation",
+    "ctz": "文件操控",
+    "cs": "File Operations",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "mkdir -p"
+    ],
+    "r": "green",
+    "a": [
+      "mkdir -p"
+    ]
+  },
+  {
+    "i": "copy-safe",
+    "te": "Copy Without Overwrite",
+    "tz": "安全复制",
+    "c": "ch03",
+    "cte": "File Manipulation",
+    "ctz": "文件操控",
+    "cs": "File Operations",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "cp -i",
+      "cp -n"
+    ],
+    "r": "green",
+    "a": [
+      "cp -i",
+      "cp -n"
+    ]
+  },
+  {
+    "i": "move-evidence",
+    "te": "Move the Evidence",
+    "tz": "转移证据",
+    "c": "ch03",
+    "cte": "File Manipulation",
+    "ctz": "文件操控",
+    "cs": "File Operations",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "mv"
+    ],
+    "r": "blue",
+    "a": [
+      "mv"
+    ]
+  },
+  {
+    "i": "delete-decoys",
+    "te": "Delete the Decoys",
+    "tz": "删除诱饵",
+    "c": "ch03",
+    "cte": "File Manipulation",
+    "ctz": "文件操控",
+    "cs": "File Operations",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "rm"
+    ],
+    "r": "blue",
+    "a": [
+      "rm decoy.txt"
+    ]
+  },
+  {
+    "i": "hard-soft-link",
+    "te": "Hard Link / Soft Link",
+    "tz": "硬链接与软链接",
+    "c": "ch03",
+    "cte": "File Manipulation",
+    "ctz": "文件操控",
+    "cs": "File Operations",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "ln",
+      "ln -s"
+    ],
+    "r": "blue",
+    "a": [
+      "ln",
+      "ln -s"
+    ]
+  },
+  {
+    "i": "tail-feed",
+    "te": "Tail the Feed",
+    "tz": "追踪日志流",
+    "c": "ch03",
+    "cte": "File Manipulation",
+    "ctz": "文件操控",
+    "cs": "File Operations",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "tail -f"
+    ],
+    "r": "blue",
+    "a": [
+      "tail -f"
+    ]
+  },
+  {
+    "i": "tee-report",
+    "te": "Tee the Report",
+    "tz": "tee分流",
+    "c": "ch03",
+    "cte": "File Manipulation",
+    "ctz": "文件操控",
+    "cs": "File Operations",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "tee"
+    ],
+    "r": "blue",
+    "a": [
+      "tee"
+    ]
+  },
+  {
+    "i": "split-archive",
+    "te": "Split Archive",
+    "tz": "分割归档",
+    "c": "ch03",
+    "cte": "File Manipulation",
+    "ctz": "文件操控",
+    "cs": "File Operations",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "split",
+      "csplit"
+    ],
+    "r": "yellow",
+    "a": [
+      "split",
+      "csplit"
+    ]
+  },
+  {
+    "i": "truncate-trap",
+    "te": "Truncate Trap",
+    "tz": "truncate陷阱",
+    "c": "ch03",
+    "cte": "File Manipulation",
+    "ctz": "文件操控",
+    "cs": "File Operations",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "truncate"
+    ],
+    "r": "yellow",
+    "a": [
+      "truncate -s 16 /home/ghost/truncate-demo.txt"
+    ]
+  },
+  {
+    "i": "op-red-button",
+    "te": "Operation: Red Button Is rm",
+    "tz": "行动: 红色按钮是rm",
+    "c": "ch03",
+    "cte": "File Manipulation",
+    "ctz": "文件操控",
+    "cs": "File Operations",
+    "m": "operation",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "rm -i",
+      "cp",
+      "mv"
+    ],
+    "r": "yellow",
+    "a": [
+      "rm -i /tmp/session.lock",
+      "cp /etc/hosts /home/ghost/hosts.backup"
+    ]
+  },
+  {
+    "i": "boss-100-files",
+    "te": "Boss: 100 Files, 3 Targets",
+    "tz": "Boss: 百文件三目标",
+    "c": "ch03",
+    "cte": "File Manipulation",
+    "ctz": "文件操控",
+    "cs": "File Operations",
+    "m": "boss",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "find",
+      "cp",
+      "rm",
+      "ln"
+    ],
+    "r": "red",
+    "a": [
+      "find",
+      "cp"
+    ]
+  },
+  {
+    "i": "nightmare-recursive-rm",
+    "te": "Nightmare: Recursive Deletion Drill",
+    "tz": "噩梦: 递归删除演练",
+    "c": "ch03",
+    "cte": "File Manipulation",
+    "ctz": "文件操控",
+    "cs": "File Operations",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "find",
+      "rm",
+      "-i"
+    ],
+    "r": "purple",
+    "a": [
+      "find drill -name '*.tmp'",
+      "rm -i drill/nested/decoy.tmp"
+    ]
+  },
+  {
+    "i": "who-owns-door",
+    "te": "Who Owns the Door",
+    "tz": "谁拥有这扇门",
+    "c": "ch04",
+    "cte": "Permissions & Identity",
+    "ctz": "权限与身份",
+    "cs": "Permissions",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "ls -l",
+      "id"
+    ],
+    "r": "green",
+    "a": [
+      "ls -l",
+      "id"
+    ]
+  },
+  {
+    "i": "execute-bit",
+    "te": "Execute Bit Mystery",
+    "tz": "执行位之谜",
+    "c": "ch04",
+    "cte": "Permissions & Identity",
+    "ctz": "权限与身份",
+    "cs": "Permissions",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "chmod"
+    ],
+    "r": "blue",
+    "a": [
+      "chmod u+x run.sh"
+    ]
+  },
+  {
+    "i": "minimal-chmod",
+    "te": "Minimal chmod",
+    "tz": "最小chmod",
+    "c": "ch04",
+    "cte": "Permissions & Identity",
+    "ctz": "权限与身份",
+    "cs": "Permissions",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "chmod u+x",
+      "chmod g-w"
+    ],
+    "r": "blue",
+    "a": [
+      "chmod u+x /home/ghost/projects/README.md",
+      "chmod g-w /home/ghost/projects/README.md"
+    ]
+  },
+  {
+    "i": "numeric-perms",
+    "te": "Numeric Permissions",
+    "tz": "数字权限",
+    "c": "ch04",
+    "cte": "Permissions & Identity",
+    "ctz": "权限与身份",
+    "cs": "Permissions",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "chmod 644",
+      "chmod 755"
+    ],
+    "r": "blue",
+    "a": [
+      "chmod 644 /home/ghost/projects/README.md",
+      "chmod 755 /home/ghost/projects/README.md"
+    ]
+  },
+  {
+    "i": "owner-switch",
+    "te": "Owner Switch",
+    "tz": "切换所有者",
+    "c": "ch04",
+    "cte": "Permissions & Identity",
+    "ctz": "权限与身份",
+    "cs": "Permissions",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "chown",
+      "chgrp"
+    ],
+    "r": "blue",
+    "a": [
+      "chown root:root ownership.txt",
+      "chgrp sudo ownership.txt"
+    ]
+  },
+  {
+    "i": "umask-shadow",
+    "te": "Umask Shadow",
+    "tz": "umask暗影",
+    "c": "ch04",
+    "cte": "Permissions & Identity",
+    "ctz": "权限与身份",
+    "cs": "Permissions",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "umask"
+    ],
+    "r": "yellow",
+    "a": [
+      "umask"
+    ]
+  },
+  {
+    "i": "sudo-boundary",
+    "te": "Sudo Boundary",
+    "tz": "sudo边界",
+    "c": "ch04",
+    "cte": "Permissions & Identity",
+    "ctz": "权限与身份",
+    "cs": "Permissions",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "sudo"
+    ],
+    "r": "yellow",
+    "a": [
+      "sudo"
+    ]
+  },
+  {
+    "i": "acl-door",
+    "te": "ACL Side Door",
+    "tz": "ACL侧门",
+    "c": "ch04",
+    "cte": "Permissions & Identity",
+    "ctz": "权限与身份",
+    "cs": "Permissions",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "getfacl",
+      "setfacl"
+    ],
+    "r": "yellow",
+    "a": [
+      "getfacl",
+      "setfacl"
+    ]
+  },
+  {
+    "i": "sticky-alley",
+    "te": "Sticky Alley",
+    "tz": "粘滞位小巷",
+    "c": "ch04",
+    "cte": "Permissions & Identity",
+    "ctz": "权限与身份",
+    "cs": "Permissions",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "chmod +t"
+    ],
+    "r": "yellow",
+    "a": [
+      "chmod +t /home/ghost/projects"
+    ]
+  },
+  {
+    "i": "suid-warning",
+    "te": "SUID Warning",
+    "tz": "SUID警告",
+    "c": "ch04",
+    "cte": "Permissions & Identity",
+    "ctz": "权限与身份",
+    "cs": "Permissions",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "find -perm"
+    ],
+    "r": "yellow",
+    "a": [
+      "find -perm"
+    ]
+  },
+  {
+    "i": "op-777-trap",
+    "te": "Operation: 777 Is a Trap",
+    "tz": "行动: 777是陷阱",
+    "c": "ch04",
+    "cte": "Permissions & Identity",
+    "ctz": "权限与身份",
+    "cs": "Permissions",
+    "m": "operation",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "chmod",
+      "ls -l"
+    ],
+    "r": "yellow",
+    "a": [
+      "chmod 640 secure.conf",
+      "ls -l secure.conf"
+    ]
+  },
+  {
+    "i": "boss-perm-lockdown",
+    "te": "Boss: Permission Lockdown",
+    "tz": "Boss: 权限封锁",
+    "c": "ch04",
+    "cte": "Permissions & Identity",
+    "ctz": "权限与身份",
+    "cs": "Permissions",
+    "m": "boss",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "chmod",
+      "chown",
+      "getfacl"
+    ],
+    "r": "red",
+    "a": [
+      "chmod 640 lockdown.conf",
+      "chown root:root lockdown.conf"
+    ]
+  },
+  {
+    "i": "nightmare-service-read",
+    "te": "Nightmare: Service Cannot Read Config",
+    "tz": "噩梦: 服务无法读取配置",
+    "c": "ch04",
+    "cte": "Permissions & Identity",
+    "ctz": "权限与身份",
+    "cs": "Permissions",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "chmod",
+      "chown",
+      "ls -l"
+    ],
+    "r": "purple",
+    "a": [
+      "chmod 640 service.conf",
+      "chown www-data:www-data service.conf"
+    ]
+  },
+  {
+    "i": "find-error",
+    "te": "Find ERROR",
+    "tz": "寻找ERROR",
+    "c": "ch05",
+    "cte": "Text Intelligence",
+    "ctz": "文本智能",
+    "cs": "Text Processing",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "grep"
+    ],
+    "r": "green",
+    "a": [
+      "grep"
+    ]
+  },
+  {
+    "i": "line-numbers",
+    "te": "Line Numbers Matter",
+    "tz": "行号很重要",
+    "c": "ch05",
+    "cte": "Text Intelligence",
+    "ctz": "文本智能",
+    "cs": "Text Processing",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "grep -n"
+    ],
+    "r": "green",
+    "a": [
+      "grep -n"
+    ]
+  },
+  {
+    "i": "recursive-signal",
+    "te": "Recursive Signal",
+    "tz": "递归搜索",
+    "c": "ch05",
+    "cte": "Text Intelligence",
+    "ctz": "文本智能",
+    "cs": "Text Processing",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "grep -R"
+    ],
+    "r": "blue",
+    "a": [
+      "grep -R"
+    ]
+  },
+  {
+    "i": "find-by-name",
+    "te": "Find by Name",
+    "tz": "按名查找",
+    "c": "ch05",
+    "cte": "Text Intelligence",
+    "ctz": "文本智能",
+    "cs": "Text Processing",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "find -name"
+    ],
+    "r": "green",
+    "a": [
+      "find -name"
+    ]
+  },
+  {
+    "i": "find-time-size",
+    "te": "Find by Time and Size",
+    "tz": "按时间和大小查找",
+    "c": "ch05",
+    "cte": "Text Intelligence",
+    "ctz": "文本智能",
+    "cs": "Text Processing",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "find -mtime",
+      "find -size"
+    ],
+    "r": "blue",
+    "a": [
+      "find -mtime",
+      "find -size"
+    ]
+  },
+  {
+    "i": "safe-xargs",
+    "te": "Safe Xargs",
+    "tz": "安全xargs",
+    "c": "ch05",
+    "cte": "Text Intelligence",
+    "ctz": "文本智能",
+    "cs": "Text Processing",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "find -print0",
+      "xargs -0"
+    ],
+    "r": "blue",
+    "a": [
+      "find -print0",
+      "xargs -0"
+    ]
+  },
+  {
+    "i": "awk-extractor",
+    "te": "Awk Extractor",
+    "tz": "Awk提取器",
+    "c": "ch05",
+    "cte": "Text Intelligence",
+    "ctz": "文本智能",
+    "cs": "Text Processing",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "awk"
+    ],
+    "r": "yellow",
+    "a": [
+      "awk"
+    ]
+  },
+  {
+    "i": "sed-window",
+    "te": "Sed Window",
+    "tz": "Sed窗口",
+    "c": "ch05",
+    "cte": "Text Intelligence",
+    "ctz": "文本智能",
+    "cs": "Text Processing",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "sed -n"
+    ],
+    "r": "yellow",
+    "a": [
+      "sed -n"
+    ]
+  },
+  {
+    "i": "sort-attackers",
+    "te": "Sort the Attackers",
+    "tz": "排序攻击者",
+    "c": "ch05",
+    "cte": "Text Intelligence",
+    "ctz": "文本智能",
+    "cs": "Text Processing",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "sort",
+      "uniq -c"
+    ],
+    "r": "blue",
+    "a": [
+      "sort",
+      "uniq -c"
+    ]
+  },
+  {
+    "i": "json-oracle",
+    "te": "JSON Oracle",
+    "tz": "JSON神谕",
+    "c": "ch05",
+    "cte": "Text Intelligence",
+    "ctz": "文本智能",
+    "cs": "Text Processing",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "jq"
+    ],
+    "r": "yellow",
+    "a": [
+      "jq"
+    ]
+  },
+  {
+    "i": "op-log-ocean",
+    "te": "Operation: Log Ocean",
+    "tz": "行动: 日志海洋",
+    "c": "ch05",
+    "cte": "Text Intelligence",
+    "ctz": "文本智能",
+    "cs": "Text Processing",
+    "m": "operation",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "grep",
+      "awk",
+      "sort"
+    ],
+    "r": "yellow",
+    "a": [
+      "grep",
+      "awk"
+    ]
+  },
+  {
+    "i": "boss-one-pipe",
+    "te": "Boss: One Pipe to Rule Them All",
+    "tz": "Boss: 一统管道",
+    "c": "ch05",
+    "cte": "Text Intelligence",
+    "ctz": "文本智能",
+    "cs": "Text Processing",
+    "m": "boss",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "grep",
+      "awk",
+      "sed",
+      "sort"
+    ],
+    "r": "red",
+    "a": [
+      "grep",
+      "awk"
+    ]
+  },
+  {
+    "i": "nightmare-million-line",
+    "te": "Nightmare: Million-Line Signal",
+    "tz": "噩梦: 百万行信号",
+    "c": "ch05",
+    "cte": "Text Intelligence",
+    "ctz": "文本智能",
+    "cs": "Text Processing",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "grep",
+      "awk",
+      "sed"
+    ],
+    "r": "purple",
+    "a": [
+      "grep",
+      "awk"
+    ]
+  },
+  {
+    "i": "variable-ghost",
+    "te": "Variable Ghost",
+    "tz": "变量幽灵",
+    "c": "ch06",
+    "cte": "Bash Language",
+    "ctz": "Bash语言",
+    "cs": "Shell Scripting",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "$VAR"
+    ],
+    "r": "green",
+    "a": [
+      "$VAR"
+    ]
+  },
+  {
+    "i": "quote-hell-i",
+    "te": "Quote Hell I",
+    "tz": "引号地狱I",
+    "c": "ch06",
+    "cte": "Bash Language",
+    "ctz": "Bash语言",
+    "cs": "Shell Scripting",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "'",
+      "\"",
+      "\\"
+    ],
+    "r": "blue",
+    "a": [
+      "'",
+      "\""
+    ]
+  },
+  {
+    "i": "if-gate",
+    "te": "If Gate",
+    "tz": "If之门",
+    "c": "ch06",
+    "cte": "Bash Language",
+    "ctz": "Bash语言",
+    "cs": "Shell Scripting",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "if",
+      "test"
+    ],
+    "r": "blue",
+    "a": [
+      "if",
+      "test"
+    ]
+  },
+  {
+    "i": "loop-patrol",
+    "te": "Loop Patrol",
+    "tz": "循环巡逻",
+    "c": "ch06",
+    "cte": "Bash Language",
+    "ctz": "Bash语言",
+    "cs": "Shell Scripting",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "for",
+      "while"
+    ],
+    "r": "blue",
+    "a": [
+      "for",
+      "while"
+    ]
+  },
+  {
+    "i": "read-lines",
+    "te": "Read Lines Safely",
+    "tz": "安全读取行",
+    "c": "ch06",
+    "cte": "Bash Language",
+    "ctz": "Bash语言",
+    "cs": "Shell Scripting",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "read",
+      "while read"
+    ],
+    "r": "blue",
+    "a": [
+      "read",
+      "while read"
+    ]
+  },
+  {
+    "i": "function-token",
+    "te": "Function Token",
+    "tz": "函数令牌",
+    "c": "ch06",
+    "cte": "Bash Language",
+    "ctz": "Bash语言",
+    "cs": "Shell Scripting",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "function"
+    ],
+    "r": "blue",
+    "a": [
+      "function"
+    ]
+  },
+  {
+    "i": "exit-code",
+    "te": "Exit Code Contract",
+    "tz": "退出码契约",
+    "c": "ch06",
+    "cte": "Bash Language",
+    "ctz": "Bash语言",
+    "cs": "Shell Scripting",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "$?"
+    ],
+    "r": "blue",
+    "a": [
+      "$?"
+    ]
+  },
+  {
+    "i": "trap-cleanup",
+    "te": "Trap Cleanup",
+    "tz": "Trap清理",
+    "c": "ch06",
+    "cte": "Bash Language",
+    "ctz": "Bash语言",
+    "cs": "Shell Scripting",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "trap"
+    ],
+    "r": "yellow",
+    "a": [
+      "trap"
+    ]
+  },
+  {
+    "i": "getopts-console",
+    "te": "Getopts Console",
+    "tz": "Getopts控制台",
+    "c": "ch06",
+    "cte": "Bash Language",
+    "ctz": "Bash语言",
+    "cs": "Shell Scripting",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "getopts"
+    ],
+    "r": "yellow",
+    "a": [
+      "getopts"
+    ]
+  },
+  {
+    "i": "array-vault",
+    "te": "Array Vault",
+    "tz": "数组仓库",
+    "c": "ch06",
+    "cte": "Bash Language",
+    "ctz": "Bash语言",
+    "cs": "Shell Scripting",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "array"
+    ],
+    "r": "yellow",
+    "a": [
+      "array"
+    ]
+  },
+  {
+    "i": "op-broken-deploy",
+    "te": "Operation: Broken Deploy Script",
+    "tz": "行动: 损坏的部署脚本",
+    "c": "ch06",
+    "cte": "Bash Language",
+    "ctz": "Bash语言",
+    "cs": "Shell Scripting",
+    "m": "operation",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "bash",
+      "if",
+      "for"
+    ],
+    "r": "yellow",
+    "a": [
+      "bash",
+      "if"
+    ]
+  },
+  {
+    "i": "boss-quote-hell-ii",
+    "te": "Boss: Quote Hell II",
+    "tz": "Boss: 引号地狱II",
+    "c": "ch06",
+    "cte": "Bash Language",
+    "ctz": "Bash语言",
+    "cs": "Shell Scripting",
+    "m": "boss",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "\"",
+      "'",
+      "\\",
+      "$()"
+    ],
+    "r": "red",
+    "a": [
+      "\"",
+      "'"
+    ]
+  },
+  {
+    "i": "nightmare-spaces",
+    "te": "Nightmare: Spaces, Newlines, Asterisks",
+    "tz": "噩梦: 空格换行星号",
+    "c": "ch06",
+    "cte": "Bash Language",
+    "ctz": "Bash语言",
+    "cs": "Shell Scripting",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "\"",
+      "'",
+      "IFS"
+    ],
+    "r": "purple",
+    "a": [
+      "\"",
+      "'"
+    ]
+  },
+  {
+    "i": "pipe-first",
+    "te": "Pipe First Contact",
+    "tz": "首次接触管道",
+    "c": "ch07",
+    "cte": "Pipes & IO",
+    "ctz": "管道与IO",
+    "cs": "IO Redirection",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "|"
+    ],
+    "r": "green",
+    "a": [
+      "|"
+    ]
+  },
+  {
+    "i": "redirect-out",
+    "te": "Redirect Output",
+    "tz": "重定向输出",
+    "c": "ch07",
+    "cte": "Pipes & IO",
+    "ctz": "管道与IO",
+    "cs": "IO Redirection",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      ">"
+    ],
+    "r": "green",
+    "a": [
+      ">"
+    ]
+  },
+  {
+    "i": "capture-errors",
+    "te": "Capture Errors",
+    "tz": "捕获错误",
+    "c": "ch07",
+    "cte": "Pipes & IO",
+    "ctz": "管道与IO",
+    "cs": "IO Redirection",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "2>"
+    ],
+    "r": "blue",
+    "a": [
+      "2>"
+    ]
+  },
+  {
+    "i": "append-evidence",
+    "te": "Append Evidence",
+    "tz": "追加证据",
+    "c": "ch07",
+    "cte": "Pipes & IO",
+    "ctz": "管道与IO",
+    "cs": "IO Redirection",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      ">>"
+    ],
+    "r": "green",
+    "a": [
+      ">>"
+    ]
+  },
+  {
+    "i": "tee-mirror",
+    "te": "Tee Mirror",
+    "tz": "Tee镜像",
+    "c": "ch07",
+    "cte": "Pipes & IO",
+    "ctz": "管道与IO",
+    "cs": "IO Redirection",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "tee"
+    ],
+    "r": "blue",
+    "a": [
+      "tee"
+    ]
+  },
+  {
+    "i": "conditional-chain",
+    "te": "Conditional Chain",
+    "tz": "条件链",
+    "c": "ch07",
+    "cte": "Pipes & IO",
+    "ctz": "管道与IO",
+    "cs": "IO Redirection",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "&&",
+      "||"
+    ],
+    "r": "blue",
+    "a": [
+      "&&",
+      "||"
+    ]
+  },
+  {
+    "i": "exit-code-hunt",
+    "te": "Exit Code Hunt",
+    "tz": "追踪退出码",
+    "c": "ch07",
+    "cte": "Pipes & IO",
+    "ctz": "管道与IO",
+    "cs": "IO Redirection",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "$?"
+    ],
+    "r": "blue",
+    "a": [
+      "$?"
+    ]
+  },
+  {
+    "i": "heredoc-msg",
+    "te": "Heredoc Message",
+    "tz": "Here文档",
+    "c": "ch07",
+    "cte": "Pipes & IO",
+    "ctz": "管道与IO",
+    "cs": "IO Redirection",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "<<"
+    ],
+    "r": "blue",
+    "a": [
+      "<<"
+    ]
+  },
+  {
+    "i": "process-sub",
+    "te": "Process Substitution",
+    "tz": "进程替换",
+    "c": "ch07",
+    "cte": "Pipes & IO",
+    "ctz": "管道与IO",
+    "cs": "IO Redirection",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "<()"
+    ],
+    "r": "yellow",
+    "a": [
+      "<()"
+    ]
+  },
+  {
+    "i": "pipefail-lab",
+    "te": "Pipefail Lab",
+    "tz": "Pipefail实验室",
+    "c": "ch07",
+    "cte": "Pipes & IO",
+    "ctz": "管道与IO",
+    "cs": "IO Redirection",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "set -o pipefail"
+    ],
+    "r": "yellow",
+    "a": [
+      "set -o pipefail"
+    ]
+  },
+  {
+    "i": "op-silent-failure",
+    "te": "Operation: Silent Failure",
+    "tz": "行动: 静默失败",
+    "c": "ch07",
+    "cte": "Pipes & IO",
+    "ctz": "管道与IO",
+    "cs": "IO Redirection",
+    "m": "operation",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "|",
+      ">",
+      "2>"
+    ],
+    "r": "yellow",
+    "a": [
+      "|",
+      ">"
+    ]
+  },
+  {
+    "i": "boss-error-split",
+    "te": "Boss: Error Stream Split",
+    "tz": "Boss: 错误流分割",
+    "c": "ch07",
+    "cte": "Pipes & IO",
+    "ctz": "管道与IO",
+    "cs": "IO Redirection",
+    "m": "boss",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "2>",
+      "|",
+      "tee"
+    ],
+    "r": "red",
+    "a": [
+      "2>",
+      "|"
+    ]
+  },
+  {
+    "i": "nightmare-hidden-failure",
+    "te": "Nightmare: Pipeline with Hidden Failure",
+    "tz": "噩梦: 隐藏失败管道",
+    "c": "ch07",
+    "cte": "Pipes & IO",
+    "ctz": "管道与IO",
+    "cs": "IO Redirection",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "|",
+      "set -o pipefail",
+      "$?"
+    ],
+    "r": "purple",
+    "a": [
+      "|",
+      "set -o pipefail"
+    ]
+  },
+  {
+    "i": "ctrl-c-reflex",
+    "te": "Ctrl-C Reflex",
+    "tz": "Ctrl-C反射",
+    "c": "ch08",
+    "cte": "Keyboard Survival",
+    "ctz": "键盘求生",
+    "cs": "Terminal Shortcuts",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "Ctrl-C"
+    ],
+    "r": "green",
+    "a": [
+      "Ctrl-C"
+    ]
+  },
+  {
+    "i": "ctrl-d-door",
+    "te": "Ctrl-D Door",
+    "tz": "Ctrl-D之门",
+    "c": "ch08",
+    "cte": "Keyboard Survival",
+    "ctz": "键盘求生",
+    "cs": "Terminal Shortcuts",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "Ctrl-D"
+    ],
+    "r": "green",
+    "a": [
+      "Ctrl-D"
+    ]
+  },
+  {
+    "i": "ctrl-z-suspend",
+    "te": "Ctrl-Z Suspend",
+    "tz": "Ctrl-Z挂起",
+    "c": "ch08",
+    "cte": "Keyboard Survival",
+    "ctz": "键盘求生",
+    "cs": "Terminal Shortcuts",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "Ctrl-Z"
+    ],
+    "r": "blue",
+    "a": [
+      "Ctrl-Z"
+    ]
+  },
+  {
+    "i": "fg-bg-recovery",
+    "te": "fg/bg Recovery",
+    "tz": "fg/bg恢复",
+    "c": "ch08",
+    "cte": "Keyboard Survival",
+    "ctz": "键盘求生",
+    "cs": "Terminal Shortcuts",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "fg",
+      "bg"
+    ],
+    "r": "blue",
+    "a": [
+      "fg",
+      "bg"
+    ]
+  },
+  {
+    "i": "ctrl-r-search",
+    "te": "Ctrl-R History Search",
+    "tz": "Ctrl-R历史搜索",
+    "c": "ch08",
+    "cte": "Keyboard Survival",
+    "ctz": "键盘求生",
+    "cs": "Terminal Shortcuts",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "Ctrl-R"
+    ],
+    "r": "blue",
+    "a": [
+      "Ctrl-R"
+    ]
+  },
+  {
+    "i": "ctrl-ukw",
+    "te": "Ctrl-U/K/W Editing",
+    "tz": "行编辑",
+    "c": "ch08",
+    "cte": "Keyboard Survival",
+    "ctz": "键盘求生",
+    "cs": "Terminal Shortcuts",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "Ctrl-U",
+      "Ctrl-K",
+      "Ctrl-W"
+    ],
+    "r": "green",
+    "a": [
+      "Ctrl-U",
+      "Ctrl-K"
+    ]
+  },
+  {
+    "i": "alt-dot",
+    "te": "Alt-Dot Recall",
+    "tz": "Alt-.回忆",
+    "c": "ch08",
+    "cte": "Keyboard Survival",
+    "ctz": "键盘求生",
+    "cs": "Terminal Shortcuts",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "Alt-."
+    ],
+    "r": "blue",
+    "a": [
+      "Alt-."
+    ]
+  },
+  {
+    "i": "ctrl-s-curse",
+    "te": "Ctrl-S Curse",
+    "tz": "Ctrl-S诅咒",
+    "c": "ch08",
+    "cte": "Keyboard Survival",
+    "ctz": "键盘求生",
+    "cs": "Terminal Shortcuts",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "Ctrl-S",
+      "Ctrl-Q"
+    ],
+    "r": "blue",
+    "a": [
+      "Ctrl-S",
+      "Ctrl-Q"
+    ]
+  },
+  {
+    "i": "quote-prompt",
+    "te": "Quote Prompt Escape",
+    "tz": "提示符转义",
+    "c": "ch08",
+    "cte": "Keyboard Survival",
+    "ctz": "键盘求生",
+    "cs": "Terminal Shortcuts",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "\\"
+    ],
+    "r": "blue",
+    "a": [
+      "\\"
+    ]
+  },
+  {
+    "i": "reverse-search-panic",
+    "te": "Reverse Search Panic",
+    "tz": "反向搜索恐慌",
+    "c": "ch08",
+    "cte": "Keyboard Survival",
+    "ctz": "键盘求生",
+    "cs": "Terminal Shortcuts",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "Ctrl-R",
+      "Ctrl-G"
+    ],
+    "r": "blue",
+    "a": [
+      "Ctrl-R",
+      "Ctrl-G"
+    ]
+  },
+  {
+    "i": "op-frozen-terminal",
+    "te": "Operation: Frozen Terminal",
+    "tz": "行动: 冻结终端",
+    "c": "ch08",
+    "cte": "Keyboard Survival",
+    "ctz": "键盘求生",
+    "cs": "Terminal Shortcuts",
+    "m": "operation",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "Ctrl-S",
+      "Ctrl-Q",
+      "Ctrl-Z"
+    ],
+    "r": "yellow",
+    "a": [
+      "Ctrl-S",
+      "Ctrl-Q"
+    ]
+  },
+  {
+    "i": "boss-panic-marathon",
+    "te": "Boss: Panic Drill Marathon",
+    "tz": "Boss: 恐慌演练马拉松",
+    "c": "ch08",
+    "cte": "Keyboard Survival",
+    "ctz": "键盘求生",
+    "cs": "Terminal Shortcuts",
+    "m": "boss",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "Ctrl-C",
+      "Ctrl-D",
+      "Ctrl-Z",
+      "fg"
+    ],
+    "r": "red",
+    "a": [
+      "Ctrl-C",
+      "Ctrl-D"
+    ]
+  },
+  {
+    "i": "nightmare-60sec",
+    "te": "Nightmare: 60-Second Escape Gauntlet",
+    "tz": "噩梦: 60秒逃生试炼",
+    "c": "ch08",
+    "cte": "Keyboard Survival",
+    "ctz": "键盘求生",
+    "cs": "Terminal Shortcuts",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "Ctrl-C",
+      "Ctrl-D",
+      "q",
+      ":q!"
+    ],
+    "r": "purple",
+    "a": [
+      "Ctrl-C",
+      "Ctrl-D"
+    ]
+  },
+  {
+    "i": "ps-snapshot",
+    "te": "ps Snapshot",
+    "tz": "ps快照",
+    "c": "ch09",
+    "cte": "Process & Resource",
+    "ctz": "进程与资源",
+    "cs": "Process Management",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "ps"
+    ],
+    "r": "green",
+    "a": [
+      "ps"
+    ]
+  },
+  {
+    "i": "top-watchtower",
+    "te": "top Watchtower",
+    "tz": "top瞭望塔",
+    "c": "ch09",
+    "cte": "Process & Resource",
+    "ctz": "进程与资源",
+    "cs": "Process Management",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "top"
+    ],
+    "r": "blue",
+    "a": [
+      "top"
+    ]
+  },
+  {
+    "i": "pgrep-signal",
+    "te": "pgrep Signal",
+    "tz": "pgrep信号",
+    "c": "ch09",
+    "cte": "Process & Resource",
+    "ctz": "进程与资源",
+    "cs": "Process Management",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "pgrep"
+    ],
+    "r": "blue",
+    "a": [
+      "pgrep"
+    ]
+  },
+  {
+    "i": "graceful-kill",
+    "te": "Graceful Kill",
+    "tz": "优雅终止",
+    "c": "ch09",
+    "cte": "Process & Resource",
+    "ctz": "进程与资源",
+    "cs": "Process Management",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "pgrep node",
+      "kill -TERM"
+    ],
+    "r": "blue",
+    "a": [
+      "pgrep node",
+      "kill -TERM 1842"
+    ]
+  },
+  {
+    "i": "dont-kill-pid1",
+    "te": "Do Not Kill PID 1",
+    "tz": "别杀PID 1",
+    "c": "ch09",
+    "cte": "Process & Resource",
+    "ctz": "进程与资源",
+    "cs": "Process Management",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "ps",
+      "kill"
+    ],
+    "r": "yellow",
+    "a": [
+      "ps",
+      "kill -TERM 1842"
+    ]
+  },
+  {
+    "i": "watch-loop",
+    "te": "watch Loop",
+    "tz": "watch循环",
+    "c": "ch09",
+    "cte": "Process & Resource",
+    "ctz": "进程与资源",
+    "cs": "Process Management",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "watch"
+    ],
+    "r": "blue",
+    "a": [
+      "watch"
+    ]
+  },
+  {
+    "i": "timeout-shield",
+    "te": "timeout Shield",
+    "tz": "timeout护盾",
+    "c": "ch09",
+    "cte": "Process & Resource",
+    "ctz": "进程与资源",
+    "cs": "Process Management",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "timeout"
+    ],
+    "r": "blue",
+    "a": [
+      "timeout"
+    ]
+  },
+  {
+    "i": "lsof-port",
+    "te": "lsof Port Owner",
+    "tz": "lsof端口主人",
+    "c": "ch09",
+    "cte": "Process & Resource",
+    "ctz": "进程与资源",
+    "cs": "Process Management",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "lsof"
+    ],
+    "r": "yellow",
+    "a": [
+      "lsof"
+    ]
+  },
+  {
+    "i": "strace-first",
+    "te": "strace First Contact",
+    "tz": "初识strace",
+    "c": "ch09",
+    "cte": "Process & Resource",
+    "ctz": "进程与资源",
+    "cs": "Process Management",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "strace"
+    ],
+    "r": "yellow",
+    "a": [
+      "strace"
+    ]
+  },
+  {
+    "i": "nice-operator",
+    "te": "nice Operator",
+    "tz": "nice操作员",
+    "c": "ch09",
+    "cte": "Process & Resource",
+    "ctz": "进程与资源",
+    "cs": "Process Management",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "nice",
+      "renice"
+    ],
+    "r": "yellow",
+    "a": [
+      "nice",
+      "renice"
+    ]
+  },
+  {
+    "i": "op-cpu-hydra",
+    "te": "Operation: CPU Hydra",
+    "tz": "行动: CPU九头蛇",
+    "c": "ch09",
+    "cte": "Process & Resource",
+    "ctz": "进程与资源",
+    "cs": "Process Management",
+    "m": "operation",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "ps",
+      "kill",
+      "nice"
+    ],
+    "r": "yellow",
+    "a": [
+      "ps",
+      "kill -STOP 1842"
+    ]
+  },
+  {
+    "i": "boss-zombie-theater",
+    "te": "Boss: Stopped Process Recovery",
+    "tz": "Boss: 停止进程恢复",
+    "c": "ch09",
+    "cte": "Process & Resource",
+    "ctz": "进程与资源",
+    "cs": "Process Management",
+    "m": "boss",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "ps -ef",
+      "kill -STOP 1842",
+      "kill -CONT 1842"
+    ],
+    "r": "red",
+    "a": [
+      "ps -ef",
+      "kill -STOP 1842",
+      "kill -CONT 1842"
+    ]
+  },
+  {
+    "i": "nightmare-kill-right",
+    "te": "Nightmare: Kill the Right One",
+    "tz": "噩梦: 杀对那个",
+    "c": "ch09",
+    "cte": "Process & Resource",
+    "ctz": "进程与资源",
+    "cs": "Process Management",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "ps",
+      "pgrep",
+      "kill"
+    ],
+    "r": "purple",
+    "a": [
+      "ps",
+      "pgrep"
+    ]
+  },
+  {
+    "i": "df-overview",
+    "te": "df Overview",
+    "tz": "df概览",
+    "c": "ch10",
+    "cte": "Storage & Filesystems",
+    "ctz": "存储与文件系统",
+    "cs": "Storage",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "df"
+    ],
+    "r": "green",
+    "a": [
+      "df"
+    ]
+  },
+  {
+    "i": "du-drilldown",
+    "te": "du Drilldown",
+    "tz": "du深挖",
+    "c": "ch10",
+    "cte": "Storage & Filesystems",
+    "ctz": "存储与文件系统",
+    "cs": "Storage",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "du"
+    ],
+    "r": "blue",
+    "a": [
+      "du"
+    ]
+  },
+  {
+    "i": "lsblk-map",
+    "te": "lsblk Map",
+    "tz": "lsblk地图",
+    "c": "ch10",
+    "cte": "Storage & Filesystems",
+    "ctz": "存储与文件系统",
+    "cs": "Storage",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "lsblk"
+    ],
+    "r": "blue",
+    "a": [
+      "lsblk"
+    ]
+  },
+  {
+    "i": "mount-trap",
+    "te": "Mount Point Trap",
+    "tz": "挂载点陷阱",
+    "c": "ch10",
+    "cte": "Storage & Filesystems",
+    "ctz": "存储与文件系统",
+    "cs": "Storage",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "mount"
+    ],
+    "r": "yellow",
+    "a": [
+      "mount"
+    ]
+  },
+  {
+    "i": "deleted-open",
+    "te": "Deleted But Open",
+    "tz": "已删但占用",
+    "c": "ch10",
+    "cte": "Storage & Filesystems",
+    "ctz": "存储与文件系统",
+    "cs": "Storage",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "lsof +L1",
+      "readlink /proc/1891/fd/4"
+    ],
+    "r": "yellow",
+    "a": [
+      "lsof +L1",
+      "readlink /proc/1891/fd/4"
+    ]
+  },
+  {
+    "i": "loop-device",
+    "te": "Loop Device Sandbox",
+    "tz": "循环设备沙箱",
+    "c": "ch10",
+    "cte": "Storage & Filesystems",
+    "ctz": "存储与文件系统",
+    "cs": "Storage",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "losetup"
+    ],
+    "r": "yellow",
+    "a": [
+      "losetup"
+    ]
+  },
+  {
+    "i": "dd-red-zone",
+    "te": "dd Red Zone",
+    "tz": "dd红区",
+    "c": "ch10",
+    "cte": "Storage & Filesystems",
+    "ctz": "存储与文件系统",
+    "cs": "Storage",
+    "m": "academy",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "dd"
+    ],
+    "r": "blue",
+    "a": [
+      "dd if=input.bin of=copy.bin"
+    ]
+  },
+  {
+    "i": "fsck-warning",
+    "te": "fsck Warning",
+    "tz": "fsck警告",
+    "c": "ch10",
+    "cte": "Storage & Filesystems",
+    "ctz": "存储与文件系统",
+    "cs": "Storage",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "fsck"
+    ],
+    "r": "yellow",
+    "a": [
+      "fsck"
+    ]
+  },
+  {
+    "i": "findmnt-maze",
+    "te": "findmnt Maze",
+    "tz": "findmnt迷宫",
+    "c": "ch10",
+    "cte": "Storage & Filesystems",
+    "ctz": "存储与文件系统",
+    "cs": "Storage",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "findmnt"
+    ],
+    "r": "yellow",
+    "a": [
+      "findmnt"
+    ]
+  },
+  {
+    "i": "log-rotation",
+    "te": "Log Rotation",
+    "tz": "日志轮转",
+    "c": "ch10",
+    "cte": "Storage & Filesystems",
+    "ctz": "存储与文件系统",
+    "cs": "Storage",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "logrotate"
+    ],
+    "r": "blue",
+    "a": [
+      "logrotate"
+    ]
+  },
+  {
+    "i": "op-disk-full",
+    "te": "Operation: Disk Is Full",
+    "tz": "行动: 磁盘已满",
+    "c": "ch10",
+    "cte": "Storage & Filesystems",
+    "ctz": "存储与文件系统",
+    "cs": "Storage",
+    "m": "operation",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "df",
+      "du",
+      "lsof"
+    ],
+    "r": "yellow",
+    "a": [
+      "df",
+      "du"
+    ]
+  },
+  {
+    "i": "boss-vanishing-space",
+    "te": "Boss: Vanishing Space",
+    "tz": "Boss: 消失的空间",
+    "c": "ch10",
+    "cte": "Storage & Filesystems",
+    "ctz": "存储与文件系统",
+    "cs": "Storage",
+    "m": "boss",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "df",
+      "du",
+      "lsof",
+      "find"
+    ],
+    "r": "red",
+    "a": [
+      "df",
+      "du"
+    ]
+  },
+  {
+    "i": "nightmare-wrong-device",
+    "te": "Nightmare: Wrong Device Warning",
+    "tz": "噩梦: 错误设备警告",
+    "c": "ch10",
+    "cte": "Storage & Filesystems",
+    "ctz": "存储与文件系统",
+    "cs": "Storage",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "dd",
+      "lsblk",
+      "mount"
+    ],
+    "r": "purple",
+    "a": [
+      "dd if=/etc/hostname of=hostname.backup",
+      "lsblk"
+    ]
+  },
+  {
+    "i": "tar-extract",
+    "te": "tar Extract",
+    "tz": "tar解压",
+    "c": "ch11",
+    "cte": "Archives & Integrity",
+    "ctz": "归档与完整性",
+    "cs": "Archives",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "tar -x"
+    ],
+    "r": "green",
+    "a": [
+      "tar -x"
+    ]
+  },
+  {
+    "i": "tar-create",
+    "te": "tar Create",
+    "tz": "tar创建",
+    "c": "ch11",
+    "cte": "Archives & Integrity",
+    "ctz": "归档与完整性",
+    "cs": "Archives",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "tar -c"
+    ],
+    "r": "blue",
+    "a": [
+      "tar -c"
+    ]
+  },
+  {
+    "i": "compression",
+    "te": "gzip/xz/bzip2",
+    "tz": "压缩工具",
+    "c": "ch11",
+    "cte": "Archives & Integrity",
+    "ctz": "归档与完整性",
+    "cs": "Archives",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "gzip",
+      "xz",
+      "bzip2"
+    ],
+    "r": "blue",
+    "a": [
+      "gzip",
+      "xz"
+    ]
+  },
+  {
+    "i": "zip-unzip",
+    "te": "zip/unzip",
+    "tz": "zip工具",
+    "c": "ch11",
+    "cte": "Archives & Integrity",
+    "ctz": "归档与完整性",
+    "cs": "Archives",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "zip",
+      "unzip"
+    ],
+    "r": "green",
+    "a": [
+      "zip",
+      "unzip"
+    ]
+  },
+  {
+    "i": "checksum-gate",
+    "te": "Checksum Gate",
+    "tz": "校验和之门",
+    "c": "ch11",
+    "cte": "Archives & Integrity",
+    "ctz": "归档与完整性",
+    "cs": "Archives",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "md5sum",
+      "sha256sum"
+    ],
+    "r": "blue",
+    "a": [
+      "md5sum",
+      "sha256sum"
+    ]
+  },
+  {
+    "i": "diff-evidence",
+    "te": "diff Evidence",
+    "tz": "diff证据",
+    "c": "ch11",
+    "cte": "Archives & Integrity",
+    "ctz": "归档与完整性",
+    "cs": "Archives",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "diff"
+    ],
+    "r": "blue",
+    "a": [
+      "diff"
+    ]
+  },
+  {
+    "i": "patch-repair",
+    "te": "patch Repair",
+    "tz": "patch修复",
+    "c": "ch11",
+    "cte": "Archives & Integrity",
+    "ctz": "归档与完整性",
+    "cs": "Archives",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "patch"
+    ],
+    "r": "yellow",
+    "a": [
+      "patch"
+    ]
+  },
+  {
+    "i": "rsync-mirror",
+    "te": "rsync Mirror",
+    "tz": "rsync镜像",
+    "c": "ch11",
+    "cte": "Archives & Integrity",
+    "ctz": "归档与完整性",
+    "cs": "Archives",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "rsync"
+    ],
+    "r": "yellow",
+    "a": [
+      "rsync"
+    ]
+  },
+  {
+    "i": "preserve-perms",
+    "te": "Preserve Permissions",
+    "tz": "保留权限",
+    "c": "ch11",
+    "cte": "Archives & Integrity",
+    "ctz": "归档与完整性",
+    "cs": "Archives",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "tar -p",
+      "cp -p"
+    ],
+    "r": "blue",
+    "a": [
+      "tar -p",
+      "cp -p"
+    ]
+  },
+  {
+    "i": "archive-bomb",
+    "te": "Archive Bomb Awareness",
+    "tz": "归档炸弹意识",
+    "c": "ch11",
+    "cte": "Archives & Integrity",
+    "ctz": "归档与完整性",
+    "cs": "Archives",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "tar",
+      "zip"
+    ],
+    "r": "yellow",
+    "a": [
+      "tar",
+      "zip"
+    ]
+  },
+  {
+    "i": "op-archive-matryoshka",
+    "te": "Operation: Archive Matryoshka",
+    "tz": "行动: 归档套娃",
+    "c": "ch11",
+    "cte": "Archives & Integrity",
+    "ctz": "归档与完整性",
+    "cs": "Archives",
+    "m": "operation",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "tar",
+      "gzip",
+      "zip"
+    ],
+    "r": "yellow",
+    "a": [
+      "tar",
+      "gzip"
+    ]
+  },
+  {
+    "i": "boss-corrupted-patch",
+    "te": "Boss: Corrupted Patch",
+    "tz": "Boss: 损坏的补丁",
+    "c": "ch11",
+    "cte": "Archives & Integrity",
+    "ctz": "归档与完整性",
+    "cs": "Archives",
+    "m": "boss",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "patch",
+      "diff",
+      "tar"
+    ],
+    "r": "red",
+    "a": [
+      "patch",
+      "diff"
+    ]
+  },
+  {
+    "i": "nightmare-nested",
+    "te": "Nightmare: Nested Compression",
+    "tz": "噩梦: 嵌套压缩",
+    "c": "ch11",
+    "cte": "Archives & Integrity",
+    "ctz": "归档与完整性",
+    "cs": "Archives",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "tar",
+      "gzip",
+      "zip",
+      "bzip2"
+    ],
+    "r": "purple",
+    "a": [
+      "tar",
+      "gzip"
+    ]
+  },
+  {
+    "i": "curl-health",
+    "te": "curl Health",
+    "tz": "curl健康检查",
+    "c": "ch12",
+    "cte": "Network Diagnostics",
+    "ctz": "网络诊断",
+    "cs": "Networking",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "curl"
+    ],
+    "r": "green",
+    "a": [
+      "curl"
+    ]
+  },
+  {
+    "i": "http-headers",
+    "te": "HTTP Headers",
+    "tz": "HTTP头",
+    "c": "ch12",
+    "cte": "Network Diagnostics",
+    "ctz": "网络诊断",
+    "cs": "Networking",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "curl -I"
+    ],
+    "r": "blue",
+    "a": [
+      "curl -I"
+    ]
+  },
+  {
+    "i": "port-listening",
+    "te": "Port Listening with ss",
+    "tz": "ss端口监听",
+    "c": "ch12",
+    "cte": "Network Diagnostics",
+    "ctz": "网络诊断",
+    "cs": "Networking",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "ss"
+    ],
+    "r": "blue",
+    "a": [
+      "ss"
+    ]
+  },
+  {
+    "i": "ip-address",
+    "te": "ip Address Map",
+    "tz": "ip地址图",
+    "c": "ch12",
+    "cte": "Network Diagnostics",
+    "ctz": "网络诊断",
+    "cs": "Networking",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "ip"
+    ],
+    "r": "blue",
+    "a": [
+      "ip"
+    ]
+  },
+  {
+    "i": "dns-dig",
+    "te": "DNS with dig",
+    "tz": "dig DNS",
+    "c": "ch12",
+    "cte": "Network Diagnostics",
+    "ctz": "网络诊断",
+    "cs": "Networking",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "dig"
+    ],
+    "r": "yellow",
+    "a": [
+      "dig"
+    ]
+  },
+  {
+    "i": "ping-vs-curl",
+    "te": "ping vs curl",
+    "tz": "ping与curl",
+    "c": "ch12",
+    "cte": "Network Diagnostics",
+    "ctz": "网络诊断",
+    "cs": "Networking",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "ping",
+      "curl"
+    ],
+    "r": "blue",
+    "a": [
+      "ping",
+      "curl"
+    ]
+  },
+  {
+    "i": "nc-test",
+    "te": "nc Local Test",
+    "tz": "nc本地测试",
+    "c": "ch12",
+    "cte": "Network Diagnostics",
+    "ctz": "网络诊断",
+    "cs": "Networking",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "nc"
+    ],
+    "r": "blue",
+    "a": [
+      "nc"
+    ]
+  },
+  {
+    "i": "ssh-keys",
+    "te": "ssh Key Basics",
+    "tz": "ssh密钥基础",
+    "c": "ch12",
+    "cte": "Network Diagnostics",
+    "ctz": "网络诊断",
+    "cs": "Networking",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "ssh-keygen",
+      "ssh"
+    ],
+    "r": "blue",
+    "a": [
+      "ssh-keygen",
+      "ssh"
+    ]
+  },
+  {
+    "i": "scp-evidence",
+    "te": "scp Evidence",
+    "tz": "scp证据",
+    "c": "ch12",
+    "cte": "Network Diagnostics",
+    "ctz": "网络诊断",
+    "cs": "Networking",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "scp"
+    ],
+    "r": "blue",
+    "a": [
+      "scp"
+    ]
+  },
+  {
+    "i": "tcpdump-lab",
+    "te": "tcpdump Local Lab",
+    "tz": "tcpdump实验室",
+    "c": "ch12",
+    "cte": "Network Diagnostics",
+    "ctz": "网络诊断",
+    "cs": "Networking",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "tcpdump"
+    ],
+    "r": "yellow",
+    "a": [
+      "tcpdump"
+    ]
+  },
+  {
+    "i": "op-port-3000",
+    "te": "Operation: Port 3000 Is Lying",
+    "tz": "行动: 端口3000在撒谎",
+    "c": "ch12",
+    "cte": "Network Diagnostics",
+    "ctz": "网络诊断",
+    "cs": "Networking",
+    "m": "operation",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "ss",
+      "curl",
+      "lsof"
+    ],
+    "r": "yellow",
+    "a": [
+      "ss",
+      "curl"
+    ]
+  },
+  {
+    "i": "boss-dns-mirage",
+    "te": "Boss: DNS Mirage",
+    "tz": "Boss: DNS幻景",
+    "c": "ch12",
+    "cte": "Network Diagnostics",
+    "ctz": "网络诊断",
+    "cs": "Networking",
+    "m": "boss",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "dig",
+      "ss",
+      "curl"
+    ],
+    "r": "red",
+    "a": [
+      "dig",
+      "ss"
+    ]
+  },
+  {
+    "i": "nightmare-alive-dead",
+    "te": "Nightmare: Service Alive, Endpoint Dead",
+    "tz": "噩梦: 活着的服务死的端点",
+    "c": "ch12",
+    "cte": "Network Diagnostics",
+    "ctz": "网络诊断",
+    "cs": "Networking",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "ss",
+      "curl",
+      "dig"
+    ],
+    "r": "purple",
+    "a": [
+      "ss",
+      "curl"
+    ]
+  },
+  {
+    "i": "systemctl-status",
+    "te": "systemctl status",
+    "tz": "systemctl状态",
+    "c": "ch13",
+    "cte": "Services & Logs",
+    "ctz": "服务与日志",
+    "cs": "Services",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "systemctl"
+    ],
+    "r": "green",
+    "a": [
+      "systemctl status nginx"
+    ]
+  },
+  {
+    "i": "journalctl-unit",
+    "te": "journalctl -u",
+    "tz": "journalctl单元日志",
+    "c": "ch13",
+    "cte": "Services & Logs",
+    "ctz": "服务与日志",
+    "cs": "Services",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "journalctl"
+    ],
+    "r": "blue",
+    "a": [
+      "journalctl"
+    ]
+  },
+  {
+    "i": "tail-f-logs",
+    "te": "tail -f Logs",
+    "tz": "tail -f日志",
+    "c": "ch13",
+    "cte": "Services & Logs",
+    "ctz": "服务与日志",
+    "cs": "Services",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "tail -f"
+    ],
+    "r": "green",
+    "a": [
+      "tail -f"
+    ]
+  },
+  {
+    "i": "dmesg-clue",
+    "te": "dmesg clue",
+    "tz": "dmesg线索",
+    "c": "ch13",
+    "cte": "Services & Logs",
+    "ctz": "服务与日志",
+    "cs": "Services",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "dmesg"
+    ],
+    "r": "blue",
+    "a": [
+      "dmesg"
+    ]
+  },
+  {
+    "i": "logger-test",
+    "te": "logger test",
+    "tz": "logger测试",
+    "c": "ch13",
+    "cte": "Services & Logs",
+    "ctz": "服务与日志",
+    "cs": "Services",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "logger"
+    ],
+    "r": "blue",
+    "a": [
+      "logger"
+    ]
+  },
+  {
+    "i": "service-restart",
+    "te": "Service Restart Boundary",
+    "tz": "服务重启边界",
+    "c": "ch13",
+    "cte": "Services & Logs",
+    "ctz": "服务与日志",
+    "cs": "Services",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "systemctl restart"
+    ],
+    "r": "yellow",
+    "a": [
+      "systemctl restart nginx"
+    ]
+  },
+  {
+    "i": "crontab-schedule",
+    "te": "crontab Schedule",
+    "tz": "crontab调度",
+    "c": "ch13",
+    "cte": "Services & Logs",
+    "ctz": "服务与日志",
+    "cs": "Services",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "crontab"
+    ],
+    "r": "blue",
+    "a": [
+      "crontab"
+    ]
+  },
+  {
+    "i": "systemd-timer",
+    "te": "systemd Timer Intro",
+    "tz": "systemd定时器",
+    "c": "ch13",
+    "cte": "Services & Logs",
+    "ctz": "服务与日志",
+    "cs": "Services",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "systemctl list-timers"
+    ],
+    "r": "yellow",
+    "a": [
+      "systemctl list-timers"
+    ]
+  },
+  {
+    "i": "logrotate-clue",
+    "te": "logrotate Clue",
+    "tz": "logrotate线索",
+    "c": "ch13",
+    "cte": "Services & Logs",
+    "ctz": "服务与日志",
+    "cs": "Services",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "logrotate"
+    ],
+    "r": "blue",
+    "a": [
+      "logrotate"
+    ]
+  },
+  {
+    "i": "env-file-fix",
+    "te": "Environment File Fix",
+    "tz": "环境文件修复",
+    "c": "ch13",
+    "cte": "Services & Logs",
+    "ctz": "服务与日志",
+    "cs": "Services",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      ".env"
+    ],
+    "r": "blue",
+    "a": [
+      ".env"
+    ]
+  },
+  {
+    "i": "op-midnight-pager",
+    "te": "Operation: Midnight Pager",
+    "tz": "行动: 午夜寻呼机",
+    "c": "ch13",
+    "cte": "Services & Logs",
+    "ctz": "服务与日志",
+    "cs": "Services",
+    "m": "operation",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "less",
+      "grep",
+      "journalctl"
+    ],
+    "r": "red",
+    "a": [
+      "less",
+      "grep"
+    ]
+  },
+  {
+    "i": "boss-dies-midnight",
+    "te": "Boss: Dies at Midnight",
+    "tz": "Boss: 死于午夜",
+    "c": "ch13",
+    "cte": "Services & Logs",
+    "ctz": "服务与日志",
+    "cs": "Services",
+    "m": "boss",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "systemctl",
+      "journalctl",
+      "grep"
+    ],
+    "r": "red",
+    "a": [
+      "systemctl status nginx",
+      "journalctl -u nginx"
+    ]
+  },
+  {
+    "i": "nightmare-three-logs",
+    "te": "Nightmare: Logs in Three Places",
+    "tz": "噩梦: 三处日志",
+    "c": "ch13",
+    "cte": "Services & Logs",
+    "ctz": "服务与日志",
+    "cs": "Services",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "journalctl",
+      "tail",
+      "grep"
+    ],
+    "r": "purple",
+    "a": [
+      "journalctl",
+      "tail"
+    ]
+  },
+  {
+    "i": "apt-search",
+    "te": "apt search/install",
+    "tz": "apt搜索安装",
+    "c": "ch14",
+    "cte": "Package & Runtime",
+    "ctz": "包与运行时",
+    "cs": "Packages",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "apt"
+    ],
+    "r": "green",
+    "a": [
+      "apt search nginx"
+    ]
+  },
+  {
+    "i": "dpkg-inspect",
+    "te": "dpkg Inspect",
+    "tz": "dpkg检查",
+    "c": "ch14",
+    "cte": "Package & Runtime",
+    "ctz": "包与运行时",
+    "cs": "Packages",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "dpkg"
+    ],
+    "r": "blue",
+    "a": [
+      "dpkg"
+    ]
+  },
+  {
+    "i": "npm-scripts",
+    "te": "npm scripts",
+    "tz": "npm脚本",
+    "c": "ch14",
+    "cte": "Package & Runtime",
+    "ctz": "包与运行时",
+    "cs": "Packages",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "npm run"
+    ],
+    "r": "blue",
+    "a": [
+      "npm run"
+    ]
+  },
+  {
+    "i": "npm-ci",
+    "te": "npm ci vs install",
+    "tz": "npm ci与install",
+    "c": "ch14",
+    "cte": "Package & Runtime",
+    "ctz": "包与运行时",
+    "cs": "Packages",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "npm ci"
+    ],
+    "r": "blue",
+    "a": [
+      "npm ci"
+    ]
+  },
+  {
+    "i": "node-repl",
+    "te": "Node REPL Basics",
+    "tz": "Node REPL基础",
+    "c": "ch14",
+    "cte": "Package & Runtime",
+    "ctz": "包与运行时",
+    "cs": "Packages",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "node"
+    ],
+    "r": "green",
+    "a": [
+      "node"
+    ]
+  },
+  {
+    "i": "python-venv",
+    "te": "Python venv",
+    "tz": "Python虚拟环境",
+    "c": "ch14",
+    "cte": "Package & Runtime",
+    "ctz": "包与运行时",
+    "cs": "Packages",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "python -m venv"
+    ],
+    "r": "blue",
+    "a": [
+      "python -m venv"
+    ]
+  },
+  {
+    "i": "pip-freeze",
+    "te": "pip freeze",
+    "tz": "pip冻结",
+    "c": "ch14",
+    "cte": "Package & Runtime",
+    "ctz": "包与运行时",
+    "cs": "Packages",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "pip freeze"
+    ],
+    "r": "blue",
+    "a": [
+      "pip freeze"
+    ]
+  },
+  {
+    "i": "make-target",
+    "te": "make Target",
+    "tz": "make目标",
+    "c": "ch14",
+    "cte": "Package & Runtime",
+    "ctz": "包与运行时",
+    "cs": "Packages",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "make"
+    ],
+    "r": "blue",
+    "a": [
+      "make"
+    ]
+  },
+  {
+    "i": "ldd-missing",
+    "te": "ldd Missing Lib",
+    "tz": "ldd缺失库",
+    "c": "ch14",
+    "cte": "Package & Runtime",
+    "ctz": "包与运行时",
+    "cs": "Packages",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "ldd"
+    ],
+    "r": "yellow",
+    "a": [
+      "ldd"
+    ]
+  },
+  {
+    "i": "cargo-smoke",
+    "te": "cargo/go Smoke Test",
+    "tz": "cargo/go冒烟测试",
+    "c": "ch14",
+    "cte": "Package & Runtime",
+    "ctz": "包与运行时",
+    "cs": "Packages",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "cargo",
+      "go test"
+    ],
+    "r": "yellow",
+    "a": [
+      "cargo",
+      "go test"
+    ]
+  },
+  {
+    "i": "op-works-on-my-machine",
+    "te": "Operation: Works on My Machine",
+    "tz": "行动: 在我机器上能跑",
+    "c": "ch14",
+    "cte": "Package & Runtime",
+    "ctz": "包与运行时",
+    "cs": "Packages",
+    "m": "operation",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "npm",
+      "node",
+      "python"
+    ],
+    "r": "yellow",
+    "a": [
+      "npm",
+      "node"
+    ]
+  },
+  {
+    "i": "boss-lockfile-conflict",
+    "te": "Boss: Lockfile Conflict",
+    "tz": "Boss: 锁文件冲突",
+    "c": "ch14",
+    "cte": "Package & Runtime",
+    "ctz": "包与运行时",
+    "cs": "Packages",
+    "m": "boss",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "npm",
+      "git",
+      "node"
+    ],
+    "r": "red",
+    "a": [
+      "npm",
+      "git"
+    ]
+  },
+  {
+    "i": "nightmare-ci-says-no",
+    "te": "Nightmare: CI Says No",
+    "tz": "噩梦: CI说不",
+    "c": "ch14",
+    "cte": "Package & Runtime",
+    "ctz": "包与运行时",
+    "cs": "Packages",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "npm",
+      "node",
+      "python",
+      "make"
+    ],
+    "r": "purple",
+    "a": [
+      "npm",
+      "node"
+    ]
+  },
+  {
+    "i": "less-q-escape",
+    "te": "less q Escape",
+    "tz": "less q逃生",
+    "c": "ch15",
+    "cte": "Editors & REPLs",
+    "ctz": "编辑器与REPL",
+    "cs": "Editors",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "less",
+      "q"
+    ],
+    "r": "green",
+    "a": [
+      "less",
+      "q"
+    ]
+  },
+  {
+    "i": "less-search",
+    "te": "less Search",
+    "tz": "less搜索",
+    "c": "ch15",
+    "cte": "Editors & REPLs",
+    "ctz": "编辑器与REPL",
+    "cs": "Editors",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "/",
+      "?",
+      "n",
+      "N"
+    ],
+    "r": "green",
+    "a": [
+      "/",
+      "?"
+    ]
+  },
+  {
+    "i": "vim-escape",
+    "te": "Vim Escape",
+    "tz": "Vim逃生",
+    "c": "ch15",
+    "cte": "Editors & REPLs",
+    "ctz": "编辑器与REPL",
+    "cs": "Editors",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      ":q"
+    ],
+    "r": "green",
+    "a": [
+      ":q"
+    ]
+  },
+  {
+    "i": "vim-save-quit",
+    "te": "Vim Save Quit",
+    "tz": "Vim保存退出",
+    "c": "ch15",
+    "cte": "Editors & REPLs",
+    "ctz": "编辑器与REPL",
+    "cs": "Editors",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      ":wq"
+    ],
+    "r": "blue",
+    "a": [
+      ":wq"
+    ]
+  },
+  {
+    "i": "vim-search-replace",
+    "te": "Vim Search Replace",
+    "tz": "Vim搜索替换",
+    "c": "ch15",
+    "cte": "Editors & REPLs",
+    "ctz": "编辑器与REPL",
+    "cs": "Editors",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      ":%s"
+    ],
+    "r": "blue",
+    "a": [
+      ":%s"
+    ]
+  },
+  {
+    "i": "nano-save",
+    "te": "nano Save Exit",
+    "tz": "nano保存退出",
+    "c": "ch15",
+    "cte": "Editors & REPLs",
+    "ctz": "编辑器与REPL",
+    "cs": "Editors",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "Ctrl-O",
+      "Ctrl-X"
+    ],
+    "r": "green",
+    "a": [
+      "Ctrl-O",
+      "Ctrl-X"
+    ]
+  },
+  {
+    "i": "node-editor",
+    "te": "Node .editor",
+    "tz": "Node编辑器",
+    "c": "ch15",
+    "cte": "Editors & REPLs",
+    "ctz": "编辑器与REPL",
+    "cs": "Editors",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      ".editor"
+    ],
+    "r": "blue",
+    "a": [
+      ".editor"
+    ]
+  },
+  {
+    "i": "python-exit",
+    "te": "Python exit",
+    "tz": "Python退出",
+    "c": "ch15",
+    "cte": "Editors & REPLs",
+    "ctz": "编辑器与REPL",
+    "cs": "Editors",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "exit()",
+      "Ctrl-D"
+    ],
+    "r": "green",
+    "a": [
+      "exit()",
+      "Ctrl-D"
+    ]
+  },
+  {
+    "i": "psql-exit",
+    "te": "psql \\q",
+    "tz": "psql退出",
+    "c": "ch15",
+    "cte": "Editors & REPLs",
+    "ctz": "编辑器与REPL",
+    "cs": "Editors",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "\\q"
+    ],
+    "r": "green",
+    "a": [
+      "\\q"
+    ]
+  },
+  {
+    "i": "sqlite-exit",
+    "te": "sqlite .exit",
+    "tz": "sqlite退出",
+    "c": "ch15",
+    "cte": "Editors & REPLs",
+    "ctz": "编辑器与REPL",
+    "cs": "Editors",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      ".exit",
+      ".quit"
+    ],
+    "r": "green",
+    "a": [
+      ".exit",
+      ".quit"
+    ]
+  },
+  {
+    "i": "op-console-zoo",
+    "te": "Operation: Console Zoo",
+    "tz": "行动: 控制台动物园",
+    "c": "ch15",
+    "cte": "Editors & REPLs",
+    "ctz": "编辑器与REPL",
+    "cs": "Editors",
+    "m": "operation",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "less",
+      ":q",
+      ".exit"
+    ],
+    "r": "yellow",
+    "a": [
+      "less",
+      ":q"
+    ]
+  },
+  {
+    "i": "boss-five-layer-exit",
+    "te": "Boss: Five-Layer Exit Room",
+    "tz": "Boss: 五层逃生室",
+    "c": "ch15",
+    "cte": "Editors & REPLs",
+    "ctz": "编辑器与REPL",
+    "cs": "Editors",
+    "m": "boss",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "q",
+      ":q!",
+      ".exit",
+      "\\q",
+      "Ctrl-b d"
+    ],
+    "r": "purple",
+    "a": [
+      "q",
+      ":q!"
+    ]
+  },
+  {
+    "i": "nightmare-mode-blind",
+    "te": "Nightmare: Mode Blindness",
+    "tz": "噩梦: 模式失明",
+    "c": "ch15",
+    "cte": "Editors & REPLs",
+    "ctz": "编辑器与REPL",
+    "cs": "Editors",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "Esc",
+      "q",
+      ":q!",
+      ".exit",
+      "\\q"
+    ],
+    "r": "purple",
+    "a": [
+      "Esc",
+      "q"
+    ]
+  },
+  {
+    "i": "git-status-add",
+    "te": "git status/add/commit",
+    "tz": "git状态添加提交",
+    "c": "ch16",
+    "cte": "Git Timeline",
+    "ctz": "Git时间线",
+    "cs": "Git",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "git status",
+      "git add",
+      "git commit"
+    ],
+    "r": "green",
+    "a": [
+      "git status",
+      "git add"
+    ]
+  },
+  {
+    "i": "git-diff-staged",
+    "te": "git diff/staged",
+    "tz": "git差异对比",
+    "c": "ch16",
+    "cte": "Git Timeline",
+    "ctz": "Git时间线",
+    "cs": "Git",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "git diff"
+    ],
+    "r": "green",
+    "a": [
+      "git diff"
+    ]
+  },
+  {
+    "i": "git-branch-switch",
+    "te": "git branch/switch",
+    "tz": "git分支切换",
+    "c": "ch16",
+    "cte": "Git Timeline",
+    "ctz": "Git时间线",
+    "cs": "Git",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "git branch",
+      "git switch"
+    ],
+    "r": "blue",
+    "a": [
+      "git branch",
+      "git switch"
+    ]
+  },
+  {
+    "i": "git-merge-basics",
+    "te": "git merge basics",
+    "tz": "git合并基础",
+    "c": "ch16",
+    "cte": "Git Timeline",
+    "ctz": "Git时间线",
+    "cs": "Git",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "git merge"
+    ],
+    "r": "blue",
+    "a": [
+      "git merge incident"
+    ]
+  },
+  {
+    "i": "conflict-markers",
+    "te": "Merge Resolution Workflow",
+    "tz": "合并解决流程",
+    "c": "ch16",
+    "cte": "Git Timeline",
+    "ctz": "Git时间线",
+    "cs": "Git",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "git merge",
+      "git add"
+    ],
+    "r": "yellow",
+    "a": [
+      "git merge incident",
+      "git add resolved.txt"
+    ]
+  },
+  {
+    "i": "git-stash",
+    "te": "git stash save/pop",
+    "tz": "git暂存",
+    "c": "ch16",
+    "cte": "Git Timeline",
+    "ctz": "Git时间线",
+    "cs": "Git",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "git stash"
+    ],
+    "r": "blue",
+    "a": [
+      "git stash"
+    ]
+  },
+  {
+    "i": "git-restore",
+    "te": "git restore/reset",
+    "tz": "git恢复重置",
+    "c": "ch16",
+    "cte": "Git Timeline",
+    "ctz": "Git时间线",
+    "cs": "Git",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "git restore",
+      "git reset"
+    ],
+    "r": "blue",
+    "a": [
+      "git restore",
+      "git reset"
+    ]
+  },
+  {
+    "i": "git-revert",
+    "te": "git revert safe undo",
+    "tz": "git安全撤销",
+    "c": "ch16",
+    "cte": "Git Timeline",
+    "ctz": "Git时间线",
+    "cs": "Git",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "git revert"
+    ],
+    "r": "blue",
+    "a": [
+      "git revert"
+    ]
+  },
+  {
+    "i": "git-reflog",
+    "te": "git reflog rescue",
+    "tz": "git reflog救援",
+    "c": "ch16",
+    "cte": "Git Timeline",
+    "ctz": "Git时间线",
+    "cs": "Git",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "git reflog"
+    ],
+    "r": "yellow",
+    "a": [
+      "git reflog"
+    ]
+  },
+  {
+    "i": "git-bisect",
+    "te": "git bisect hunt",
+    "tz": "git bisect追踪",
+    "c": "ch16",
+    "cte": "Git Timeline",
+    "ctz": "Git时间线",
+    "cs": "Git",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "git bisect"
+    ],
+    "r": "yellow",
+    "a": [
+      "git bisect"
+    ]
+  },
+  {
+    "i": "op-broken-timeline",
+    "te": "Operation: Broken Timeline",
+    "tz": "行动: 破碎的时间线",
+    "c": "ch16",
+    "cte": "Git Timeline",
+    "ctz": "Git时间线",
+    "cs": "Git",
+    "m": "operation",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "git bisect",
+      "git revert",
+      "git log"
+    ],
+    "r": "red",
+    "a": [
+      "git bisect",
+      "git revert"
+    ]
+  },
+  {
+    "i": "boss-rebase-dragon",
+    "te": "Boss: Rebase Dragon",
+    "tz": "Boss: Rebase之龙",
+    "c": "ch16",
+    "cte": "Git Timeline",
+    "ctz": "Git时间线",
+    "cs": "Git",
+    "m": "boss",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "git rebase",
+      "git reflog",
+      "git reset"
+    ],
+    "r": "purple",
+    "a": [
+      "git rebase",
+      "git reflog"
+    ]
+  },
+  {
+    "i": "nightmare-detached-head",
+    "te": "Nightmare: Detached HEAD",
+    "tz": "噩梦: 游离HEAD",
+    "c": "ch16",
+    "cte": "Git Timeline",
+    "ctz": "Git时间线",
+    "cs": "Git",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "git checkout",
+      "git switch",
+      "git reflog"
+    ],
+    "r": "purple",
+    "a": [
+      "git checkout",
+      "git switch"
+    ]
+  },
+  {
+    "i": "tmux-first",
+    "te": "tmux First Session",
+    "tz": "tmux首个会话",
+    "c": "ch17",
+    "cte": "Multiplexer & Remote",
+    "ctz": "多路复用与远程",
+    "cs": "Multiplexer",
+    "m": "academy",
+    "d": 1,
+    "et": "2-3 min",
+    "s": [
+      "tmux"
+    ],
+    "r": "green",
+    "a": [
+      "tmux"
+    ]
+  },
+  {
+    "i": "tmux-windows",
+    "te": "tmux Windows",
+    "tz": "tmux窗口",
+    "c": "ch17",
+    "cte": "Multiplexer & Remote",
+    "ctz": "多路复用与远程",
+    "cs": "Multiplexer",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "tmux new-window"
+    ],
+    "r": "blue",
+    "a": [
+      "tmux new-window"
+    ]
+  },
+  {
+    "i": "tmux-panes",
+    "te": "tmux Panes",
+    "tz": "tmux窗格",
+    "c": "ch17",
+    "cte": "Multiplexer & Remote",
+    "ctz": "多路复用与远程",
+    "cs": "Multiplexer",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "tmux split"
+    ],
+    "r": "blue",
+    "a": [
+      "tmux split"
+    ]
+  },
+  {
+    "i": "tmux-detach",
+    "te": "tmux Detach Attach",
+    "tz": "tmux分离附加",
+    "c": "ch17",
+    "cte": "Multiplexer & Remote",
+    "ctz": "多路复用与远程",
+    "cs": "Multiplexer",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "tmux detach",
+      "tmux attach"
+    ],
+    "r": "blue",
+    "a": [
+      "tmux detach",
+      "tmux attach"
+    ]
+  },
+  {
+    "i": "tmux-copy",
+    "te": "tmux Copy Mode",
+    "tz": "tmux复制模式",
+    "c": "ch17",
+    "cte": "Multiplexer & Remote",
+    "ctz": "多路复用与远程",
+    "cs": "Multiplexer",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "tmux copy-mode"
+    ],
+    "r": "blue",
+    "a": [
+      "tmux copy-mode"
+    ]
+  },
+  {
+    "i": "screen-basics",
+    "te": "screen Basics",
+    "tz": "screen基础",
+    "c": "ch17",
+    "cte": "Multiplexer & Remote",
+    "ctz": "多路复用与远程",
+    "cs": "Multiplexer",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "screen"
+    ],
+    "r": "blue",
+    "a": [
+      "screen -S",
+      "Ctrl-a d",
+      "screen -r"
+    ]
+  },
+  {
+    "i": "zellij-basics",
+    "te": "zellij Basics",
+    "tz": "zellij基础",
+    "c": "ch17",
+    "cte": "Multiplexer & Remote",
+    "ctz": "多路复用与远程",
+    "cs": "Multiplexer",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "zellij"
+    ],
+    "r": "blue",
+    "a": [
+      "zellij"
+    ]
+  },
+  {
+    "i": "ssh-remote",
+    "te": "ssh Remote Session",
+    "tz": "ssh远程会话",
+    "c": "ch17",
+    "cte": "Multiplexer & Remote",
+    "ctz": "多路复用与远程",
+    "cs": "Multiplexer",
+    "m": "academy",
+    "d": 2,
+    "et": "3-5 min",
+    "s": [
+      "ssh"
+    ],
+    "r": "blue",
+    "a": [
+      "ssh"
+    ]
+  },
+  {
+    "i": "long-task",
+    "te": "Long Task Survival",
+    "tz": "长任务存活",
+    "c": "ch17",
+    "cte": "Multiplexer & Remote",
+    "ctz": "多路复用与远程",
+    "cs": "Multiplexer",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "nohup",
+      "&"
+    ],
+    "r": "yellow",
+    "a": [
+      "nohup",
+      "nohup true &"
+    ]
+  },
+  {
+    "i": "lost-session",
+    "te": "Lost Session Recovery",
+    "tz": "丢失会话恢复",
+    "c": "ch17",
+    "cte": "Multiplexer & Remote",
+    "ctz": "多路复用与远程",
+    "cs": "Multiplexer",
+    "m": "academy",
+    "d": 3,
+    "et": "5-10 min",
+    "s": [
+      "tmux",
+      "screen"
+    ],
+    "r": "yellow",
+    "a": [
+      "tmux",
+      "screen"
+    ]
+  },
+  {
+    "i": "op-ghost-session",
+    "te": "Operation: Ghost Session",
+    "tz": "行动: 幽灵会话",
+    "c": "ch17",
+    "cte": "Multiplexer & Remote",
+    "ctz": "多路复用与远程",
+    "cs": "Multiplexer",
+    "m": "operation",
+    "d": 4,
+    "et": "10-15 min",
+    "s": [
+      "tmux",
+      "ssh",
+      "nohup"
+    ],
+    "r": "red",
+    "a": [
+      "tmux",
+      "ssh"
+    ]
+  },
+  {
+    "i": "boss-session-never-dies",
+    "te": "Boss: Session Never Dies",
+    "tz": "Boss: 会话永不死",
+    "c": "ch17",
+    "cte": "Multiplexer & Remote",
+    "ctz": "多路复用与远程",
+    "cs": "Multiplexer",
+    "m": "boss",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "tmux",
+      "screen",
+      "ssh",
+      "nohup"
+    ],
+    "r": "purple",
+    "a": [
+      "tmux",
+      "screen"
+    ]
+  },
+  {
+    "i": "nightmare-nested-mux",
+    "te": "Nightmare: Nested Multiplexer",
+    "tz": "噩梦: 嵌套多路复用",
+    "c": "ch17",
+    "cte": "Multiplexer & Remote",
+    "ctz": "多路复用与远程",
+    "cs": "Multiplexer",
+    "m": "nightmare",
+    "d": 5,
+    "et": "15-20 min",
+    "s": [
+      "tmux",
+      "screen",
+      "Ctrl-b d",
+      "Ctrl-a d"
+    ],
+    "r": "purple",
+    "a": [
+      "tmux",
+      "screen"
+    ]
+  }
+]

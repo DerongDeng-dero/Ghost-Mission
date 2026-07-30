@@ -108,16 +108,18 @@ const dynamicBoundaries = new Set(
 const readme = await readFile(path.resolve(workspaceRoot, 'README.md'), 'utf8')
 const initialRawKiB = Math.round(initialRaw / 1024)
 const initialGzipKiB = Math.round(initialGzip / 1024)
+const totalJsGzipKiB = Math.round(totalJsGzip / 1024)
 const documentedBuildMetrics =
   `首载 ${initialFiles.size} 个 JS 块，约 ${initialRawKiB.toLocaleString('en-US')} KiB raw / ` +
   `${initialGzipKiB.toLocaleString('en-US')} KiB gzip；${dynamicBoundaries.size} 个动态边界，约 ` +
-  `${Math.round(totalJsGzip / 1024).toLocaleString('en-US')} KiB total JS gzip`
+  `${totalJsGzipKiB.toLocaleString('en-US')} KiB total JS gzip`
 if (!readme.includes(documentedBuildMetrics)) {
   failures.push('README production-build metrics do not match the current manifest.')
 }
 
 const initialMetricPattern = /首载[^\r\n]*?([0-9][0-9,]*) KiB raw\s*\/\s*([0-9][0-9,]*) KiB gzip/gi
-for (const [lineIndex, line] of readme.split(/\r?\n/).entries()) {
+const readmeLines = readme.split(/\r?\n/)
+for (const [lineIndex, line] of readmeLines.entries()) {
   initialMetricPattern.lastIndex = 0
   let match
   while ((match = initialMetricPattern.exec(line)) !== null) {
@@ -131,6 +133,53 @@ for (const [lineIndex, line] of readme.split(/\r?\n/).entries()) {
           `${initialGzipKiB.toLocaleString('en-US')} KiB gzip.`,
       )
     }
+  }
+}
+
+function validateIntegerMetricOccurrences(label, patterns, expected) {
+  for (const [lineIndex, line] of readmeLines.entries()) {
+    for (const pattern of patterns) {
+      pattern.lastIndex = 0
+      let match
+      while ((match = pattern.exec(line)) !== null) {
+        const documented = Number(match[1].replaceAll(',', ''))
+        if (documented !== expected) {
+          failures.push(
+            `README line ${lineIndex + 1} contains stale ${label}: ${match[1]}; expected ` +
+              `${expected.toLocaleString('en-US')}.`,
+          )
+        }
+      }
+    }
+  }
+}
+
+validateIntegerMetricOccurrences(
+  'dynamic-boundary count',
+  [/([0-9][0-9,]*)\s*个动态边界/gi, /([0-9][0-9,]*)\s+dynamic boundaries/gi],
+  dynamicBoundaries.size,
+)
+validateIntegerMetricOccurrences(
+  'total-JavaScript gzip metric',
+  [
+    /([0-9][0-9,]*)\s*KiB\s+total JS gzip/gi,
+    /总\s*JS\s*(?:约\s*)?([0-9][0-9,]*)\s*KiB\s*gzip/gi,
+  ],
+  totalJsGzipKiB,
+)
+
+for (const deferredChunk of [
+  { name: 'vendor-three', label: 'Three.js vendor' },
+  { name: 'vendor-gsap', label: 'GSAP vendor' },
+  { name: 'levels', label: 'full mission catalog' },
+]) {
+  const deferredEntry = Object.entries(manifest).find(([, value]) =>
+    value.name === deferredChunk.name,
+  )
+  if (!deferredEntry) {
+    failures.push(`Expected a separately reviewable ${deferredChunk.label} chunk.`)
+  } else if (initialManifestKeys.has(deferredEntry[0])) {
+    failures.push(`${deferredChunk.label} must not be reachable from the initial entry.`)
   }
 }
 

@@ -15,13 +15,24 @@
     "mainNavigation": "Main navigation",
     "openMenu": "Open navigation menu",
     "closeMenu": "Close navigation menu",
-    "connectionStatus": "Connection status: {{status}}",
-    "rankProfile": "Open profile, rank {{rank}}"
+    "localSimulatorReady": "Local simulator ready",
+    "rankProfile": "Open profile, rank {{rank}}",
+    "progressNotSavedShort": "Not saved",
+    "progressNotSaved": "Progress not saved",
+    "progressNotSavedAlert": "Local progress could not be saved. Open Settings for recovery options."
   },
   "rank": {
     "recruit": "Recruit",
     "operator": "Operator",
     "ghost": "Ghost"
+  },
+  "skills": {
+    "filesystem": "Filesystem",
+    "shell": "Shell & Text",
+    "process": "Process",
+    "network": "Network",
+    "runtime": "Runtime",
+    "git": "Git"
   },
   "home": {
     "welcome": "Welcome back, Operative",
@@ -29,7 +40,7 @@
     "rank": "Rank",
     "stats": {
       "missionsCompleted": "Missions Completed",
-      "commandsLearned": "Commands Learned",
+      "commandsLearned": "Validated Actions",
       "currentStreak": "Current Streak"
     },
     "todayTraining": "Today's Training",
@@ -40,9 +51,11 @@
     "season": "Season {{season}}: {{title}}",
     "skillMastery": "Skill Mastery",
     "focusAreas": "Focus Areas",
+    "allSkillsMastered": "All tracked skill groups are complete. Replay any mission to keep practicing.",
     "dailyIncident": "Daily Incident",
     "respondNow": "Respond Now",
     "recentActivity": "Recent Activity",
+    "noRecentActivity": "No mission activity yet. Start a mission to build your history.",
     "quickActions": {
       "newMission": "New Mission",
       "academy": "Academy",
@@ -175,6 +188,7 @@
     "boss": "Boss",
     "riskLevel": "Risk: {{level}}",
     "replay": "Replay",
+    "continue": "Continue",
     "start": "Start",
     "scoreComplete": "{{score}}% complete",
     "chapterProgressLabel": "Chapter {{number}}, {{title}}: {{completed}} of {{total}} drills complete",
@@ -210,6 +224,10 @@
   },
   "terminal": {
     "title": "Terminal Cockpit",
+    "initializing": "Initializing terminal...",
+    "loadFailed": "Terminal unavailable",
+    "loadFailedDescription": "The terminal code could not be loaded. Check your connection, then retry.",
+    "inputOutputLabel": "Terminal input and output",
     "objectives": "Objectives",
     "objectivesRegion": "Mission objectives",
     "expandObjectives": "Expand objectives panel",
@@ -352,12 +370,14 @@
   },
   "profile": {
     "title": "Operative Profile",
-    "operativeSince": "Operative Since",
+    "avatarAlt": "{{callsign}} profile avatar",
+    "operativeSince": "Operative since {{date}}",
+    "notStarted": "no training recorded",
     "skillRadar": "Skill Radar",
     "topSkills": "Top Skills",
     "focusAreas": "Focus Areas",
     "skillDepartments": "Skill Departments",
-    "commandUsageHeatmap": "Command Usage Heatmap",
+    "commandUsageHeatmap": "Mission Activity Heatmap",
     "missionCompletionLog": "Mission Completion Log",
     "stats": {
       "missions": "Missions",
@@ -383,14 +403,41 @@
       "portDetective": "Port Detective",
       "redZoneDefuser": "Red Zone Defuser",
       "unlocked": "Unlocked",
+      "locked": "Locked",
       "noneYet": "No Achievements Yet",
       "noneDescription": "Complete missions to unlock achievements."
+    },
+    "achievementCategories": {
+      "all": "All",
+      "perfectionist": "Perfectionist",
+      "speed-runners": "Streaks",
+      "explorer": "Explorer"
+    },
+    "achievementTiers": {
+      "bronze": "Bronze",
+      "silver": "Silver",
+      "gold": "Gold",
+      "platinum": "Platinum"
+    },
+    "achievementItems": {
+      "perfect-score": {
+        "title": "Ghost Protocol",
+        "description": "Achieve a 100% score on any mission"
+      },
+      "week-warrior": {
+        "title": "Week Warrior",
+        "description": "Complete training on seven consecutive local calendar days"
+      },
+      "command-encyclopedia": {
+        "title": "Command Encyclopedia",
+        "description": "Validate 50 distinct command patterns by completing missions"
+      }
     },
     "tableHeaders": {
       "mission": "Mission",
       "type": "Type",
       "score": "Score",
-      "time": "Time",
+      "time": "Attempts",
       "date": "Date",
       "status": "Status"
     },
@@ -405,21 +452,30 @@
     },
     "pass": "PASS",
     "fail": "FAIL",
-    "activityHeatmapLabel": "Command activity over 365 days, {{count}} commands used",
+    "activityHeatmapLabel": "Mission activity over 365 days, {{count}} completions recorded",
+    "activityHistoryTruncated": "Only recently retained completion records are shown; older attempts were trimmed.",
     "less": "Less",
     "more": "More",
     "noSkillData": "No skill data yet.",
+    "allSkillsMastered": "All tracked skill groups are complete. Replay any mission to keep practicing.",
     "skillRadarLabel": "Skill radar: {{skills}}",
     "skillMastery": "Skill mastery",
     "overall": "Overall",
     "missionsCleared": "Missions Cleared",
-    "commandsLearned": "Commands Learned",
+    "commandsLearned": "Validated Actions",
     "dayStreak": "Day Streak",
     "levelNumber": "Level {{level}}",
-    "xpProgress": "Experience progress to next level"
+    "xpProgress": "Experience progress to next level",
+    "historyEmpty": "No completed missions have been recorded yet.",
+    "activity": {
+      "completed": "Completed {{title}} with a score of {{score}} on this attempt",
+      "started": "Started {{title}}",
+      "empty": "No mission activity has been recorded yet."
+    }
   },
   "debrief": {
     "title": "Mission Debrief",
+    "missionReport": "Mission Report",
     "grade": {
       "S": "Ghost Clean",
       "A": "Operator Grade",
@@ -428,7 +484,10 @@
       "D": "Incident Replayed"
     },
     "scoreBreakdown": "Score Breakdown",
-    "commandTimeline": "Command Timeline",
+    "total": "TOTAL",
+    "totalScore": "Total: {{score}}/{{max}}",
+    "scoreProgress": "{{category}}: {{earned}} of {{max}} points",
+    "commandTimeline": "Command History",
     "performance": "Performance",
     "recommendations": "Recommended Next Steps",
     "replay": "Replay",
@@ -436,31 +495,115 @@
     "objectives": "Objectives",
     "completed": "Completed",
     "points": "Points",
-    "newSkills": "New Skills Unlocked",
+    "newSkills": "Skills Practiced",
     "practiceReinforced": "Practice Reinforced",
     "practice": "Practice",
+    "practiceCommand": "Practice {{command}} in this mission",
     "viewInAtlas": "View in Atlas",
+    "viewCommandInAtlas": "Open Command Atlas to look up {{command}}",
     "noNewCommands": "No new commands this mission.",
     "warnings": "Warnings",
     "issues": "Issues Detected",
+    "issueCount": "Issues detected: {{count}}",
+    "difficulty": "Difficulty {{level}} of 5",
+    "openRecommendedMission": "Start recommended mission {{title}}",
     "recommendedSubtitle": "Recommended missions based on your performance",
+    "yes": "Yes",
+    "no": "No",
+    "notApplicable": "N/A",
+    "none": "none",
     "metadata": {
-      "commandsUsed": "Commands Used",
-      "hintsUsed": "Hints Used"
+      "commandsUsed": "Recorded Actions",
+      "hintsUsed": "Hints Used",
+      "noRedCommandsRecorded": "No red commands recorded",
+      "verificationPassed": "Verification passed"
     },
     "missionType": {
       "operation": "Operation"
+    },
+    "missionTypes": {
+      "academy": "Academy",
+      "operation": "Operation",
+      "nightmare": "Nightmare",
+      "boss": "Boss"
     },
     "stats": {
       "uniqueCommands": "Unique Commands",
       "errorsMade": "Errors Made",
       "safeOps": "Safe Ops"
     },
-    "share": "Share Results"
+    "scoreCategories": {
+      "objectives": "Objectives Complete",
+      "safety": "Safe Operations",
+      "verification": "State Verification",
+      "efficiency": "Time & Action Efficiency",
+      "shortcuts": "Keyboard Mastery",
+      "noHints": "No Hints Bonus",
+      "review": "Manual Review"
+    },
+    "scoreDetails": {
+      "efficiency": "Measured from configured action and time budgets",
+      "evidence": "Backed by recorded mission evidence"
+    },
+    "evidence": {
+      "missionContract": "Validated by the mission contract",
+      "notRecorded": "No matching evidence recorded"
+    },
+    "timeline": {
+      "subtitle": "Every recorded command or interaction, in order",
+      "filtersLabel": "Filter command history",
+      "filters": {
+        "all": "All",
+        "warnings": "Warnings",
+        "red": "Red Commands"
+      },
+      "listLabel": "Recorded mission actions",
+      "empty": "No entries match this filter",
+      "redCommand": "Red Command",
+      "exitCode": "exit code",
+      "exitCodeValue": "Exit code: {{code}}",
+      "output": "Output:",
+      "outputFor": "Output for {{command}}",
+      "visibleCount": "Matching entries: {{count}}",
+      "riskLabel": "Risk: {{level}}",
+      "hasWarning": "Has a warning",
+      "risk": {
+        "green": "Safe",
+        "blue": "Diagnostic",
+        "yellow": "Caution",
+        "red": "DESTRUCTIVE",
+        "purple": "Interactive",
+        "black": "Restricted"
+      },
+      "warnings": {
+        "redCommand": "The simulator classified this as a red command.",
+        "nonZeroExit": "This action returned a non-zero exit code."
+      }
+    },
+    "skillDescription": "Practiced or reinforced by this mission contract.",
+    "warningMessages": {
+      "redCommand": "Red command recorded: {{command}}",
+      "hintsUsed": "Hints used: {{count}}.",
+      "categoryNotScored": "{{category}} was not scored."
+    },
+    "warningSuggestions": {
+      "redCommand": "Confirm the target and mission authorization before destructive operations.",
+      "hintsUsed": "Replay the mission without hints to reclaim the no-hints bonus.",
+      "categoryNotScored": "This category had no observable evidence and was excluded rather than awarded automatically."
+    },
+    "reportNarrative": "{{missionTitle}} was completed in {{timeTaken}}. Recorded actions: {{actionCount}}. Required objectives validated: {{validatedCount}}/{{requiredCount}}. The {{totalScore}}/100 score is normalized only across categories backed by recorded evidence. Categories excluded from scoring: {{excludedCategories}}.",
+    "share": "Share Results",
+    "shareSuccess": "Results copied to the clipboard.",
+    "shareFailed": "Could not copy results. Check clipboard permission and retry.",
+    "reportUnavailableTitle": "No current run report available",
+    "reportUnavailableDescription": "Complete this mission in this browser session. Reset or incomplete progress invalidates older debriefs.",
+    "startMission": "Start mission"
   },
   "settings": {
     "title": "Settings",
-    "subtitle": "Customize your gaming experience",
+    "subtitle": "Manage callsign, language, export, and local progress. Preview-only controls are clearly disabled.",
+    "previewUnavailable": "Preview only — this control is not wired to the simulator in this build.",
+    "builtInAccessibility": "Keyboard focus, screen-reader semantics, and the system reduced-motion preference are supported automatically; they do not require a toggle.",
     "appearance": "Appearance",
     "accessibility": "Accessibility",
     "terminal": "Terminal",
@@ -512,6 +655,11 @@
     "resetProgress": "Reset All Progress",
     "resetProgressDesc": "Clear all saved mission progress, scores, and unlocked content",
     "resetConfirm": "Confirm Reset",
+    "resetSuccess": "Progress cleared and the local reset safeguard was saved.",
+    "resetPartial": "Mission progress was safely cleared, but some session debriefs or guide flags could not be removed.",
+    "resetFailed": "Memory was cleared, but the core reset safeguard could not be saved. Old data may return after reload; allow site storage and retry.",
+    "accountSaved": "Saved on this device.",
+    "accountSessionOnly": "The change works for this session, but browser storage is unavailable, so it may be lost after reload.",
     "masterVolume": "Master Volume",
     "inputFeedback": "Input Feedback Sound",
     "inputFeedbackDesc": "Play feedback sound on keystroke",
@@ -530,6 +678,8 @@
     "callsignPlaceholder": "Enter your callsign",
     "displayName": "Display Name",
     "exportProgress": "Export Progress",
+    "exportSuccess": "The normalized progress download has started.",
+    "exportFailed": "Export failed in this browser.",
     "signOut": "Sign Out",
     "signOutUnavailable": "Sign out unavailable in local demo",
     "fontSize": "Font Size",
@@ -594,6 +744,7 @@
     "language": "Language",
     "switchToEnglish": "Switch language to English",
     "switchToChinese": "Switch language to Chinese",
+    "languageSessionOnly": "Language changed for this session, but browser storage is unavailable, so it may reset after reload.",
     "removeFilter": "Remove filter {{label}}"
   },
   "footer": {

@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { useEffect, useMemo, useState, useRef } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import type { ProgressChapter } from '@/data/progressCatalog';
 
 interface Department {
   id: number;
@@ -8,60 +9,6 @@ interface Department {
   progress: number;
   subSkills: { name: string; progress: number }[];
 }
-
-const departments: Department[] = [
-  { id: 1, name: 'Help & Discovery', color: '#00FF88', progress: 85, subSkills: [
-    { name: 'man', progress: 90 }, { name: 'apropos', progress: 80 }, { name: 'tldr', progress: 85 },
-  ]},
-  { id: 2, name: 'Filesystem Movement', color: '#00FF88', progress: 92, subSkills: [
-    { name: 'pwd/ls/cd', progress: 95 }, { name: 'pushd/popd', progress: 75 }, { name: 'Symlinks', progress: 85 }, { name: 'Glob patterns', progress: 90 },
-  ]},
-  { id: 3, name: 'File Manipulation', color: '#00FF88', progress: 78, subSkills: [
-    { name: 'touch/mkdir', progress: 95 }, { name: 'cp/mv/rm', progress: 80 }, { name: 'find', progress: 70 }, { name: 'tar/gzip', progress: 65 },
-  ]},
-  { id: 4, name: 'Permissions & Identity', color: '#FFD166', progress: 65, subSkills: [
-    { name: 'chmod/chown', progress: 60 }, { name: 'sudo', progress: 75 }, { name: 'umask', progress: 50 }, { name: 'ACLs', progress: 40 },
-  ]},
-  { id: 5, name: 'Text Intelligence', color: '#00E5FF', progress: 88, subSkills: [
-    { name: 'grep', progress: 95 }, { name: 'awk', progress: 80 }, { name: 'sed', progress: 85 }, { name: 'regex', progress: 90 },
-  ]},
-  { id: 6, name: 'Bash Language', color: '#E8EDF2', progress: 72, subSkills: [
-    { name: 'Variables', progress: 80 }, { name: 'Conditionals', progress: 70 }, { name: 'Loops', progress: 65 }, { name: 'Functions', progress: 60 },
-  ]},
-  { id: 7, name: 'Pipes & IO', color: '#E8EDF2', progress: 82, subSkills: [
-    { name: '| (pipe)', progress: 95 }, { name: 'redirection > >>', progress: 85 }, { name: 'tee', progress: 75 }, { name: 'xargs', progress: 70 },
-  ]},
-  { id: 8, name: 'Keyboard Survival', color: '#C77DFF', progress: 55, subSkills: [
-    { name: 'Ctrl+C/Z/D', progress: 90 }, { name: 'Job control', progress: 50 }, { name: 'readline', progress: 40 }, { name: 'bind', progress: 30 },
-  ]},
-  { id: 9, name: 'Process & Resource Ops', color: '#FF6B35', progress: 70, subSkills: [
-    { name: 'ps/top/htop', progress: 85 }, { name: 'kill signals', progress: 75 }, { name: 'nice/renice', progress: 55 }, { name: 'ulimit', progress: 50 },
-  ]},
-  { id: 10, name: 'Storage & Filesystems', color: '#4488FF', progress: 45, subSkills: [
-    { name: 'df/du', progress: 70 }, { name: 'mount', progress: 40 }, { name: 'lsblk/fdisk', progress: 30 }, { name: 'LVM', progress: 20 },
-  ]},
-  { id: 11, name: 'Archives & Integrity', color: '#00E5FF', progress: 60, subSkills: [
-    { name: 'tar/zip', progress: 75 }, { name: 'gzip/bzip2', progress: 65 }, { name: 'md5sum/sha256', progress: 55 }, { name: 'rsync', progress: 45 },
-  ]},
-  { id: 12, name: 'Network Diagnostics', color: '#00E5FF', progress: 68, subSkills: [
-    { name: 'ping/traceroute', progress: 85 }, { name: 'curl/wget', progress: 80 }, { name: 'netstat/ss', progress: 65 }, { name: 'nc/nmap', progress: 50 },
-  ]},
-  { id: 13, name: 'Services & Logs', color: '#FF6B35', progress: 58, subSkills: [
-    { name: 'systemctl', progress: 65 }, { name: 'journalctl', progress: 70 }, { name: 'syslog', progress: 50 }, { name: 'cron', progress: 45 },
-  ]},
-  { id: 14, name: 'Package & Runtime', color: '#2496ED', progress: 62, subSkills: [
-    { name: 'apt/yum', progress: 70 }, { name: 'npm/pip', progress: 75 }, { name: 'snap/flatpak', progress: 40 }, { name: 'AppImages', progress: 35 },
-  ]},
-  { id: 15, name: 'Editors & REPLs', color: '#C77DFF', progress: 48, subSkills: [
-    { name: 'vim basics', progress: 55 }, { name: 'nano', progress: 80 }, { name: 'REPLs (python/node)', progress: 45 }, { name: 'emacs', progress: 15 },
-  ]},
-  { id: 16, name: 'Git Timeline', color: '#FF6B35', progress: 52, subSkills: [
-    { name: 'add/commit/push', progress: 75 }, { name: 'branch/merge', progress: 60 }, { name: 'rebase', progress: 40 }, { name: 'cherry-pick', progress: 35 },
-  ]},
-  { id: 17, name: 'Multiplexer & Remote', color: '#C77DFF', progress: 42, subSkills: [
-    { name: 'tmux basics', progress: 50 }, { name: 'ssh/scp', progress: 65 }, { name: 'screen', progress: 30 }, { name: 'mosh', progress: 20 },
-  ]},
-];
 
 function ProgressRing({
   progress,
@@ -73,36 +20,55 @@ function ProgressRing({
   size?: number;
 }) {
   const [animatedProgress, setAnimatedProgress] = useState(0);
+  const animatedProgressRef = useRef(0);
   const ref = useRef<SVGSVGElement>(null);
-  const started = useRef(false);
+  const reduceMotion = useReducedMotion() ?? false;
 
   useEffect(() => {
+    let frameId = 0;
+    let started = false;
+    const updateProgress = (nextProgress: number) => {
+      animatedProgressRef.current = nextProgress;
+      setAnimatedProgress(nextProgress);
+    };
+
+    if (reduceMotion) {
+      animatedProgressRef.current = progress;
+      return;
+    }
+
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && !started.current) {
-          started.current = true;
+        if (entry.isIntersecting && !started) {
+          started = true;
+          const initialProgress = animatedProgressRef.current;
           const start = performance.now();
           const duration = 800;
           const animate = (now: number) => {
             const elapsed = now - start;
             const p = Math.min(elapsed / duration, 1);
             const eased = p === 1 ? 1 : 1 - Math.pow(2, -10 * p);
-            setAnimatedProgress(Math.round(eased * progress));
-            if (p < 1) requestAnimationFrame(animate);
+            updateProgress(Math.round(initialProgress + (progress - initialProgress) * eased));
+            if (p < 1) frameId = requestAnimationFrame(animate);
           };
-          requestAnimationFrame(animate);
+          frameId = requestAnimationFrame(animate);
+          observer.disconnect();
         }
       },
       { threshold: 0.2 }
     );
     if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, [progress]);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frameId);
+    };
+  }, [progress, reduceMotion]);
 
   const stroke = 3;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
-  const dashOffset = c - (animatedProgress / 100) * c;
+  const displayedProgress = reduceMotion ? progress : animatedProgress;
+  const dashOffset = c - (displayedProgress / 100) * c;
 
   return (
     <svg ref={ref} width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="flex-shrink-0">
@@ -135,14 +101,31 @@ function ProgressRing({
         className="font-jetbrains"
         style={{ fontSize: '9px', fill: '#8B9EB0' }}
       >
-        {animatedProgress}%
+        {displayedProgress}%
       </text>
     </svg>
   );
 }
 
-export default function SkillTreeMini() {
+export default function SkillTreeMini({ chapters }: { chapters: ProgressChapter[] }) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const departments = useMemo<Department[]>(() => chapters.map((chapter) => {
+    const subSkills = [...new Set(chapter.drills.flatMap((drill) => drill.skills))].map((name) => {
+      const matchingDrills = chapter.drills.filter((drill) => drill.skills.includes(name));
+      const completed = matchingDrills.filter((drill) => drill.status === 'completed').length;
+      return {
+        name,
+        progress: matchingDrills.length === 0 ? 0 : Math.round((completed / matchingDrills.length) * 100),
+      };
+    });
+    return {
+      id: chapter.id,
+      name: chapter.title,
+      color: chapter.domainColor,
+      progress: chapter.totalDrills === 0 ? 0 : Math.round((chapter.completedDrills / chapter.totalDrills) * 100),
+      subSkills,
+    };
+  }), [chapters]);
 
   return (
     <div className="space-y-2">
@@ -159,7 +142,10 @@ export default function SkillTreeMini() {
           >
             {/* Header */}
             <button
+              type="button"
               onClick={() => setExpandedId(isExpanded ? null : dept.id)}
+              aria-expanded={isExpanded}
+              aria-controls={`skill-department-${dept.id}`}
               className="w-full flex items-center gap-3 p-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0E14]"
             >
               <ProgressRing progress={dept.progress} color={dept.color} />
@@ -202,6 +188,7 @@ export default function SkillTreeMini() {
 
             {/* Expanded sub-skills */}
             <motion.div
+              id={`skill-department-${dept.id}`}
               initial={false}
               animate={{ height: isExpanded ? 'auto' : 0, opacity: isExpanded ? 1 : 0 }}
               transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}

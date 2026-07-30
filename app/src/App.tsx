@@ -1,4 +1,5 @@
 import { lazy, Suspense, Component, type ComponentType, type ReactNode } from 'react'
+import { MotionConfig } from 'framer-motion'
 import { Link, Routes, Route } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Layout from './components/Layout'
@@ -159,23 +160,25 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 
 export default function App() {
   return (
-    <ErrorBoundary>
-      <Layout>
-        <Suspense fallback={<PageSkeleton />}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/missions" element={<MissionBoard />} />
-            <Route path="/academy" element={<Academy />} />
-            <Route path="/terminal/:missionId" element={<TerminalCockpit />} />
-            <Route path="/atlas" element={<CommandAtlas />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/debrief/:missionId" element={<Debrief />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Suspense>
-        <GhostGuide3D />
-      </Layout>
-    </ErrorBoundary>
+    <MotionConfig reducedMotion="user">
+      <ErrorBoundary>
+        <Layout>
+          <Suspense fallback={<PageSkeleton />}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/missions" element={<MissionBoard />} />
+              <Route path="/academy" element={<Academy />} />
+              <Route path="/terminal/:missionId" element={<TerminalCockpit />} />
+              <Route path="/atlas" element={<CommandAtlas />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/debrief/:missionId" element={<Debrief />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
+          <GhostGuide3D />
+        </Layout>
+      </ErrorBoundary>
+    </MotionConfig>
   )
 }

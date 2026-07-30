@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Terminal as XTermType } from '@xterm/xterm'
 import type { FitAddon as FitAddonType } from '@xterm/addon-fit'
-import type { ShellEngine, ShellResult } from '@/engine/shell'
+import {
+  MAX_SHELL_COMMAND_LENGTH,
+  MAX_SHELL_HISTORY_ENTRIES,
+  type ShellEngine,
+  type ShellResult,
+} from '@/engine/shell'
+import {
+  MAX_TERMINAL_PASTE_SUBMISSIONS,
+  planTerminalInputChunk,
+  truncateTextToUtf16Limit,
+} from '@/lib/textSegmentation'
 
 export interface TerminalAction {
   command: string
@@ -18,7 +29,7 @@ interface TerminalEmulatorProps {
   initialJobScenario?: InitialJobScenario
 }
 
-const MAX_OUTPUT = 5000
+const MAX_TERMINAL_OUTPUT_CODE_UNITS = 5_000
 const REPL_MODES = ['node', 'python', 'psql', 'sqlite'] as const
 
 type ReplMode = typeof REPL_MODES[number]
@@ -39,6 +50,36 @@ interface TmuxSessionState {
   attached: boolean
   windows: number
   panes: number
+}
+
+interface TerminalModules {
+  Terminal: typeof import('@xterm/xterm').Terminal
+  FitAddon: typeof import('@xterm/addon-fit').FitAddon
+  WebLinksAddon: typeof import('@xterm/addon-web-links').WebLinksAddon
+}
+
+let terminalModulesPromise: Promise<TerminalModules> | null = null
+
+function loadTerminalModules(): Promise<TerminalModules> {
+  if (terminalModulesPromise) return terminalModulesPromise
+
+  const pendingLoad = (async () => {
+    const [{ Terminal }, { FitAddon }, { WebLinksAddon }] = await Promise.all([
+      import('@xterm/xterm'),
+      import('@xterm/addon-fit'),
+      import('@xterm/addon-web-links'),
+      import('@xterm/xterm/css/xterm.css'),
+    ])
+    return { Terminal, FitAddon, WebLinksAddon }
+  })()
+
+  terminalModulesPromise = pendingLoad
+  void pendingLoad.catch(() => {
+    // A rejected import Promise cannot be reused. Let the next retry perform a
+    // fresh dynamic import instead of replaying the cached rejection forever.
+    if (terminalModulesPromise === pendingLoad) terminalModulesPromise = null
+  })
+  return pendingLoad
 }
 
 function tokenizeCommandLine(line: string): string[] {
@@ -210,6 +251,7 @@ export default function TerminalEmulator({
   successPulse,
   initialJobScenario = 'none',
 }: TerminalEmulatorProps) {
+  const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<XTermType | null>(null)
   const fitRef = useRef<FitAddonType | null>(null)
@@ -224,9 +266,16 @@ export default function TerminalEmulator({
   const onCommandExecutedRef = useRef(onCommandExecuted)
 
   const [hasFocus, setHasFocus] = useState(false)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [readyTerminal, setReadyTerminal] = useState<{
     shell: ShellEngine
     scenario: typeof initialJobScenario
+    attempt: number
+  } | null>(null)
+  const [terminalLoadFailure, setTerminalLoadFailure] = useState<{
+    shell: ShellEngine
+    scenario: typeof initialJobScenario
+    attempt: number
   } | null>(null)
 
   const writePrompt = useCallback((term: XTermType) => {
@@ -236,6 +285,10 @@ export default function TerminalEmulator({
   const loading = !readyTerminal
     || readyTerminal.shell !== shell
     || readyTerminal.scenario !== initialJobScenario
+    || readyTerminal.attempt !== loadAttempt
+  const loadFailed = terminalLoadFailure?.shell === shell
+    && terminalLoadFailure.scenario === initialJobScenario
+    && terminalLoadFailure.attempt === loadAttempt
 
   useEffect(() => {
     shellRef.current = shell
@@ -246,7 +299,16 @@ export default function TerminalEmulator({
 
   useEffect(() => {
     let disposed = false
-    let cleanupFn: (() => void) | null = null
+    let cleanedUp = false
+    const cleanupTasks: Array<() => void> = []
+    const cleanupFn = () => {
+      if (cleanedUp) return
+      cleanedUp = true
+      for (let index = cleanupTasks.length - 1; index >= 0; index--) {
+        try { cleanupTasks[index]() } catch { /* Continue rolling back the remaining resources. */ }
+      }
+      cleanupTasks.length = 0
+    }
     inputBufferRef.current = ''
     currentModeRef.current = 'shell'
     tmuxPrefixRef.current = false
@@ -307,12 +369,7 @@ export default function TerminalEmulator({
     }
 
     async function initTerminal() {
-      const [{ Terminal }, { FitAddon }, { WebLinksAddon }] = await Promise.all([
-        import('@xterm/xterm'),
-        import('@xterm/addon-fit'),
-        import('@xterm/addon-web-links'),
-      ])
-      await import('@xterm/xterm/css/xterm.css')
+      const { Terminal, FitAddon, WebLinksAddon } = await loadTerminalModules()
 
       if (disposed || !containerRef.current) return
       const container = containerRef.current
@@ -348,6 +405,8 @@ export default function TerminalEmulator({
         scrollback: 5000,
         convertEol: true,
       })
+      cleanupTasks.push(() => container.replaceChildren())
+      cleanupTasks.push(() => term.dispose())
 
       const fitAddon = new FitAddon()
       term.loadAddon(fitAddon)
@@ -387,8 +446,23 @@ export default function TerminalEmulator({
         const successfulCommands = typeof result === 'number'
           ? (result === 0 ? [command] : [])
           : (result.successfulCommands ?? (result.exitCode === 0 ? [command] : []))
-        if (command.trim()) terminalCommandHistory.push(command)
+        if (command.trim()) {
+          terminalCommandHistory.push(command)
+          if (terminalCommandHistory.length > MAX_SHELL_HISTORY_ENTRIES) {
+            terminalCommandHistory.splice(0, terminalCommandHistory.length - MAX_SHELL_HISTORY_ENTRIES)
+          }
+        }
         cbRef.onCommandExecuted({ command, exitCode, kind: 'command', successfulCommands })
+      }
+
+      const appendToInputBuffer = (value: string): boolean => {
+        if (inputBufferRef.current.length + value.length > MAX_SHELL_COMMAND_LENGTH) {
+          safeWrite(term, '\x07')
+          return false
+        }
+        inputBufferRef.current += value
+        safeWrite(term, value)
+        return true
       }
 
       const insertPreviousArgument = () => {
@@ -402,18 +476,17 @@ export default function TerminalEmulator({
           return
         }
         const insertion = quoteCommandToken(previousArgument)
-        inputBufferRef.current += insertion
-        safeWrite(term, insertion)
-        recordAction('Alt-.')
+        recordAction('Alt-.', appendToInputBuffer(insertion) ? 0 : 1)
       }
 
       const writeBoundedOutput = (output: string, color = '') => {
         if (!output) return
-        const bounded = output.length > MAX_OUTPUT
-          ? `${output.slice(0, MAX_OUTPUT)}\n\x1b[38;5;3m... output truncated (${output.length} chars total)\x1b[0m`
+        const truncation = truncateTextToUtf16Limit(output, MAX_TERMINAL_OUTPUT_CODE_UNITS)
+        const displayOutput = truncation.wasTruncated
+          ? `${truncation.text}\n\x1b[38;5;3m... output truncated (${truncation.totalCodeUnits} UTF-16 units total)\x1b[0m`
           : output
-        safeWrite(term, color ? `${color}${bounded}\x1b[0m` : bounded)
-        if (!bounded.endsWith('\n')) safeWriteLn(term, '')
+        safeWrite(term, color ? `${color}${displayOutput}\x1b[0m` : displayOutput)
+        if (!displayOutput.endsWith('\n')) safeWriteLn(term, '')
       }
 
       const restorePreviousScreenFrame = () => {
@@ -479,10 +552,11 @@ export default function TerminalEmulator({
           setMode('less')
           safeWriteLn(term, '')
           safeWriteLn(term, '\x1b[38;5;3m--- less pager --- Press q to quit ---\x1b[0m')
-          const bounded = stdout.length > MAX_OUTPUT
-            ? `${stdout.slice(0, MAX_OUTPUT)}\n... output truncated (${stdout.length} chars total)`
+          const truncation = truncateTextToUtf16Limit(stdout, MAX_TERMINAL_OUTPUT_CODE_UNITS)
+          const displayOutput = truncation.wasTruncated
+            ? `${truncation.text}\n... output truncated (${truncation.totalCodeUnits} UTF-16 units total)`
             : stdout
-          bounded.split('\n').slice(0, 24).forEach(line => safeWriteLn(term, line))
+          displayOutput.split('\n').slice(0, 24).forEach(line => safeWriteLn(term, line))
           safeWriteLn(term, '\x1b[38;5;3m(END)\x1b[0m')
           return
         }
@@ -1114,7 +1188,17 @@ export default function TerminalEmulator({
 
       const handleTerminalData = (data: string) => {
         try {
-          const characters = [...data]
+          if (data.length > MAX_SHELL_COMMAND_LENGTH) {
+            safeWrite(term, '\x07')
+            return
+          }
+          const inputPlan = planTerminalInputChunk(data, MAX_TERMINAL_PASTE_SUBMISSIONS)
+          if (!inputPlan.accepted) {
+            // Reject the complete paste before recursive dispatch: no prefix executes.
+            safeWrite(term, '\x07')
+            return
+          }
+          const characters = inputPlan.characters
           const code = characters.length === 1 ? (characters[0].codePointAt(0) ?? -1) : -1
           if (flowPaused) {
             if (code === 17) {
@@ -1136,7 +1220,7 @@ export default function TerminalEmulator({
             screenPrefixRef.current = false
             return
           }
-          // Pasted text may arrive as one chunk; process it like typed input.
+          // Pasted text may arrive as one chunk; process only a preflighted batch.
           if (characters.length > 1) {
             for (const character of characters) handleTerminalData(character)
             return
@@ -1180,8 +1264,7 @@ export default function TerminalEmulator({
                 safeWrite(term, '\b \b')
               }
             } else if (code >= 32) {
-              inputBufferRef.current += data
-              safeWrite(term, data)
+              appendToInputBuffer(data)
             }
             return
           }
@@ -1219,8 +1302,7 @@ export default function TerminalEmulator({
               return
             }
             if (code >= 32) {
-              inputBufferRef.current += data
-              safeWrite(term, data)
+              appendToInputBuffer(data)
             }
             return
           }
@@ -1253,8 +1335,7 @@ export default function TerminalEmulator({
               return
             }
             if (inputBufferRef.current.startsWith(':') && code >= 32) {
-              inputBufferRef.current += data
-              safeWrite(term, data)
+              appendToInputBuffer(data)
             }
             return
           }
@@ -1306,8 +1387,7 @@ export default function TerminalEmulator({
               return
             }
             if (code >= 32) {
-              inputBufferRef.current += data
-              safeWrite(term, data)
+              appendToInputBuffer(data)
             }
             return
           }
@@ -1359,8 +1439,7 @@ export default function TerminalEmulator({
             }
             if (code >= 32) {
               if (mode === 'node') nodeInterruptCount = 0
-              inputBufferRef.current += data
-              safeWrite(term, data)
+              appendToInputBuffer(data)
             }
             return
           }
@@ -1533,8 +1612,7 @@ export default function TerminalEmulator({
               safeWrite(term, '\b \b')
             }
           } else if (code >= 32) {
-            inputBufferRef.current += data
-            safeWrite(term, data)
+            appendToInputBuffer(data)
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
@@ -1545,7 +1623,8 @@ export default function TerminalEmulator({
         }
       }
 
-      term.onData(handleTerminalData)
+      const dataSubscription = term.onData(handleTerminalData)
+      cleanupTasks.push(() => dataSubscription.dispose())
       const handleControlKeyDown = (event: KeyboardEvent) => {
         if (event.type !== 'keydown') return true
         const key = event.key.toLowerCase()
@@ -1586,42 +1665,44 @@ export default function TerminalEmulator({
         }
       }
       container.addEventListener('keydown', handleControlKeyDown, true)
+      cleanupTasks.push(() => container.removeEventListener('keydown', handleControlKeyDown, true))
 
       termRef.current = term
       fitRef.current = fitAddon
+      cleanupTasks.push(() => {
+        if (termRef.current === term) termRef.current = null
+        if (fitRef.current === fitAddon) fitRef.current = null
+      })
       term.focus()
-      setReadyTerminal({ shell, scenario: initialJobScenario })
 
       const handleResize = () => {
         try { fitAddon.fit() } catch { /* Ignore a resize during disposal. */ }
       }
       window.addEventListener('resize', handleResize)
+      cleanupTasks.push(() => window.removeEventListener('resize', handleResize))
 
       const handleFocus = () => setHasFocus(true)
       const handleBlur = () => setHasFocus(false)
       container.addEventListener('focusin', handleFocus)
+      cleanupTasks.push(() => container.removeEventListener('focusin', handleFocus))
       container.addEventListener('focusout', handleBlur)
+      cleanupTasks.push(() => container.removeEventListener('focusout', handleBlur))
 
-      cleanupFn = () => {
-        try {
-          window.removeEventListener('resize', handleResize)
-          container.removeEventListener('keydown', handleControlKeyDown, true)
-          container.removeEventListener('focusin', handleFocus)
-          container.removeEventListener('focusout', handleBlur)
-        } catch { /* The container may already be gone. */ }
-        try { term.dispose() } catch { /* Avoid a double-dispose crash. */ }
-        termRef.current = null
-        fitRef.current = null
-      }
+      setReadyTerminal({ shell, scenario: initialJobScenario, attempt: loadAttempt })
     }
 
-    void initTerminal()
+    void initTerminal().catch((error: unknown) => {
+      cleanupFn()
+      if (disposed) return
+      console.error('Failed to initialize the terminal runtime.', error)
+      setTerminalLoadFailure({ shell, scenario: initialJobScenario, attempt: loadAttempt })
+    })
 
     return () => {
       disposed = true
-      if (cleanupFn) cleanupFn()
+      cleanupFn()
     }
-  }, [initialJobScenario, shell, writePrompt])
+  }, [initialJobScenario, loadAttempt, shell, writePrompt])
 
   useEffect(() => {
     if (!successPulse || !containerRef.current) return
@@ -1638,15 +1719,38 @@ export default function TerminalEmulator({
 
   return (
     <div className="relative w-full h-full" style={{ backgroundColor: 'var(--bg-terminal)' }}>
-      {loading && (
+      {loadFailed ? (
+        <div
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 px-6 text-center"
+          style={{ backgroundColor: 'var(--bg-terminal)' }}
+          role="alert"
+          aria-live="assertive"
+        >
+          <span className="font-jetbrains text-body-md font-semibold text-[#FF6B6B]">
+            {t('terminal.loadFailed')}
+          </span>
+          <span className="max-w-md font-inter text-body-sm text-[#A8B8C8]">
+            {t('terminal.loadFailedDescription')}
+          </span>
+          <button
+            type="button"
+            className="mt-1 min-h-11 rounded border border-[#00E5FF]/60 bg-[#00E5FF]/10 px-5 py-2 font-jetbrains text-body-sm font-semibold text-[#57EDFF] transition-colors hover:bg-[#00E5FF]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0C1117]"
+            onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+          >
+            {t('common.retry')}
+          </button>
+        </div>
+      ) : loading ? (
         <div
           className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3"
           style={{ backgroundColor: 'var(--bg-terminal)' }}
+          role="status"
+          aria-live="polite"
         >
-          <div className="w-6 h-6 border-2 border-[#00E5FF] border-t-transparent rounded-full animate-spin" />
-          <span className="font-jetbrains text-body-sm text-[#788DA1]">Initializing terminal...</span>
+          <div className="w-6 h-6 border-2 border-[#00E5FF] border-t-transparent rounded-full animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          <span className="font-jetbrains text-body-sm text-[#788DA1]">{t('terminal.initializing')}</span>
         </div>
-      )}
+      ) : null}
       <div
         ref={containerRef}
         className="w-full h-full overflow-hidden"
@@ -1655,9 +1759,10 @@ export default function TerminalEmulator({
           ...focusStyle,
           transition: 'box-shadow 200ms var(--ease-default)',
         }}
-        tabIndex={0}
+        tabIndex={loading ? -1 : 0}
         role="application"
-        aria-label="Terminal input and output"
+        aria-label={t('terminal.inputOutputLabel')}
+        aria-hidden={loading}
       />
     </div>
   )

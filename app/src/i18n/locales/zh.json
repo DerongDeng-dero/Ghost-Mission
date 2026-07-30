@@ -15,13 +15,24 @@
     "mainNavigation": "主导航",
     "openMenu": "打开导航菜单",
     "closeMenu": "关闭导航菜单",
-    "connectionStatus": "连接状态：{{status}}",
-    "rankProfile": "打开档案，等级 {{rank}}"
+    "localSimulatorReady": "本地模拟器已就绪",
+    "rankProfile": "打开档案，等级 {{rank}}",
+    "progressNotSavedShort": "未保存",
+    "progressNotSaved": "进度未保存",
+    "progressNotSavedAlert": "本地进度无法保存。打开设置查看恢复选项。"
   },
   "rank": {
     "recruit": "新兵",
     "operator": "操作员",
     "ghost": "幽灵"
+  },
+  "skills": {
+    "filesystem": "文件系统",
+    "shell": "Shell 与文本",
+    "process": "进程",
+    "network": "网络",
+    "runtime": "运行环境",
+    "git": "Git"
   },
   "home": {
     "welcome": "欢迎回来，特工",
@@ -29,7 +40,7 @@
     "rank": "等级",
     "stats": {
       "missionsCompleted": "已完成任务",
-      "commandsLearned": "已学命令",
+      "commandsLearned": "已验证操作",
       "currentStreak": "当前连胜"
     },
     "todayTraining": "今日训练",
@@ -43,6 +54,7 @@
     "dailyIncident": "每日事件",
     "respondNow": "立即响应",
     "recentActivity": "最近活动",
+    "noRecentActivity": "暂无任务活动。开始一个任务后，这里会记录你的进展。",
     "quickActions": {
       "newMission": "新任务",
       "academy": "学院",
@@ -74,6 +86,7 @@
     "difficultyHard": "困难",
     "streakDays": "{{count}} 天",
     "noSkillData": "暂无技能数据。",
+    "allSkillsMastered": "所有已跟踪技能组均已完成；可重玩任意任务继续练习。",
     "skillRadarLabel": "技能掌握雷达图：{{skills}}"
   },
   "missionBoard": {
@@ -174,6 +187,7 @@
     "boss": "首领",
     "riskLevel": "风险：{{level}}",
     "replay": "重玩",
+    "continue": "继续",
     "start": "开始",
     "scoreComplete": "完成度 {{score}}%",
     "chapterProgressLabel": "第 {{number}} 章，{{title}}：已完成 {{completed}}/{{total}} 个演练",
@@ -209,6 +223,10 @@
   },
   "terminal": {
     "title": "终端驾驶舱",
+    "initializing": "正在初始化终端…",
+    "loadFailed": "终端暂时不可用",
+    "loadFailedDescription": "无法加载终端代码。请检查网络连接后重试。",
+    "inputOutputLabel": "终端输入与输出",
     "objectives": "目标",
     "objectivesRegion": "任务目标",
     "expandObjectives": "展开任务目标面板",
@@ -351,12 +369,15 @@
   },
   "profile": {
     "title": "特工档案",
-    "operativeSince": "加入时间",
+    "avatarAlt": "{{callsign}} 的档案头像",
+    "operativeSince": "训练始于 {{date}}",
+    "notStarted": "尚无训练记录",
     "skillRadar": "技能雷达",
     "topSkills": "最强技能",
     "focusAreas": "关注领域",
+    "allSkillsMastered": "所有已跟踪技能组均已完成；可重玩任意任务继续练习。",
     "skillDepartments": "技能部门",
-    "commandUsageHeatmap": "命令使用热力图",
+    "commandUsageHeatmap": "任务活动热力图",
     "missionCompletionLog": "任务完成记录",
     "stats": {
       "missions": "任务",
@@ -382,14 +403,41 @@
       "portDetective": "端口侦探",
       "redZoneDefuser": "红区拆弹专家",
       "unlocked": "已解锁",
+      "locked": "未解锁",
       "noneYet": "尚无成就",
       "noneDescription": "完成任务来解锁成就。"
+    },
+    "achievementCategories": {
+      "all": "全部",
+      "perfectionist": "完美主义",
+      "speed-runners": "连续训练",
+      "explorer": "探索者"
+    },
+    "achievementTiers": {
+      "bronze": "青铜",
+      "silver": "白银",
+      "gold": "黄金",
+      "platinum": "铂金"
+    },
+    "achievementItems": {
+      "perfect-score": {
+        "title": "幽灵协议",
+        "description": "在任意任务中获得 100 分"
+      },
+      "week-warrior": {
+        "title": "七日战士",
+        "description": "按本地日历连续七天完成训练"
+      },
+      "command-encyclopedia": {
+        "title": "命令百科",
+        "description": "通过完成任务验证 50 种不同的命令模式"
+      }
     },
     "tableHeaders": {
       "mission": "任务",
       "type": "类型",
       "score": "得分",
-      "time": "时间",
+      "time": "完成次数",
       "date": "日期",
       "status": "状态"
     },
@@ -404,7 +452,8 @@
     },
     "pass": "通过",
     "fail": "失败",
-    "activityHeatmapLabel": "365 天命令活动，共使用 {{count}} 条命令",
+    "activityHeatmapLabel": "365 天任务活动，共记录 {{count}} 次完成",
+    "activityHistoryTruncated": "仅显示最近保留记录；更早的完成尝试已被裁剪。",
     "less": "较少",
     "more": "较多",
     "noSkillData": "暂无技能数据。",
@@ -412,54 +461,148 @@
     "skillMastery": "技能掌握",
     "overall": "综合",
     "missionsCleared": "已完成任务",
-    "commandsLearned": "已学命令",
+    "commandsLearned": "已验证操作",
     "dayStreak": "连续天数",
     "levelNumber": "等级 {{level}}",
-    "xpProgress": "距离下一等级的经验进度"
+    "xpProgress": "距离下一等级的经验进度",
+    "historyEmpty": "尚未记录已完成任务。",
+    "activity": {
+      "completed": "已完成 {{title}}，本次得分 {{score}}",
+      "started": "已开始 {{title}}",
+      "empty": "尚未记录任务活动。"
+    }
   },
   "debrief": {
-    "title": "任务简报",
+    "title": "任务复盘",
+    "missionReport": "任务报告",
     "grade": {
-      "S": "幽灵清洁",
-      "A": "操作员等级",
-      "B": "野外通过",
-      "C": "紧急退出",
-      "D": "事件重播"
+      "S": "幽灵无痕",
+      "A": "特工级",
+      "B": "现场通过",
+      "C": "险中脱身",
+      "D": "事件复盘"
     },
     "scoreBreakdown": "得分明细",
-    "commandTimeline": "命令时间线",
-    "performance": "表现",
+    "total": "总分",
+    "totalScore": "总分：{{score}}/{{max}}",
+    "scoreProgress": "{{category}}：{{earned}} / {{max}} 分",
+    "commandTimeline": "操作历史",
+    "performance": "任务表现",
     "recommendations": "推荐的下一步",
     "replay": "重玩",
     "nextMission": "下一个任务",
     "objectives": "目标",
     "completed": "已完成",
     "points": "积分",
-    "newSkills": "新技能已解锁",
-    "practiceReinforced": "练习已加强",
+    "newSkills": "练习的技能",
+    "practiceReinforced": "强化练习",
     "practice": "练习",
+    "practiceCommand": "在当前任务中练习 {{command}}",
     "viewInAtlas": "在图谱中查看",
+    "viewCommandInAtlas": "打开命令图谱以查找 {{command}}",
     "noNewCommands": "本次任务没有新命令。",
     "warnings": "警告",
     "issues": "检测到的问题",
+    "issueCount": "检测到 {{count}} 个问题",
+    "difficulty": "难度 {{level}} / 5",
+    "openRecommendedMission": "开始推荐任务 {{title}}",
     "recommendedSubtitle": "基于你的表现推荐的任务",
+    "yes": "是",
+    "no": "否",
+    "notApplicable": "不适用",
+    "none": "无",
     "metadata": {
-      "commandsUsed": "使用命令数",
-      "hintsUsed": "使用提示数"
+      "commandsUsed": "记录操作数",
+      "hintsUsed": "使用提示数",
+      "noRedCommandsRecorded": "未记录红色危险命令",
+      "verificationPassed": "状态验证通过"
     },
     "missionType": {
       "operation": "行动"
+    },
+    "missionTypes": {
+      "academy": "学院训练",
+      "operation": "行动",
+      "nightmare": "梦魇",
+      "boss": "首领战"
     },
     "stats": {
       "uniqueCommands": "独立命令数",
       "errorsMade": "错误次数",
       "safeOps": "安全操作"
     },
-    "share": "分享结果"
+    "scoreCategories": {
+      "objectives": "任务目标",
+      "safety": "安全操作",
+      "verification": "状态验证",
+      "efficiency": "时间与操作效率",
+      "shortcuts": "键盘操作",
+      "noHints": "无提示奖励",
+      "review": "人工复核"
+    },
+    "scoreDetails": {
+      "efficiency": "依据任务配置的操作与时间预算计算",
+      "evidence": "由已记录的任务证据支持"
+    },
+    "evidence": {
+      "missionContract": "已通过任务契约验证",
+      "notRecorded": "未记录到匹配证据"
+    },
+    "timeline": {
+      "subtitle": "按执行顺序列出所有已记录的命令与交互",
+      "filtersLabel": "筛选操作历史",
+      "filters": {
+        "all": "全部",
+        "warnings": "有警告",
+        "red": "红色命令"
+      },
+      "listLabel": "已记录的任务操作",
+      "empty": "没有符合当前筛选条件的记录",
+      "redCommand": "红色命令",
+      "exitCode": "退出码",
+      "exitCodeValue": "退出码：{{code}}",
+      "output": "输出：",
+      "outputFor": "{{command}} 的输出",
+      "visibleCount": "符合条件的记录：{{count}} 条",
+      "riskLabel": "风险：{{level}}",
+      "hasWarning": "包含警告",
+      "risk": {
+        "green": "安全",
+        "blue": "诊断",
+        "yellow": "注意",
+        "red": "破坏性",
+        "purple": "交互",
+        "black": "受限"
+      },
+      "warnings": {
+        "redCommand": "模拟器将此操作判定为红色危险命令。",
+        "nonZeroExit": "此操作返回了非零退出码。"
+      }
+    },
+    "skillDescription": "本任务契约已练习或强化此技能。",
+    "warningMessages": {
+      "redCommand": "已记录红色命令：{{command}}",
+      "hintsUsed": "使用提示：{{count}} 次。",
+      "categoryNotScored": "{{category}} 未计分。"
+    },
+    "warningSuggestions": {
+      "redCommand": "执行破坏性操作前，请确认目标与任务授权。",
+      "hintsUsed": "不使用提示重玩任务，可重新争取无提示奖励。",
+      "categoryNotScored": "该类别没有可观察证据，因此被排除，而不是自动给分。"
+    },
+    "reportNarrative": "{{missionTitle}} 已在 {{timeTaken}} 内完成。记录操作：{{actionCount}} 次；必需目标已验证：{{validatedCount}}/{{requiredCount}}。{{totalScore}}/100 的得分仅按有记录证据的类别归一化。未纳入计分的类别：{{excludedCategories}}。",
+    "share": "分享结果",
+    "shareSuccess": "结果已复制到剪贴板。",
+    "shareFailed": "无法复制结果，请检查剪贴板权限后重试。",
+    "reportUnavailableTitle": "当前没有可用的运行简报",
+    "reportUnavailableDescription": "请在当前浏览器会话中完成此任务；重置或未完成的进度会使旧简报失效。",
+    "startMission": "开始任务"
   },
   "settings": {
     "title": "设置",
-    "subtitle": "自定义你的游戏体验",
+    "subtitle": "管理代号、语言、导出与本地进度；仅预览的控件已明确禁用。",
+    "previewUnavailable": "仅供预览——此版本尚未把该控件接入模拟器。",
+    "builtInAccessibility": "键盘焦点、屏幕阅读器语义和系统减少动画偏好会自动生效，无需手动开关。",
     "appearance": "外观",
     "accessibility": "无障碍",
     "terminal": "终端",
@@ -511,6 +654,11 @@
     "resetProgress": "重置所有进度",
     "resetProgressDesc": "清除所有已保存的任务进度、得分和解锁内容",
     "resetConfirm": "确认重置",
+    "resetSuccess": "进度已清除，并已写入本地重置保护。",
+    "resetPartial": "任务进度已可靠清除，但部分会话复盘或引导标记未能清理。",
+    "resetFailed": "内存进度已清空，但核心重置保护未能写入；刷新后旧数据可能恢复，请允许站点存储后重试。",
+    "accountSaved": "已保存到此设备。",
+    "accountSessionOnly": "本次会话内已生效，但浏览器存储不可用，刷新后可能丢失。",
     "masterVolume": "主音量",
     "inputFeedback": "输入反馈音效",
     "inputFeedbackDesc": "按键时播放反馈音效",
@@ -529,6 +677,8 @@
     "callsignPlaceholder": "输入你的代号",
     "displayName": "显示名称",
     "exportProgress": "导出进度",
+    "exportSuccess": "归一化进度文件的下载已开始。",
+    "exportFailed": "当前浏览器导出失败。",
     "signOut": "退出登录",
     "signOutUnavailable": "本地演示暂不支持退出登录",
     "fontSize": "字体大小",
@@ -593,6 +743,7 @@
     "language": "语言",
     "switchToEnglish": "切换为英文",
     "switchToChinese": "切换为中文",
+    "languageSessionOnly": "语言已在本次会话中切换，但浏览器存储不可用，刷新后可能恢复原设置。",
     "removeFilter": "移除筛选条件 {{label}}"
   },
   "footer": {

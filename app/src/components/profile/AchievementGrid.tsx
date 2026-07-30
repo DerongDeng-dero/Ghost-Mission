@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import {
   KeyRound,
   BookOpen,
@@ -23,7 +24,8 @@ import {
   Trash2,
   Lock,
 } from 'lucide-react';
-import { achievements, tierColors, achievementCategories } from '@/data/achievements';
+import { achievements, tierColors } from '@/data/achievements';
+import type { Achievement } from '@/data/achievements';
 
 const iconMap: Record<string, React.ElementType> = {
   KeyRound,
@@ -50,23 +52,31 @@ const iconMap: Record<string, React.ElementType> = {
 
 interface AchievementGridProps {
   compact?: boolean;
+  items?: Achievement[];
 }
 
-export default function AchievementGrid({ compact = false }: AchievementGridProps) {
+export default function AchievementGrid({ compact = false, items = achievements }: AchievementGridProps) {
+  const { t } = useTranslation();
   const [activeCategory, setActiveCategory] = useState('All');
+  const availableCategories = ['All', ...new Set(items.map((achievement) => achievement.category))];
 
   const filtered = activeCategory === 'All'
-    ? achievements
-    : achievements.filter((a) => a.category === activeCategory);
+    ? items
+    : items.filter((achievement) => achievement.category === activeCategory);
+  const categoryLabel = (category: string) => category === 'All'
+    ? t('profile.achievementCategories.all')
+    : t(`profile.achievementCategories.${category.replace(/\s+/g, '-').toLowerCase()}`, { defaultValue: category });
 
   return (
     <div className="space-y-4">
       {/* Category filters */}
       <div className="flex items-center gap-2 flex-wrap">
-        {achievementCategories.map((cat) => (
+        {availableCategories.map((cat) => (
           <button
             key={cat}
+            type="button"
             onClick={() => setActiveCategory(cat)}
+            aria-pressed={activeCategory === cat}
             className="px-3 py-1.5 font-jetbrains text-body-sm transition-all duration-fast rounded-radius-sm"
             style={{
               color: activeCategory === cat ? '#00E5FF' : '#788DA1',
@@ -74,7 +84,7 @@ export default function AchievementGrid({ compact = false }: AchievementGridProp
               border: `1px solid ${activeCategory === cat ? '#00E5FF' : '#1E2D3D'}`,
             }}
           >
-            {cat}
+            {categoryLabel(cat)}
           </button>
         ))}
       </div>
@@ -132,28 +142,28 @@ export default function AchievementGrid({ compact = false }: AchievementGridProp
                   border: `1px solid ${tierColor}30`,
                 }}
               >
-                {ach.tier}
+                {t(`profile.achievementTiers.${ach.tier}`)}
               </span>
 
               {/* Title */}
               <h4 className="font-jetbrains text-body font-semibold text-[#E8EDF2] leading-tight">
-                {ach.title}
+                {t(`profile.achievementItems.${ach.id}.title`, { defaultValue: ach.title })}
               </h4>
 
               {/* Description */}
               <p className="font-inter text-body-sm text-[#8B9EB0] mt-1.5 line-clamp-2">
-                {ach.description}
+                {t(`profile.achievementItems.${ach.id}.description`, { defaultValue: ach.description })}
               </p>
 
               {/* Status */}
-              {isUnlocked && ach.unlockedAt && (
+              {isUnlocked && (
                 <span className="font-jetbrains text-[10px] text-[#00FF88] mt-2">
-                  Unlocked {ach.unlockedAt}
+                  {t('profile.achievements.unlocked')}{ach.unlockedAt ? ` ${ach.unlockedAt}` : ''}
                 </span>
               )}
               {!isUnlocked && (
                 <span className="font-jetbrains text-[10px] text-[#788DA1] mt-2">
-                  Locked
+                  {t('profile.achievements.locked')}
                 </span>
               )}
             </motion.div>

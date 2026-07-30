@@ -11,6 +11,26 @@ export interface VNode {
   target?: string
 }
 
+export interface VFSStateSnapshot {
+  root: VNode
+  currentUser: string
+}
+
+export interface VFSUsage {
+  entries: number
+  maxDepth: number
+  storageCodeUnits: number
+  valid: boolean
+}
+
+export const MAX_VFS_FILE_CODE_UNITS = 10 * 1_024 * 1_024
+export const MAX_VFS_TOTAL_CODE_UNITS = 32 * 1_024 * 1_024
+export const MAX_VFS_ENTRIES = 10_000
+export const MAX_VFS_DEPTH = 128
+export const MAX_VFS_COMPONENT_CODE_UNITS = 255
+export const MAX_VFS_SYMLINK_TARGET_CODE_UNITS = 4_096
+export const MAX_VFS_SYMLINK_HOPS = 40
+
 export type PermissionMode = 'read' | 'write' | 'execute'
 
 function parsePermissions(perm: string): { owner: number; group: number; other: number } {
@@ -73,10 +93,47 @@ export function createVNode(opts: Partial<VNode> & Pick<VNode, 'name' | 'type'>)
   }
 }
 
+function cloneVNodeShallow(node: VNode): VNode {
+  return {
+    name: node.name,
+    type: node.type,
+    content: node.content,
+    permissions: node.permissions,
+    owner: node.owner,
+    group: node.group,
+    size: node.size,
+    mtime: new Date(node.mtime),
+    children: node.type === 'directory' ? new Map() : undefined,
+    target: node.target,
+  }
+}
+
+function cloneVNodeGraph(root: VNode): VNode {
+  const rootClone = cloneVNodeShallow(root)
+  const seen = new Map<VNode, VNode>([[root, rootClone]])
+  const pending: Array<[VNode, VNode]> = [[root, rootClone]]
+
+  while (pending.length > 0) {
+    const [source, target] = pending.pop()!
+    for (const [name, child] of source.children ?? []) {
+      let childClone = seen.get(child)
+      if (!childClone) {
+        childClone = cloneVNodeShallow(child)
+        seen.set(child, childClone)
+        if (child.type === 'directory') pending.push([child, childClone])
+      }
+      target.children!.set(name, childClone)
+    }
+  }
+  return rootClone
+}
+
 export class VFS {
   private root: VNode
   private users: Map<string, { uid: number; groups: string[] }>
   private currentUser: string
+  private capacityFailureSerial = 0
+  private lastCapacityError = ''
 
   constructor() {
     this.root = createVNode({ name: '', type: 'directory', permissions: 'rwxr-xr-x', owner: 'root', group: 'root' })
@@ -170,53 +227,60 @@ export class VFS {
     seen = new Set<VNode>(),
   ): { node: VNode | null; parent: VNode | null; name: string; denied?: boolean } {
     if (parts.length === 0) return { node: this.root, parent: null, name: '' }
-    const name = parts[parts.length - 1]
+    let remaining = [...parts]
+    let name = remaining[remaining.length - 1]
     let parent: VNode = this.root
-    for (let i = 0; i < parts.length; i++) {
-      if (parent.type !== 'directory' || !parent.children) {
+    let index = 0
+    while (index < remaining.length) {
+      name = remaining[remaining.length - 1]
+      if (parent.type !== 'directory' || !(parent.children instanceof Map)) {
         return { node: null, parent: null, name }
       }
       if (!this.checkPerm(parent, this.currentUser, 'execute')) {
         return { node: null, parent: null, name, denied: true }
       }
 
-      const next = parent.children.get(parts[i])
+      const next = parent.children.get(remaining[index])
       if (!next) {
-        return { node: null, parent: i === parts.length - 1 ? parent : null, name }
+        return { node: null, parent: index === remaining.length - 1 ? parent : null, name }
       }
-      if (i === parts.length - 1) return { node: next, parent, name }
+      if (index === remaining.length - 1) return { node: next, parent, name }
 
       if (next.type === 'symlink') {
-        if (!next.target || seen.has(next)) return { node: null, parent: null, name }
+        if (!next.target || seen.has(next) || seen.size >= MAX_VFS_SYMLINK_HOPS) {
+          return { node: null, parent: null, name }
+        }
         seen.add(next)
-        const context = next.target.startsWith('/') ? [] : parts.slice(0, i)
+        const context = next.target.startsWith('/') ? [] : remaining.slice(0, index)
         const targetParts = next.target.startsWith('/')
           ? next.target.slice(1).split('/').filter(Boolean)
           : next.target.split('/').filter(Boolean)
-        return this.getNode(
-          [...this.resolve(targetParts, context), ...parts.slice(i + 1)],
-          seen,
-        )
+        remaining = [...this.resolve(targetParts, context), ...remaining.slice(index + 1)]
+        parent = this.root
+        index = 0
+        continue
       }
       if (next.type !== 'directory') return { node: null, parent: null, name }
       parent = next
+      index += 1
     }
     return { node: null, parent: null, name }
   }
 
   private followSymlink(node: VNode | null, linkParts: string[], seen = new Set<VNode>()): VNode | null {
-    if (!node) return null
-    if (node.type === 'symlink' && node.target) {
-      if (seen.has(node)) return null
-      seen.add(node)
-      const context = node.target.startsWith('/') ? [] : linkParts.slice(0, -1)
-      const targetParts = node.target.startsWith('/')
-        ? node.target.slice(1).split('/').filter(Boolean)
-        : node.target.split('/').filter(Boolean)
-      const resolved = this.resolve(targetParts, context)
-      return this.followSymlink(this.getNode(resolved, seen).node, resolved, seen)
+    let current = node
+    let currentParts = linkParts
+    while (current?.type === 'symlink') {
+      if (!current.target || seen.has(current) || seen.size >= MAX_VFS_SYMLINK_HOPS) return null
+      seen.add(current)
+      const context = current.target.startsWith('/') ? [] : currentParts.slice(0, -1)
+      const targetParts = current.target.startsWith('/')
+        ? current.target.slice(1).split('/').filter(Boolean)
+        : current.target.split('/').filter(Boolean)
+      currentParts = this.resolve(targetParts, context)
+      current = this.getNode(currentParts, seen).node
     }
-    return node
+    return current
   }
 
   private checkPerm(node: VNode, user: string, mode: PermissionMode): boolean {
@@ -237,8 +301,211 @@ export class VFS {
     return parent.owner === this.currentUser || node.owner === this.currentUser
   }
 
+  /**
+   * Return a directory's physical depth in the VFS graph. Input path depth is
+   * not authoritative because an intermediate symlink can resolve to a much
+   * deeper parent.
+   */
+  private getDirectoryDepth(target: VNode): number | null {
+    if (target.type !== 'directory') return null
+    if (target === this.root) return 0
+    const visited = new Set<VNode>([this.root])
+    const pending: Array<{ directory: VNode; depth: number }> = [{ directory: this.root, depth: 0 }]
+    while (pending.length > 0) {
+      const { directory, depth } = pending.pop()!
+      if (!(directory.children instanceof Map)) return null
+      for (const child of directory.children.values()) {
+        if (child.type !== 'directory') continue
+        if (visited.has(child)) return null
+        if (child === target) return depth + 1
+        visited.add(child)
+        pending.push({ directory: child, depth: depth + 1 })
+      }
+    }
+    return null
+  }
+
+  private directoryContains(root: VNode, target: VNode): boolean {
+    if (root.type !== 'directory' || target.type !== 'directory') return false
+    const visited = new Set<VNode>()
+    const pending = [root]
+    while (pending.length > 0) {
+      const directory = pending.pop()!
+      if (directory === target) return true
+      if (visited.has(directory) || !(directory.children instanceof Map)) continue
+      visited.add(directory)
+      for (const child of directory.children.values()) {
+        if (child.type === 'directory') pending.push(child)
+      }
+    }
+    return false
+  }
+
+  private getChildEntryDepth(path: string, parent: VNode): { depth: number } | { error: string } {
+    const parentDepth = this.getDirectoryDepth(parent)
+    if (parentDepth === null) return this.capacityFailure(`${path}: No space left on device`)
+    return { depth: parentDepth + 1 }
+  }
+
+  getUsage(): VFSUsage {
+    return this.measureUsage(this.root)
+  }
+
+  private measureUsage(root: VNode): VFSUsage {
+    let entries = 0
+    let maxDepth = 0
+    let storageCodeUnits = 0
+    if (!root || typeof root !== 'object' || root.type !== 'directory' || !(root.children instanceof Map)) {
+      return { entries, maxDepth, storageCodeUnits, valid: false }
+    }
+    let valid = this.hasValidNodeMetadata(root)
+    const countedFiles = new Set<VNode>()
+    const visitedDirectories = new Set<VNode>([root])
+    const pending: Array<{ directory: VNode; depth: number }> = [{ directory: root, depth: 0 }]
+
+    while (pending.length > 0) {
+      const { directory, depth } = pending.pop()!
+      if (!(directory.children instanceof Map)) {
+        valid = false
+        continue
+      }
+      for (const [entryName, child] of directory.children) {
+        if (typeof entryName !== 'string' || !child || typeof child !== 'object') {
+          valid = false
+          continue
+        }
+        const childDepth = depth + 1
+        entries += 1
+        storageCodeUnits += entryName.length
+        maxDepth = Math.max(maxDepth, childDepth)
+        if (entryName.length === 0 || entryName.length > MAX_VFS_COMPONENT_CODE_UNITS || childDepth > MAX_VFS_DEPTH) {
+          valid = false
+        }
+        if (!this.hasValidNodeMetadata(child)) valid = false
+        if (child.type === 'directory') {
+          if (!(child.children instanceof Map) || visitedDirectories.has(child)) {
+            valid = false
+          } else {
+            visitedDirectories.add(child)
+            pending.push({ directory: child, depth: childDepth })
+          }
+        } else if (child.type === 'symlink') {
+          const targetLength = typeof child.target === 'string' ? child.target.length : 0
+          storageCodeUnits += targetLength
+          if (typeof child.target !== 'string' || targetLength === 0 || targetLength > MAX_VFS_SYMLINK_TARGET_CODE_UNITS) valid = false
+        } else if (child.type === 'file') {
+          if (!countedFiles.has(child)) {
+            countedFiles.add(child)
+            const contentLength = typeof child.content === 'string' ? child.content.length : 0
+            storageCodeUnits += contentLength
+            if (typeof child.content !== 'string' || contentLength > MAX_VFS_FILE_CODE_UNITS || child.size !== contentLength) valid = false
+          }
+        } else {
+          valid = false
+        }
+      }
+    }
+    if (entries > MAX_VFS_ENTRIES || storageCodeUnits > MAX_VFS_TOTAL_CODE_UNITS) valid = false
+    return { entries, maxDepth, storageCodeUnits, valid }
+  }
+
+  private hasValidNodeMetadata(node: VNode): boolean {
+    return (
+      typeof node.name === 'string'
+      && typeof node.permissions === 'string'
+      && typeof node.owner === 'string'
+      && typeof node.group === 'string'
+      && Number.isFinite(node.size)
+      && node.size >= 0
+      && node.mtime instanceof Date
+      && Number.isFinite(node.mtime.getTime())
+    )
+  }
+
+  private capacityFailure(error: string): { error: string } {
+    this.capacityFailureSerial += 1
+    this.lastCapacityError = error
+    return { error }
+  }
+
+  getCapacityFailureSerial(): number { return this.capacityFailureSerial }
+  getLastCapacityError(): string { return this.lastCapacityError }
+
+  private validateEntryShape(path: string, entryName: string, depth: number, symlinkTarget = ''): { error?: string } {
+    if (depth > MAX_VFS_DEPTH || entryName.length > MAX_VFS_COMPONENT_CODE_UNITS) {
+      return this.capacityFailure(`${path}: File name too long`)
+    }
+    if (symlinkTarget.length > MAX_VFS_SYMLINK_TARGET_CODE_UNITS) {
+      return this.capacityFailure(`${path}: Symbolic link target too long`)
+    }
+    return {}
+  }
+
+  private validateAddedEntry(
+    path: string,
+    entryName: string,
+    parent: VNode,
+    extraStorageCodeUnits = 0,
+    symlinkTarget = '',
+  ): { error?: string } {
+    const placement = this.getChildEntryDepth(path, parent)
+    if ('error' in placement) return placement
+    const shape = this.validateEntryShape(path, entryName, placement.depth, symlinkTarget)
+    if (shape.error) return shape
+    const usage = this.getUsage()
+    if (
+      !usage.valid
+      || usage.entries + 1 > MAX_VFS_ENTRIES
+      || usage.storageCodeUnits + entryName.length + extraStorageCodeUnits > MAX_VFS_TOTAL_CODE_UNITS
+    ) {
+      return this.capacityFailure(`${path}: No space left on device`)
+    }
+    return {}
+  }
+
+  private validateFileContent(
+    path: string,
+    existingFile: VNode | null,
+    nextLength: number,
+    parent: VNode,
+    newEntryName = '',
+  ): { error?: string } {
+    if (newEntryName) {
+      const placement = this.getChildEntryDepth(path, parent)
+      if ('error' in placement) return placement
+      const shape = this.validateEntryShape(path, newEntryName, placement.depth)
+      if (shape.error) return shape
+    }
+    if (nextLength > MAX_VFS_FILE_CODE_UNITS) return this.capacityFailure(`${path}: File too large`)
+    const usage = this.getUsage()
+    const currentLength = existingFile?.content?.length ?? 0
+    const addedEntries = existingFile ? 0 : 1
+    if (
+      !usage.valid
+      || usage.entries + addedEntries > MAX_VFS_ENTRIES
+      || usage.storageCodeUnits - currentLength + nextLength + newEntryName.length > MAX_VFS_TOTAL_CODE_UNITS
+    ) {
+      return this.capacityFailure(`${path}: No space left on device`)
+    }
+    return {}
+  }
+
   getCurrentUser(): string { return this.currentUser }
   setCurrentUser(u: string) { this.currentUser = u }
+
+  createSnapshot(): VFSStateSnapshot {
+    if (!this.getUsage().valid) throw new Error('vfs: filesystem graph violates simulator limits')
+    return {
+      root: cloneVNodeGraph(this.root),
+      currentUser: this.currentUser,
+    }
+  }
+
+  restoreSnapshot(snapshot: VFSStateSnapshot): void {
+    if (!this.measureUsage(snapshot.root).valid) throw new Error('vfs: refusing an invalid filesystem snapshot')
+    this.root = cloneVNodeGraph(snapshot.root)
+    this.currentUser = snapshot.currentUser
+  }
 
   canWriteFile(path: string, cwd: string[], followedLinks = new Set<VNode>()): { error?: string } {
     const parts = this.resolvePath(path, cwd)
@@ -252,7 +519,9 @@ export class VFS {
     }
     const resolved = this.followSymlink(node, parts)
     if (!resolved && node.type === 'symlink' && node.target) {
-      if (followedLinks.has(node)) return { error: `${path}: Too many levels of symbolic links` }
+      if (followedLinks.has(node) || followedLinks.size >= MAX_VFS_SYMLINK_HOPS) {
+        return { error: `${path}: Too many levels of symbolic links` }
+      }
       followedLinks.add(node)
       const context = node.target.startsWith('/') ? [] : parts.slice(0, -1)
       const targetParts = node.target.startsWith('/')
@@ -315,7 +584,9 @@ export class VFS {
     if (node) {
       const resolved = this.followSymlink(node, parts)
       if (!resolved && node.type === 'symlink' && node.target) {
-        if (followedLinks.has(node)) return { error: `${path}: Too many levels of symbolic links` }
+        if (followedLinks.has(node) || followedLinks.size >= MAX_VFS_SYMLINK_HOPS) {
+          return { error: `${path}: Too many levels of symbolic links` }
+        }
         followedLinks.add(node)
         const context = node.target.startsWith('/') ? [] : parts.slice(0, -1)
         const targetParts = node.target.startsWith('/')
@@ -327,11 +598,16 @@ export class VFS {
       if (!resolved) return { error: `${path}: No such file or directory` }
       if (resolved.type === 'directory') return { error: `${path}: Is a directory` }
       if (!this.checkPerm(resolved, this.currentUser, 'write')) return { error: `${path}: Permission denied` }
+      const nextLength = append ? (resolved.content?.length ?? 0) + content.length : content.length
+      const capacity = this.validateFileContent(path, resolved, nextLength, parent)
+      if (capacity.error) return capacity
       resolved.content = append ? (resolved.content ?? '') + content : content
       resolved.size = resolved.content.length
       resolved.mtime = new Date()
     } else {
       if (!this.checkPerm(parent, this.currentUser, 'write')) return { error: `${path}: Permission denied` }
+      const capacity = this.validateFileContent(path, null, content.length, parent, name)
+      if (capacity.error) return capacity
       parent.children!.set(name, createVNode({ name, type: 'file', content, owner: this.currentUser, group: this.currentUser }))
     }
     return {}
@@ -377,6 +653,8 @@ export class VFS {
     if (!parent) return { error: `mkdir: cannot create directory '${path}': Permission denied` }
     if (node) return { error: `mkdir: cannot create directory '${path}': File exists` }
     if (!this.checkPerm(parent, this.currentUser, 'write')) return { error: `mkdir: cannot create directory '${path}': Permission denied` }
+    const capacity = this.validateAddedEntry(path, name, parent)
+    if (capacity.error) return capacity
     parent.children!.set(name, createVNode({ name, type: 'directory', owner: this.currentUser, group: this.currentUser, permissions: 'rwxr-xr-x' }))
     return {}
   }
@@ -506,12 +784,15 @@ export class VFS {
   }
 
   symlink(target: string, linkPath: string, cwd: string[]): { error?: string } {
+    if (target.length === 0) return { error: `ln: failed to create symbolic link '${linkPath}': Invalid argument` }
     const parts = this.resolvePath(linkPath, cwd)
     const { parent, name, denied } = this.getNode(parts)
     if (denied) return { error: `ln: failed to create symbolic link '${linkPath}': Permission denied` }
     if (!parent) return { error: `ln: failed to create symbolic link '${linkPath}': Permission denied` }
     if (parent.children!.has(name)) return { error: `ln: failed to create symbolic link '${linkPath}': File exists` }
     if (!this.checkPerm(parent, this.currentUser, 'write')) return { error: `ln: failed to create symbolic link '${linkPath}': Permission denied` }
+    const capacity = this.validateAddedEntry(linkPath, name, parent, target.length, target)
+    if (capacity.error) return capacity
     parent.children!.set(name, createVNode({ name, type: 'symlink', target, owner: this.currentUser, group: this.currentUser, permissions: 'rwxrwxrwx' }))
     return {}
   }
@@ -528,6 +809,8 @@ export class VFS {
       return { error: `ln: failed to create hard link '${linkPath}': Permission denied` }
     }
     if (parent.children!.has(name)) return { error: `ln: failed to create hard link '${linkPath}': File exists` }
+    const capacity = this.validateAddedEntry(linkPath, name, parent)
+    if (capacity.error) return capacity
     // Directory entries intentionally share the same file node: content,
     // ownership, permissions, size, and mtime therefore change together.
     parent.children!.set(name, targetResult.node)
@@ -559,7 +842,12 @@ export class VFS {
         return { error: `cp: cannot copy a directory, '${src}', into itself, '${dst}'` }
       }
       const targetPath = `/${targetParts.join('/')}`
-      const target = this.getNode(targetParts).node
+      const targetResult = this.getNode(targetParts)
+      const target = targetResult.node
+      const targetContainer = target?.type === 'directory' ? target : targetResult.parent
+      if (targetContainer && this.directoryContains(srcNode, targetContainer)) {
+        return { error: `cp: cannot copy a directory, '${src}', into itself, '${dst}'` }
+      }
       if (target && target.type !== 'directory') return { error: `cp: cannot overwrite non-directory '${dst}' with directory '${src}'` }
       if (!target) {
         const mkdirRes = this.createDirectory(targetPath, [])
@@ -616,6 +904,14 @@ export class VFS {
     if (!this.checkPerm(actualDstParent, this.currentUser, 'write')) return { error: `cp: cannot create regular file '${dst}': Permission denied` }
     const existing = actualDstParent.children!.get(actualDstName)
     if (existing && existing.type === 'directory') return { error: `cp: cannot overwrite directory '${dst}' with non-directory '${src}'` }
+    const capacity = this.validateFileContent(
+      dst,
+      existing?.type === 'file' ? existing : null,
+      content.length,
+      actualDstParent,
+      existing ? '' : actualDstName,
+    )
+    if (capacity.error) return { error: `cp: cannot create regular file '${dst}': ${capacity.error}` }
     if (existing && existing.type === 'file') {
       if (!this.checkPerm(existing, this.currentUser, 'write')) return { error: `cp: cannot create regular file '${dst}': Permission denied` }
       existing.content = content
@@ -663,11 +959,28 @@ export class VFS {
     ) {
       return { error: `mv: cannot move '${src}' to a subdirectory of itself, '${dst}'` }
     }
+    if (srcNode.type === 'directory' && this.directoryContains(srcNode, actualDstParent)) {
+      return { error: `mv: cannot move '${src}' to a subdirectory of itself, '${dst}'` }
+    }
     if (!this.canRemove(srcParent, srcNode)) return { error: `mv: cannot move '${src}': Permission denied` }
     if (!this.checkPerm(actualDstParent, this.currentUser, 'write')) return { error: `mv: cannot move to '${dst}': Permission denied` }
 
     const existing = actualDstParent.children!.get(actualDstName)
     if (existing === srcNode) return {}
+    const placement = this.getChildEntryDepth(dst, actualDstParent)
+    if ('error' in placement) return { error: `mv: cannot move to '${dst}': ${placement.error}` }
+    const shape = this.validateEntryShape(dst, actualDstName, placement.depth)
+    if (shape.error) return { error: `mv: cannot move to '${dst}': ${shape.error}` }
+    const subtreeHeight = this.getSubtreeHeight(srcNode)
+    if (subtreeHeight === null || placement.depth + subtreeHeight > MAX_VFS_DEPTH) {
+      const failure = this.capacityFailure(`${dst}: File name too long`)
+      return { error: `mv: cannot move to '${dst}': ${failure.error}` }
+    }
+    const usage = this.getUsage()
+    if (!usage.valid || usage.storageCodeUnits - srcName.length + actualDstName.length > MAX_VFS_TOTAL_CODE_UNITS) {
+      const failure = this.capacityFailure(`${dst}: No space left on device`)
+      return { error: `mv: cannot move to '${dst}': ${failure.error}` }
+    }
     if (existing && !this.canRemove(actualDstParent, existing)) return { error: `mv: cannot move to '${dst}': Permission denied` }
     if (existing?.type === 'directory' && srcNode.type !== 'directory') return { error: `mv: cannot overwrite directory '${dst}' with non-directory` }
     if (existing && existing.type !== 'directory' && srcNode.type === 'directory') return { error: `mv: cannot overwrite non-directory '${dst}' with directory` }
@@ -680,18 +993,39 @@ export class VFS {
     return {}
   }
 
-  private countNodeReferences(target: VNode): number {
-    let count = 0
-    const visit = (node: VNode) => {
-      if (node.type !== 'directory') return
-      for (const child of node.children!.values()) {
-        if (child === target) count += 1
-        if (child.type === 'directory') visit(child)
+  private getSubtreeHeight(root: VNode): number | null {
+    if (root.type !== 'directory') return 0
+    let height = 0
+    const visited = new Set<VNode>([root])
+    const pending: Array<{ node: VNode; depth: number }> = [{ node: root, depth: 0 }]
+    while (pending.length > 0) {
+      const { node, depth } = pending.pop()!
+      height = Math.max(height, depth)
+      if (!(node.children instanceof Map)) return null
+      for (const child of node.children.values()) {
+        if (child.type !== 'directory') continue
+        if (visited.has(child)) return null
+        visited.add(child)
+        pending.push({ node: child, depth: depth + 1 })
       }
     }
-    visit(this.root)
-    return count
+    return height
   }
 
-  getRoot(): VNode { return this.root }
+  private countNodeReferences(target: VNode): number {
+    let count = 0
+    const visited = new Set<VNode>()
+    const pending: VNode[] = [this.root]
+    while (pending.length > 0) {
+      const node = pending.pop()!
+      if (node.type !== 'directory' || visited.has(node)) continue
+      visited.add(node)
+      if (!(node.children instanceof Map)) continue
+      for (const child of node.children.values()) {
+        if (child === target) count += 1
+        if (child.type === 'directory') pending.push(child)
+      }
+    }
+    return count
+  }
 }

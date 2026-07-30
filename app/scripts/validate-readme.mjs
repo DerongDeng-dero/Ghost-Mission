@@ -10,6 +10,7 @@ import {
   formatMiB,
 } from './project-metrics.mjs'
 import { capabilityMetrics } from './report-capabilities.mjs'
+import { AUDIT_POLICY } from './audit-policy.mjs'
 
 const failures = []
 const readme = await readFile(path.resolve(workspaceRoot, 'README.md'), 'utf8')
@@ -24,6 +25,11 @@ const engineValidationSource = await readFile(
   'utf8',
 )
 const engineRegressionChecks = engineValidationSource.match(/^test\(/gm)?.length ?? 0
+const auditPolicyValidationSource = await readFile(
+  path.resolve(appRoot, 'scripts', 'validate-audit-policy.mjs'),
+  'utf8',
+)
+const auditPolicyRegressionChecks = auditPolicyValidationSource.match(/^test\(/gm)?.length ?? 0
 const genericH5Levels = levels.filter(level =>
   level.hints?.some(hint => hint.level === 5 && /^Full solution:\s*Use '/i.test(hint.text_en ?? '')),
 ).length
@@ -69,6 +75,22 @@ expectIncludes('command graph metrics', `${commands.commands} nodes / ${commands
 expectIncludes('achievement count', `| 成就定义 | **${achievements.achievements}**`)
 expectIncludes('public asset size', `${formatMiB(assets.publicBytes)} MiB`)
 
+const expectedPublicAssetMiB = Number(formatMiB(assets.publicBytes))
+const publicAssetMetricPattern = /`?public\/`?[^\r\n]*?([0-9]+(?:\.[0-9]+)?)\s*MiB/gi
+for (const [lineIndex, line] of readme.split(/\r?\n/).entries()) {
+  publicAssetMetricPattern.lastIndex = 0
+  let match
+  while ((match = publicAssetMetricPattern.exec(line)) !== null) {
+    const documentedMiB = Number(match[1])
+    if (documentedMiB !== expectedPublicAssetMiB) {
+      failures.push(
+        `public asset size: README line ${lineIndex + 1} reports ${match[1]} MiB, ` +
+          `expected ${formatMiB(assets.publicBytes)} MiB`,
+      )
+    }
+  }
+}
+
 for (const imagePath of assets.docsFiles) {
   const reference = './app/' + path.relative(appRoot, imagePath).replaceAll('\\', '/')
   expectIncludes(`README image ${path.basename(imagePath)}`, reference)
@@ -84,6 +106,7 @@ for (const [label, token] of [
 }
 expectIncludes('Node engine range', `Node.js \`${packageJson.engines.node}\``)
 expectIncludes('engine regression count', `${engineRegressionChecks} 项回归`)
+expectIncludes('audit policy regression count', `${auditPolicyRegressionChecks} 个离线策略回归`)
 const documentedRegressionCounts = [...readme.matchAll(/(\d+)\s*项回归/g)]
 for (const match of documentedRegressionCounts) {
   const documentedCount = Number(match[1])
@@ -117,11 +140,28 @@ expectIncludes('generic H5 debt', `${genericH5Levels}/${content.levels} 关的�
 expectIncludes('explicit objective binding debt', `只有 ${fullyBoundLevels}/${content.levels} 关的所有 check 显式绑定`)
 
 for (const script of [
-  'dev', 'validate:content', 'validate:engine', 'report:capabilities', 'check',
-  'lint', 'build', 'verify', 'preview', 'audit:prod', 'audit:all',
+  'dev', 'generate:progress-catalog', 'validate:content', 'validate:engine',
+  'validate:progress', 'validate:audit-policy', 'report:capabilities',
+  'validate:assets', 'validate:dependencies', 'validate:readme', 'validate:build',
+  'check', 'lint', 'build', 'verify', 'preview', 'audit:prod', 'audit:all',
+  'audit:policy', 'release:check',
 ]) {
+  if (typeof packageJson.scripts[script] !== 'string') {
+    failures.push(`package scripts: missing ${script}`)
+  }
   expectIncludes(`documented script ${script}`, `npm run ${script}`)
 }
+
+if (!packageJson.scripts.check?.includes('npm run validate:audit-policy')) {
+  failures.push('package scripts: check must include the offline audit-policy regression')
+}
+if (packageJson.scripts['release:check'] !== 'npm run verify && npm run audit:policy') {
+  failures.push('package scripts: release:check must run verify before the live audit policy')
+}
+expectIncludes('audit advisory URL', AUDIT_POLICY.advisoryUrl)
+expectIncludes('audit exception expiry', AUDIT_POLICY.expiresAt.slice(0, 10))
+expectIncludes('audit registry', AUDIT_POLICY.registry)
+expectIncludes('audit dependency scope', '全部生产、开发、可选与 peer 依赖')
 
 for (const staleClaim of [
   '201/221', '201 / 221', '551 个必做目标', '59 个可选目标',

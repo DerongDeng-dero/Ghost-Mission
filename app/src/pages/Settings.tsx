@@ -21,7 +21,7 @@ import ThemeSelector from '@/components/settings/ThemeSelector'
 import type { Theme } from '@/components/settings/ThemeSelector'
 import ToggleOption from '@/components/settings/ToggleOption'
 import AccessibilityPanel from '@/components/settings/AccessibilityPanel'
-import { useGameStore } from '@/store/gameStore'
+import { sanitizeCallsignInput, useGameStore } from '@/store/gameStore'
 
 // ─── localStorage Helpers ───────────────────────────────────────────
 
@@ -40,14 +40,27 @@ function loadSetting<K extends keyof SettingsState>(
   }
 }
 
-function saveSetting(key: string, value: unknown) {
-  try {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(`ghostops_${key}`, JSON.stringify(value))
-    }
-  } catch {
-    // ignore
+function persistedResetAcknowledges(
+  value: Record<string, unknown>,
+  expectedResetAt: number,
+  expectedResetSerial: string,
+): boolean {
+  const persistedResetAt = value.progressResetAt
+  const persistedResetSerial = value.progressResetSerial
+  if (
+    !Number.isSafeInteger(persistedResetAt)
+    || typeof persistedResetSerial !== 'string'
+    || !/^(0|[1-9][0-9]*)$/.test(persistedResetSerial)
+  ) {
+    return false
   }
+  if (Number(persistedResetAt) !== expectedResetAt) {
+    return Number(persistedResetAt) > expectedResetAt
+  }
+  if (persistedResetSerial.length !== expectedResetSerial.length) {
+    return persistedResetSerial.length > expectedResetSerial.length
+  }
+  return persistedResetSerial >= expectedResetSerial
 }
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -74,7 +87,6 @@ interface SettingsState {
   highContrast: boolean
   colorBlindMode: boolean
   largeText: boolean
-  screenReader: boolean
   keyboardHints: boolean
   soundToVisual: boolean
 
@@ -93,7 +105,6 @@ interface SettingsState {
 
   // Account
   displayName: string
-  locale: string
 }
 
 const DEFAULT_SETTINGS: SettingsState = {
@@ -112,7 +123,6 @@ const DEFAULT_SETTINGS: SettingsState = {
   highContrast: false,
   colorBlindMode: false,
   largeText: false,
-  screenReader: false,
   keyboardHints: true,
   soundToVisual: false,
 
@@ -128,7 +138,6 @@ const DEFAULT_SETTINGS: SettingsState = {
   backgroundMusic: false,
 
   displayName: 'Ghost-7',
-  locale: 'en-US',
 }
 
 function isValidSettingValue(key: keyof SettingsState, value: unknown): boolean {
@@ -151,8 +160,6 @@ function isValidSettingValue(key: keyof SettingsState, value: unknown): boolean 
       return Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 100
     case 'displayName':
       return typeof value === 'string' && value.length <= 20
-    case 'locale':
-      return value === 'en-US' || value === 'zh-CN'
     default:
       return typeof value === typeof DEFAULT_SETTINGS[key]
   }
@@ -375,62 +382,84 @@ function ResetModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: 
 export default function Settings() {
   const { t, i18n } = useTranslation()
   const resetMissionProgress = useGameStore(state => state.resetMissionProgress)
+  const missionProgress = useGameStore(state => state.missionProgress)
+  const progressMilestones = useGameStore(state => state.progressMilestones)
+  const progressResetAt = useGameStore(state => state.progressResetAt)
+  const progressResetSerial = useGameStore(state => state.progressResetSerial)
+  const callsign = useGameStore(state => state.callsign)
+  const setCallsign = useGameStore(state => state.setCallsign)
   const [activeSection, setActiveSection] = useState('appearance')
   const [showResetModal, setShowResetModal] = useState(false)
+  const [exportStatus, setExportStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [resetStatus, setResetStatus] = useState<'idle' | 'success' | 'warning' | 'error'>('idle')
+  const [accountPersistenceStatus, setAccountPersistenceStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [s, setS] = useState<SettingsState>(() => {
     // Load from localStorage on mount
     const loaded: Partial<SettingsState> = {}
     for (const key of Object.keys(DEFAULT_SETTINGS) as Array<keyof SettingsState>) {
       loaded[key] = loadSetting(key, DEFAULT_SETTINGS[key]) as never
     }
-    return { ...DEFAULT_SETTINGS, ...loaded }
+    return {
+      ...DEFAULT_SETTINGS,
+      ...loaded,
+      displayName: callsign,
+    }
   })
-
-  // Persist to localStorage on change
-  useEffect(() => {
-    for (const key of Object.keys(s) as Array<keyof SettingsState>) {
-      saveSetting(key, s[key])
-    }
-  }, [s])
-
-  // Apply large text if enabled
-  useEffect(() => {
-    if (s.largeText) {
-      document.documentElement.style.fontSize = '16px'
-    } else {
-      document.documentElement.style.fontSize = ''
-    }
-  }, [s.largeText])
-
-  // Apply high contrast
-  useEffect(() => {
-    if (s.highContrast) {
-      document.documentElement.setAttribute('data-theme', 'high-contrast')
-    } else if (s.theme === 'dark') {
-      document.documentElement.setAttribute('data-theme', '')
-    } else {
-      document.documentElement.setAttribute('data-theme', s.theme)
-    }
-  }, [s.highContrast, s.theme])
 
   const update = useCallback(<K extends keyof SettingsState>(key: K, value: SettingsState[K]) => {
     setS((prev) => ({ ...prev, [key]: value }))
   }, [])
 
   const handleReset = () => {
+    setResetStatus('idle')
     resetMissionProgress()
     try {
-      for (const storage of [window.localStorage, window.sessionStorage]) {
+      const expectedResetAt = useGameStore.getState().progressResetAt
+      const expectedResetSerial = useGameStore.getState().progressResetSerial
+      const persistedRaw = window.localStorage.getItem('ghostops_progress_v1')
+      if (persistedRaw === null) throw new Error('Progress reset tombstone was not persisted')
+      const persisted: unknown = JSON.parse(persistedRaw)
+      if (
+        typeof persisted !== 'object'
+        || persisted === null
+        || !('state' in persisted)
+        || typeof persisted.state !== 'object'
+        || persisted.state === null
+        || !persistedResetAcknowledges(persisted.state as Record<string, unknown>, expectedResetAt, expectedResetSerial)
+        || !('missionProgress' in persisted.state)
+        || typeof persisted.state.missionProgress !== 'object'
+        || persisted.state.missionProgress === null
+        || Object.keys(persisted.state.missionProgress).length !== 0
+      ) {
+        throw new Error('Persisted progress did not acknowledge reset')
+      }
+    } catch {
+      setResetStatus('error')
+      setShowResetModal(false)
+      return
+    }
+
+    let auxiliaryCleanupSucceeded = true
+    for (const storageName of ['localStorage', 'sessionStorage'] as const) {
+      try {
+        const storage = window[storageName]
         for (let index = storage.length - 1; index >= 0; index -= 1) {
           const key = storage.key(index)
           if (key?.startsWith('ghostops_run_report:')) {
             storage.removeItem(key)
           }
         }
+      } catch {
+        auxiliaryCleanupSucceeded = false
       }
-    } catch {
-      // The in-memory store is already reset if browser storage is unavailable.
     }
+    try {
+      window.localStorage.removeItem('ghostops_tutorial_seen')
+      window.localStorage.removeItem('ghost-greeted')
+    } catch {
+      auxiliaryCleanupSucceeded = false
+    }
+    setResetStatus(auxiliaryCleanupSucceeded ? 'success' : 'warning')
     setShowResetModal(false)
   }
 
@@ -553,6 +582,8 @@ export default function Settings() {
               title={t('settings.appearance')}
               description={t('settings.theme')}
             >
+              <fieldset disabled className="space-y-space-4 opacity-60">
+              <p className="font-inter text-body-sm text-[#FFD166]">{t('settings.previewUnavailable')}</p>
               <div>
                 <h4 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.theme')}</h4>
                 <ThemeSelector value={s.theme} onChange={(t) => update('theme', t)} />
@@ -598,6 +629,7 @@ export default function Settings() {
                   onChange={(v) => update('bossModeEffects', v)}
                 />
               </div>
+              </fieldset>
             </SettingSection>
           </div>
 
@@ -608,6 +640,14 @@ export default function Settings() {
               title={t('settings.accessibility')}
               description=""
             >
+              <div
+                className="rounded-radius-md border border-[#1E2D3D] bg-[#0F1419] px-space-4 py-space-3 font-inter text-body-sm text-[#8B9EB0]"
+                role="status"
+              >
+                {t('settings.builtInAccessibility')}
+              </div>
+              <fieldset disabled className="space-y-space-4 opacity-60">
+              <p className="font-inter text-body-sm text-[#FFD166]">{t('settings.previewUnavailable')}</p>
               <AccessibilityPanel
                 features={[
                   {
@@ -635,14 +675,6 @@ export default function Settings() {
                     onChange: (v) => update('largeText', v),
                   },
                   {
-                    id: 'screen-reader',
-                    label: t('settings.screenReader'),
-                    description: t('settings.screenReaderDesc'),
-                    icon: Accessibility,
-                    enabled: s.screenReader,
-                    onChange: (v) => update('screenReader', v),
-                  },
-                  {
                     id: 'keyboard-hints',
                     label: t('settings.keyboardHints'),
                     description: t('settings.keyboardHintsDesc'),
@@ -661,15 +693,7 @@ export default function Settings() {
                 ]}
               />
 
-              {/* Reduced Motion toggle — respects prefers-reduced-motion */}
-              <div className="mt-space-4">
-                <ToggleOption
-                  label={t('settings.respectReducedMotion')}
-                  description={t('settings.respectReducedMotionDesc')}
-                  enabled={s.animationIntensity === 'none'}
-                  onChange={(v) => update('animationIntensity', v ? 'none' : 'full')}
-                />
-              </div>
+              </fieldset>
             </SettingSection>
           </div>
 
@@ -680,6 +704,8 @@ export default function Settings() {
               title={t('settings.terminal')}
               description=""
             >
+              <fieldset disabled className="space-y-space-4 opacity-60">
+              <p className="font-inter text-body-sm text-[#FFD166]">{t('settings.previewUnavailable')}</p>
               {/* Font Size */}
               <div>
                 <div className="flex items-center justify-between mb-space-3">
@@ -779,6 +805,7 @@ export default function Settings() {
                   onChange={(v) => update('clickToCopy', v)}
                 />
               </div>
+              </fieldset>
             </SettingSection>
           </div>
 
@@ -789,6 +816,8 @@ export default function Settings() {
               title={t('settings.gameplay')}
               description=""
             >
+              <fieldset disabled className="space-y-space-4 opacity-60">
+              <p className="font-inter text-body-sm text-[#FFD166]">{t('settings.previewUnavailable')}</p>
               {/* Default Hint Level */}
               <div>
                 <h4 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.defaultHintLevel')}</h4>
@@ -826,6 +855,7 @@ export default function Settings() {
                   onChange={(v) => update('autoSave', v)}
                 />
               </div>
+              </fieldset>
 
               {/* Reset Progress */}
               <div
@@ -846,7 +876,10 @@ export default function Settings() {
                     </p>
                     <button
                       type="button"
-                      onClick={() => setShowResetModal(true)}
+                      onClick={() => {
+                        setResetStatus('idle')
+                        setShowResetModal(true)
+                      }}
                       className="mt-space-3 min-h-11 rounded-radius-sm border px-space-4 py-space-2 font-jetbrains text-body transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4757]"
                       style={{
                         borderColor: '#FF4757',
@@ -863,6 +896,26 @@ export default function Settings() {
                       <RotateCcw size={14} className="inline mr-2" />
                       {t('settings.resetConfirm')}
                     </button>
+                    <p
+                      className="mt-space-2 font-inter text-body-sm"
+                      style={{
+                        color: resetStatus === 'error'
+                          ? '#FF7B86'
+                          : resetStatus === 'warning'
+                            ? '#FFD166'
+                            : '#8B9EB0',
+                      }}
+                      role={resetStatus === 'error' ? 'alert' : 'status'}
+                      aria-live={resetStatus === 'error' ? 'assertive' : 'polite'}
+                    >
+                      {resetStatus === 'success'
+                        ? t('settings.resetSuccess')
+                        : resetStatus === 'warning'
+                          ? t('settings.resetPartial')
+                        : resetStatus === 'error'
+                          ? t('settings.resetFailed')
+                          : ''}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -876,6 +929,8 @@ export default function Settings() {
               title={t('settings.sound')}
               description=""
             >
+              <fieldset disabled className="space-y-space-4 opacity-60">
+              <p className="font-inter text-body-sm text-[#FFD166]">{t('settings.previewUnavailable')}</p>
               {/* Master Volume */}
               <div>
                 <div className="flex items-center justify-between mb-space-3">
@@ -917,6 +972,7 @@ export default function Settings() {
                   onChange={(v) => update('backgroundMusic', v)}
                 />
               </div>
+              </fieldset>
             </SettingSection>
           </div>
 
@@ -934,15 +990,23 @@ export default function Settings() {
                   <input
                     id="settings-display-name"
                     type="text"
-                    maxLength={20}
                     aria-describedby="settings-display-name-count"
                     value={s.displayName}
-                    onChange={(e) => update('displayName', e.target.value.slice(0, 20))}
+                    onChange={(e) => update('displayName', sanitizeCallsignInput(e.target.value))}
+                    onBlur={() => {
+                      const normalized = s.displayName.trim()
+                      if (normalized) {
+                        update('displayName', normalized)
+                        setAccountPersistenceStatus(setCallsign(normalized) ? 'success' : 'error')
+                      } else {
+                        update('displayName', callsign)
+                      }
+                    }}
                     className="min-h-11 flex-1 max-w-[300px] rounded-radius-sm border border-[#1E2D3D] bg-[#1A2332] px-space-3 py-space-2 font-jetbrains text-body text-[#E8EDF2] transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
                     placeholder={t('settings.callsignPlaceholder')}
                   />
                   <span id="settings-display-name-count" className="font-jetbrains text-code-sm text-[#788DA1]">
-                    {s.displayName.length}/20
+                    {[...s.displayName].length}/20
                   </span>
                 </div>
               </div>
@@ -964,48 +1028,68 @@ export default function Settings() {
                 <h4 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.locale')}</h4>
                 <NeonSelect
                   label={t('settings.locale')}
-                  value={s.locale}
+                  value={(i18n.resolvedLanguage ?? i18n.language).startsWith('zh') ? 'zh-CN' : 'en-US'}
                   options={[
                     { label: '中文（简体）', value: 'zh-CN' },
                     { label: 'English (US)', value: 'en-US' },
                   ]}
                   onChange={(v) => {
                     const locale = String(v)
-                    update('locale', locale)
                     const language = locale.startsWith('zh') ? 'zh' : 'en'
+                    let persisted = true
                     try {
                       window.localStorage.setItem('i18nextLng', language)
                     } catch {
-                      // Language switching still works when persistence is unavailable.
+                      persisted = false
                     }
                     void i18n.changeLanguage(language)
+                      .then(() => setAccountPersistenceStatus(persisted ? 'success' : 'error'))
+                      .catch(() => setAccountPersistenceStatus('error'))
                   }}
                 />
               </div>
+
+              <p
+                className="mt-space-3 font-inter text-body-sm"
+                style={{ color: accountPersistenceStatus === 'error' ? '#FF7B86' : '#8B9EB0' }}
+                role={accountPersistenceStatus === 'error' ? 'alert' : 'status'}
+                aria-live={accountPersistenceStatus === 'error' ? 'assertive' : 'polite'}
+              >
+                {accountPersistenceStatus === 'success'
+                  ? t('settings.accountSaved')
+                  : accountPersistenceStatus === 'error'
+                    ? t('settings.accountSessionOnly')
+                    : ''}
+              </p>
 
               {/* Export + Sign Out */}
               <div className="mt-space-6 flex flex-wrap items-center gap-space-3">
                 <button
                   type="button"
                   onClick={() => {
-                    const data: Record<string, unknown> = {}
-                    for (let i = 0; i < localStorage.length; i++) {
-                      const key = localStorage.key(i)
-                      if (key && key.startsWith('ghostops_')) {
-                        try {
-                          data[key] = JSON.parse(localStorage.getItem(key) || 'null')
-                        } catch {
-                          data[key] = localStorage.getItem(key)
-                        }
+                    try {
+                      const data = {
+                        schema: 'ghostops_progress_export',
+                        version: 4,
+                        exportedAt: new Date().toISOString(),
+                        missionProgress,
+                        progressMilestones,
+                        progressResetAt,
+                        progressResetSerial,
                       }
+                      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+                      const url = URL.createObjectURL(blob)
+                      const anchor = document.createElement('a')
+                      anchor.href = url
+                      anchor.download = 'ghost-ops-progress.json'
+                      document.body.appendChild(anchor)
+                      anchor.click()
+                      anchor.remove()
+                      window.setTimeout(() => URL.revokeObjectURL(url), 1_000)
+                      setExportStatus('success')
+                    } catch {
+                      setExportStatus('error')
                     }
-                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = 'ghost-ops-progress.json'
-                    a.click()
-                    URL.revokeObjectURL(url)
                   }}
                   className="flex min-h-11 items-center gap-space-2 rounded-radius-sm px-space-4 py-space-2 font-jetbrains text-body transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
                   style={{
@@ -1016,6 +1100,13 @@ export default function Settings() {
                   <Download size={14} />
                   {t('settings.exportProgress')}
                 </button>
+                <span className="font-inter text-body-sm text-[#8B9EB0]" role="status" aria-live="polite">
+                  {exportStatus === 'success'
+                    ? t('settings.exportSuccess')
+                    : exportStatus === 'error'
+                      ? t('settings.exportFailed')
+                      : ''}
+                </span>
 
                 <button
                   type="button"

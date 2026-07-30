@@ -16,7 +16,13 @@ const vendorChunkGroups = [
   },
   {
     name: 'vendor-motion',
-    packages: ['framer-motion', 'motion-dom', 'motion-utils', 'gsap'],
+    packages: ['framer-motion', 'motion-dom', 'motion-utils'],
+  },
+  {
+    // GSAP is only used by the lazy Debrief route. Keeping it separate prevents
+    // Rollup from pulling it into the globally imported Framer Motion chunk.
+    name: 'vendor-gsap',
+    packages: ['gsap'],
   },
 ]
 

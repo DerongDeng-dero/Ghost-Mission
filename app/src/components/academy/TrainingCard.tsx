@@ -191,7 +191,7 @@ export default function TrainingCard({ drill, index }: TrainingCardProps) {
             <button
               type="button"
               onClick={() => navigate(`/terminal/${drill.id}`)}
-              aria-label={`${isCompleted ? t('academy.replay') : t('academy.start')}: ${drill.title}`}
+              aria-label={`${isCompleted ? t('academy.replay') : isInProgress ? t('academy.continue') : t('academy.start')}: ${drill.title}`}
               className="flex min-h-11 flex-shrink-0 items-center gap-1 rounded-radius-sm px-3 font-jetbrains text-code-sm transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF] sm:ml-2"
               style={{
                 backgroundColor: isCompleted ? 'rgba(0,255,136,0.1)' : 'rgba(0,255,136,0.15)',
@@ -201,6 +201,8 @@ export default function TrainingCard({ drill, index }: TrainingCardProps) {
             >
               {isCompleted ? (
                 <><RotateCcw size={12} aria-hidden="true" /> {t('academy.replay')}</>
+              ) : isInProgress ? (
+                <><Play size={12} aria-hidden="true" /> {t('academy.continue')}</>
               ) : (
                 <><Play size={12} aria-hidden="true" /> {t('academy.start')}</>
               )}

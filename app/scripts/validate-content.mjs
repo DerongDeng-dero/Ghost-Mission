@@ -1,8 +1,17 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { capabilityMetrics } from './report-capabilities.mjs'
+import {
+  buildProgressCatalog,
+  serializeKnownMissionIds,
+} from './progress-catalog-tools.mjs'
 
 const catalogUrl = new URL('../src/data/all_levels.json', import.meta.url)
 const chapterSummariesUrl = new URL('../src/data/chapter_summaries.json', import.meta.url)
+const progressCatalogUrl = new URL('../src/data/progress_catalog.json', import.meta.url)
+const knownMissionIdsUrl = new URL('../src/data/knownMissionIds.ts', import.meta.url)
+const sourceRootUrl = new URL('../src/', import.meta.url)
+const englishLocaleUrl = new URL('../src/i18n/locales/en.json', import.meta.url)
+const chineseLocaleUrl = new URL('../src/i18n/locales/zh.json', import.meta.url)
 const allowedModes = new Set(['academy', 'operation', 'boss', 'nightmare'])
 const allowedRiskLevels = new Set(['green', 'blue', 'yellow', 'red', 'purple', 'black'])
 const allowedCheckTypes = new Set([
@@ -42,8 +51,23 @@ const penaltyKeys = [
 ]
 const redCommandNames = new Set([
   'apt', 'chmod', 'chown', 'dd', 'dnf', 'docker', 'fdisk', 'kill', 'kubectl', 'mkfs',
-  'pacman', 'pkill', 'reboot', 'rm', 'shred', 'shutdown', 'systemctl', 'yum',
+  'pacman', 'pkill', 'reboot', 'rm', 'shred', 'shutdown', 'systemctl', 'truncate', 'yum',
 ])
+
+function dangerousInvocationIsIncomplete(tokens) {
+  const [command, subcommand] = tokens
+  if (!redCommandNames.has(command)) return false
+  if (command === 'rm') return !tokens.slice(1).some(token => !token.startsWith('-'))
+  if (command === 'chmod' || command === 'chown') return tokens.length < 3
+  if (command === 'truncate') {
+    const sizeIndex = tokens.findIndex(token => token === '-s' || token === '--size')
+    return sizeIndex < 0 || !tokens[sizeIndex + 1] || !tokens.slice(sizeIndex + 2).some(token => !token.startsWith('-'))
+  }
+  if (command === 'systemctl' && ['start', 'stop', 'restart', 'enable', 'disable'].includes(subcommand)) {
+    return tokens.length < 3
+  }
+  return tokens.length === 1
+}
 
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -57,11 +81,41 @@ function describeLevel(level, index) {
   return isRecord(level) && isNonEmptyString(level.id) ? level.id : `level[${index}]`
 }
 
+function flattenLocale(value, prefix = '', output = new Map()) {
+  if (!isRecord(value)) {
+    output.set(prefix, value)
+    return output
+  }
+  for (const [key, child] of Object.entries(value)) {
+    flattenLocale(child, prefix ? `${prefix}.${key}` : key, output)
+  }
+  return output
+}
+
+function logicalLocaleKey(key) {
+  return key.replace(/_(?:one|other)$/, '')
+}
+
+function hasLocaleKey(locale, key) {
+  return locale.has(key) || (locale.has(`${key}_one`) && locale.has(`${key}_other`))
+}
+
 let levels
 let chapterSummaries
+let progressCatalog
+let knownMissionIdsSource
+let englishLocale
+let chineseLocale
+let sourceFiles
 try {
   levels = JSON.parse(await readFile(catalogUrl, 'utf8'))
   chapterSummaries = JSON.parse(await readFile(chapterSummariesUrl, 'utf8'))
+  progressCatalog = JSON.parse(await readFile(progressCatalogUrl, 'utf8'))
+  knownMissionIdsSource = await readFile(knownMissionIdsUrl, 'utf8')
+  englishLocale = flattenLocale(JSON.parse(await readFile(englishLocaleUrl, 'utf8')))
+  chineseLocale = flattenLocale(JSON.parse(await readFile(chineseLocaleUrl, 'utf8')))
+  sourceFiles = (await readdir(sourceRootUrl, { recursive: true }))
+    .filter(entry => typeof entry === 'string' && /\.(?:ts|tsx)$/.test(entry))
 } catch (error) {
   console.error(`Content validation failed: ${error instanceof Error ? error.message : String(error)}`)
   process.exit(1)
@@ -75,6 +129,36 @@ let objectiveCount = 0
 let requiredObjectiveCount = 0
 let checkCount = 0
 let hintCount = 0
+
+for (const [language, locale] of [['en', englishLocale], ['zh', chineseLocale]]) {
+  for (const [key, value] of locale) {
+    if (!isNonEmptyString(value)) failures.push(`${language} locale key ${key} must be a non-empty string`)
+    if (key.endsWith('_one') && !locale.has(`${key.slice(0, -4)}_other`)) {
+      failures.push(`${language} locale plural ${key.slice(0, -4)} is missing _other`)
+    }
+    if (key.endsWith('_other') && !locale.has(`${key.slice(0, -6)}_one`)) {
+      failures.push(`${language} locale plural ${key.slice(0, -6)} is missing _one`)
+    }
+  }
+}
+
+const englishLogicalKeys = new Set([...englishLocale.keys()].map(logicalLocaleKey))
+const chineseLogicalKeys = new Set([...chineseLocale.keys()].map(logicalLocaleKey))
+for (const key of new Set([...englishLogicalKeys, ...chineseLogicalKeys])) {
+  if (!englishLogicalKeys.has(key)) failures.push(`English locale is missing logical key ${key}`)
+  if (!chineseLogicalKeys.has(key)) failures.push(`Chinese locale is missing logical key ${key}`)
+}
+
+for (const entry of sourceFiles) {
+  const normalizedEntry = entry.replaceAll('\\', '/')
+  const source = await readFile(new URL(normalizedEntry, sourceRootUrl), 'utf8')
+  for (const match of source.matchAll(/\bt\(\s*['"]([^'"$`]+)['"]/g)) {
+    const key = match[1]
+    const line = source.slice(0, match.index).split('\n').length
+    if (!hasLocaleKey(englishLocale, key)) failures.push(`${normalizedEntry}:${line}: English locale is missing ${key}`)
+    if (!hasLocaleKey(chineseLocale, key)) failures.push(`${normalizedEntry}:${line}: Chinese locale is missing ${key}`)
+  }
+}
 
 if (!Array.isArray(levels) || levels.length === 0) {
   failures.push('The level catalog must be a non-empty array.')
@@ -222,8 +306,8 @@ if (!Array.isArray(levels) || levels.length === 0) {
         effectivePattern = expected
       }
       const tokens = effectivePattern.split(/\s+/)
-      if (redCommandNames.has(tokens[0]) && tokens.length === 1) {
-        failures.push(`${context}: dangerous command objective ${tokens[0]} must name an exact safe invocation`)
+      if (dangerousInvocationIsIncomplete(tokens)) {
+        failures.push(`${context}: dangerous command objective must name a complete exact invocation: ${effectivePattern}`)
       }
     }
 
@@ -288,6 +372,18 @@ if (!Array.isArray(chapterSummaries) || chapterSummaries.length !== chapterContr
       failures.push(`${chapterId}: chapter_summaries.json disagrees with the mission catalog`)
     }
   }
+}
+
+const expectedProgressCatalog = buildProgressCatalog(levels)
+if (JSON.stringify(progressCatalog) !== JSON.stringify(expectedProgressCatalog)) {
+  failures.push(
+    'progress_catalog.json is stale or malformed; run npm run generate:progress-catalog',
+  )
+}
+if (knownMissionIdsSource !== serializeKnownMissionIds(levels)) {
+  failures.push(
+    'knownMissionIds.ts is stale or malformed; run npm run generate:progress-catalog',
+  )
 }
 
 if (capabilityMetrics.blockedLevels > 0) {

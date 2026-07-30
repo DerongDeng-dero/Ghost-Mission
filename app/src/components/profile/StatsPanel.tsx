@@ -7,7 +7,7 @@ interface StatsPanelProps {
   missionsCompleted: number;
   commandsLearned: number;
   currentStreak: number;
-  totalXP: number;
+  currentLevelXP: number;
   level?: number;
   xpToNextLevel?: number;
 }
@@ -15,30 +15,38 @@ interface StatsPanelProps {
 function AnimatedNumber({ value, duration = 800 }: { value: number; duration?: number }) {
   const reduceMotion = useReducedMotion() ?? false;
   const [display, setDisplay] = useState(0);
+  const displayRef = useRef(0);
   const ref = useRef<HTMLSpanElement>(null);
-  const started = useRef(false);
 
   useEffect(() => {
     let frameId = 0;
+    let started = false;
+    const updateDisplay = (nextValue: number) => {
+      displayRef.current = nextValue;
+      setDisplay(nextValue);
+    };
+
+    if (reduceMotion) {
+      displayRef.current = value;
+      return;
+    }
+
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && !started.current) {
-          started.current = true;
-          if (reduceMotion) {
-            setDisplay(value);
-            observer.disconnect();
-            return;
-          }
+        if (entry.isIntersecting && !started) {
+          started = true;
+          const initialValue = displayRef.current;
           const start = performance.now();
           const animate = (now: number) => {
             const elapsed = now - start;
             const progress = Math.min(elapsed / duration, 1);
             // ease-out-expo
             const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
-            setDisplay(Math.round(eased * value));
+            updateDisplay(Math.round(initialValue + (value - initialValue) * eased));
             if (progress < 1) frameId = requestAnimationFrame(animate);
           };
           frameId = requestAnimationFrame(animate);
+          observer.disconnect();
         }
       },
       { threshold: 0.5 }
@@ -50,19 +58,19 @@ function AnimatedNumber({ value, duration = 800 }: { value: number; duration?: n
     };
   }, [value, duration, reduceMotion]);
 
-  return <span ref={ref}>{display.toLocaleString()}</span>;
+  return <span ref={ref}>{(reduceMotion ? value : display).toLocaleString()}</span>;
 }
 
 export default function StatsPanel({
   missionsCompleted,
   commandsLearned,
   currentStreak,
-  totalXP,
+  currentLevelXP,
   level = 12,
   xpToNextLevel = 5000,
 }: StatsPanelProps) {
   const { t } = useTranslation();
-  const xpProgress = Math.min((totalXP / xpToNextLevel) * 100, 100);
+  const xpProgress = Math.min((currentLevelXP / xpToNextLevel) * 100, 100);
 
   const stats = [
     {
@@ -94,7 +102,7 @@ export default function StatsPanel({
             {t('profile.levelNumber', { level })}
           </span>
           <span className="font-jetbrains text-body-sm text-[#00FF88]">
-            <AnimatedNumber value={totalXP} /> / {xpToNextLevel.toLocaleString()} XP
+            <AnimatedNumber value={currentLevelXP} /> / {xpToNextLevel.toLocaleString()} XP
           </span>
         </div>
         <div
@@ -104,7 +112,7 @@ export default function StatsPanel({
           aria-label={t('profile.xpProgress')}
           aria-valuemin={0}
           aria-valuemax={xpToNextLevel}
-          aria-valuenow={Math.min(totalXP, xpToNextLevel)}
+          aria-valuenow={Math.min(currentLevelXP, xpToNextLevel)}
         >
           <motion.div
             className="h-full rounded-full"

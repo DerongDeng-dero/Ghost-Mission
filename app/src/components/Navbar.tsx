@@ -1,17 +1,32 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Settings, Terminal, Menu, X, UserRound } from 'lucide-react'
+import { AlertTriangle, Settings, Terminal, Menu, X, UserRound } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { LanguageSwitcher } from '@/i18n/LanguageSwitcher'
 import { useTranslation } from 'react-i18next'
+import { PROGRESS_CATALOG } from '@/data/progressCatalog'
+import { deriveProgressMetrics } from '@/lib/progressMetrics'
+import {
+  calculateTotalXP,
+  deriveProgressRank,
+  resolveAchievements,
+} from '@/data/achievements'
 
 export default function Navbar() {
   const location = useLocation()
-  const { rank, connectionStatus } = useGameStore()
+  const missionProgress = useGameStore((state) => state.missionProgress)
+  const progressMilestones = useGameStore((state) => state.progressMilestones)
+  const progressPersistenceStatus = useGameStore((state) => state.progressPersistenceStatus)
   const [scrolled, setScrolled] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null)
   const { t } = useTranslation()
+  const rank = useMemo(() => {
+    const metrics = deriveProgressMetrics(PROGRESS_CATALOG, missionProgress, undefined, progressMilestones)
+    return deriveProgressRank(calculateTotalXP(metrics.missionsCompleted, resolveAchievements(metrics)))
+  }, [missionProgress, progressMilestones])
+  const hasProgressPersistenceError = progressPersistenceStatus === 'error'
 
   const navLinks = [
     { path: '/', label: t('nav.home') },
@@ -32,12 +47,6 @@ export default function Navbar() {
     ghost: '#00FF88',
   }
 
-  const connectionColors = {
-    connected: '#00FF88',
-    connecting: '#FFD166',
-    disconnected: '#FF4757',
-  }
-
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 100)
@@ -49,7 +58,10 @@ export default function Navbar() {
   useEffect(() => {
     if (!mobileMenuOpen) return
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMobileMenuOpen(false)
+      if (event.key === 'Escape') {
+        setMobileMenuOpen(false)
+        mobileMenuButtonRef.current?.focus()
+      }
     }
     document.addEventListener('keydown', closeOnEscape)
     return () => document.removeEventListener('keydown', closeOnEscape)
@@ -152,33 +164,44 @@ export default function Navbar() {
 
       {/* Right: Status + Icons */}
       <div className="flex items-center gap-space-2 md:gap-space-3">
-        {/* Connection Status Dot */}
-        <div
-          className="relative flex min-h-11 min-w-11 items-center justify-center"
-          title={t('nav.connectionStatus', { status: connectionStatus })}
-          role="status"
-        >
-          <span className="sr-only">{t('nav.connectionStatus', { status: connectionStatus })}</span>
+        {/* Local simulator / progress persistence status */}
+        {hasProgressPersistenceError ? (
+          <div role="alert">
+            <Link
+              to="/settings"
+              aria-label={t('nav.progressNotSavedAlert')}
+              title={t('nav.progressNotSavedAlert')}
+              className="flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-radius-sm border border-[#FFD166]/50 bg-[#FFD166]/10 px-2 font-jetbrains text-[10px] uppercase text-[#FFD166] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFD166] sm:text-body-sm"
+            >
+              <AlertTriangle size={16} aria-hidden="true" />
+              <span className="sm:hidden">{t('nav.progressNotSavedShort')}</span>
+              <span className="hidden sm:inline">{t('nav.progressNotSaved')}</span>
+            </Link>
+          </div>
+        ) : (
           <div
-            className="w-2 h-2 rounded-full"
-            style={{ backgroundColor: connectionColors[connectionStatus] }}
-          />
-          {connectionStatus === 'connecting' && (
+            className="relative flex min-h-11 min-w-11 items-center justify-center"
+            title={t('nav.localSimulatorReady')}
+            role="status"
+          >
+            <span className="sr-only">{t('nav.localSimulatorReady')}</span>
             <div
-              className="absolute w-2 h-2 rounded-full animate-ping motion-reduce:animate-none"
-              style={{ backgroundColor: connectionColors[connectionStatus] }}
+              className="w-2 h-2 rounded-full"
+              style={{ backgroundColor: '#00FF88' }}
             />
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Language Switcher */}
-        <div className="hidden md:block"><LanguageSwitcher /></div>
+        <div className={hasProgressPersistenceError ? 'hidden lg:block' : 'hidden md:block'}>
+          <LanguageSwitcher />
+        </div>
 
         {/* Rank Badge */}
         <Link
           to="/profile"
-          aria-label={t('nav.rankProfile', { rank: rankLabels[rank] })}
-          className="hidden md:flex min-h-11 min-w-11 rounded-full items-center justify-center font-jetbrains text-[10px] font-bold transition-transform duration-fast hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+          aria-label={t('nav.rankProfile', { rank: t(`rank.${rank}`) })}
+          className={`${hasProgressPersistenceError ? 'hidden xl:flex' : 'hidden md:flex'} min-h-11 min-w-11 rounded-full items-center justify-center font-jetbrains text-[10px] font-bold transition-transform duration-fast hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]`}
           style={{
             border: `2px solid ${rankColors[rank]}`,
             color: rankColors[rank],
@@ -192,7 +215,7 @@ export default function Navbar() {
         <Link
           to="/settings"
           aria-label={t('nav.settings')}
-          className="hidden md:flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-[#788DA1] hover:text-[#E8EDF2] hover:bg-[rgba(0,229,255,0.08)] transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+          className={`${hasProgressPersistenceError ? 'hidden' : 'hidden md:flex'} min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-[#788DA1] hover:text-[#E8EDF2] hover:bg-[rgba(0,229,255,0.08)] transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]`}
         >
           <Settings size={18} aria-hidden="true" />
         </Link>
@@ -201,13 +224,14 @@ export default function Navbar() {
         <Link
           to="/terminal/whoami-shell"
           aria-label={t('nav.terminal')}
-          className="hidden md:flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-[#788DA1] hover:text-[#00FF88] hover:bg-[rgba(0,255,136,0.08)] transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+          className={`${hasProgressPersistenceError ? 'hidden xl:flex' : 'hidden md:flex'} min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-[#788DA1] hover:text-[#00FF88] hover:bg-[rgba(0,255,136,0.08)] transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]`}
         >
           <Terminal size={18} aria-hidden="true" />
         </Link>
 
         {/* Mobile menu button */}
         <button
+          ref={mobileMenuButtonRef}
           type="button"
           className="md:hidden flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-[#8B9EB0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
           onClick={() => setMobileMenuOpen((open) => !open)}

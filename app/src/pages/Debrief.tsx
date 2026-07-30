@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { motion, useInView } from 'framer-motion'
+import { motion, useInView, useReducedMotion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import {
   Check,
@@ -23,6 +23,9 @@ import MissionReport from '@/components/debrief/MissionReport'
 import { ALL_LEVELS, getLevelById } from '@/engine/levels'
 import { loadMissionRunReport } from '@/engine/runReport'
 import type { MissionRunAction } from '@/engine/runReport'
+import { getObjectiveChecks, matchesMissionCommand } from '@/engine/validator'
+import { useGameStore } from '@/store/gameStore'
+import { allocateIntegerPoints } from '@/lib/scoreAllocation'
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -87,6 +90,7 @@ function ScoreRing({
   size?: number
   strokeWidth?: number
 }) {
+  const shouldReduceMotion = useReducedMotion() ?? false
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
   const progress = (score / 100) * circumference
@@ -112,9 +116,11 @@ function ScoreRing({
         strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeDasharray={circumference}
-        initial={{ strokeDashoffset: circumference }}
+        initial={shouldReduceMotion ? false : { strokeDashoffset: circumference }}
         animate={{ strokeDashoffset: circumference - progress }}
-        transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] as [number, number, number, number], delay: 0.3 }}
+        transition={shouldReduceMotion
+          ? { duration: 0 }
+          : { duration: 1.2, ease: [0.16, 1, 0.3, 1] as [number, number, number, number], delay: 0.3 }}
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
         style={{ filter: `drop-shadow(0 0 6px ${color}40)` }}
       />
@@ -128,12 +134,14 @@ function AnimatedScore({ value, color }: { value: number; color: string }) {
   const [display, setDisplay] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
   const isInView = useInView(ref, { once: true })
+  const shouldReduceMotion = useReducedMotion() ?? false
 
   useEffect(() => {
-    if (!isInView) return
+    if (!isInView || shouldReduceMotion) return
     let start = 0
     const duration = 1200
     const startTime = performance.now()
+    let frameId = 0
 
     function animate(now: number) {
       const elapsed = now - startTime
@@ -142,18 +150,19 @@ function AnimatedScore({ value, color }: { value: number; color: string }) {
       const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress)
       start = Math.round(eased * value)
       setDisplay(start)
-      if (progress < 1) requestAnimationFrame(animate)
+      if (progress < 1) frameId = requestAnimationFrame(animate)
     }
 
-    requestAnimationFrame(animate)
-  }, [isInView, value])
+    frameId = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(frameId)
+  }, [isInView, shouldReduceMotion, value])
 
   return (
     <div ref={ref} className="relative inline-flex items-center justify-center">
       <ScoreRing score={value} color={color} />
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="font-jetbrains text-h1" style={{ color, fontSize: '32px' }}>
-          {display}
+          {shouldReduceMotion ? value : display}
         </span>
         <span className="font-jetbrains text-code-sm text-[#788DA1]">/100</span>
       </div>
@@ -222,7 +231,7 @@ function ObjectivesReview({ objectives }: { objectives: ObjectiveReview[] }) {
 
 // ─── What You Learned ───────────────────────────────────────────────
 
-function WhatYouLearned({ skills }: { skills: LearnedSkill[] }) {
+function WhatYouLearned({ skills, missionId }: { skills: LearnedSkill[]; missionId: string }) {
   const { t } = useTranslation()
   const ref = useRef<HTMLDivElement>(null)
   const isInView = useInView(ref, { once: true, margin: '-60px' })
@@ -255,12 +264,20 @@ function WhatYouLearned({ skills }: { skills: LearnedSkill[] }) {
               <h3 className="font-fira text-h3 text-[#00FF88]">{skill.command}</h3>
               <p className="font-inter text-body text-[#8B9EB0] mt-space-2">{skill.description}</p>
               <div className="flex items-center gap-space-3 mt-space-4">
-                <button className="font-jetbrains text-body-sm text-[#00E5FF] hover:underline">
+                <Link
+                  to={`/terminal/${missionId}`}
+                  aria-label={t('debrief.practiceCommand', { command: skill.command })}
+                  className="rounded-radius-sm font-jetbrains text-body-sm text-[#00E5FF] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+                >
                   {t('debrief.practice')} &rarr;
-                </button>
-                <button className="font-jetbrains text-body-sm text-[#8B9EB0] hover:text-[#00E5FF] transition-colors">
+                </Link>
+                <Link
+                  to="/atlas"
+                  aria-label={t('debrief.viewCommandInAtlas', { command: skill.command })}
+                  className="rounded-radius-sm font-jetbrains text-body-sm text-[#8B9EB0] hover:text-[#00E5FF] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+                >
                   {t('debrief.viewInAtlas')}
-                </button>
+                </Link>
               </div>
             </motion.div>
           ))}
@@ -308,7 +325,7 @@ function WarningsSection({ warnings }: { warnings: Warning[] }) {
               color: '#FFD166',
             }}
           >
-            {warnings.length} {t('debrief.issues')}
+            {t('debrief.issueCount', { count: warnings.length })}
           </span>
         </div>
 
@@ -353,7 +370,7 @@ function RecommendedSteps({ recommendations }: { recommendations: Recommendation
         {recommendations.map((rec, i) => (
           <motion.div
             key={rec.id}
-            className="flex-shrink-0 w-[280px] p-space-4 rounded-radius-md border cursor-pointer transition-all duration-fast"
+            className="flex-shrink-0 w-[280px] rounded-radius-md border transition-all duration-fast"
             style={{
               backgroundColor: '#0F1419',
               borderColor: '#1E2D3D',
@@ -371,45 +388,53 @@ function RecommendedSteps({ recommendations }: { recommendations: Recommendation
               borderColor: '#2A4365',
             }}
           >
-            <div className="flex items-center justify-between mb-space-2">
-              <span
-                className="font-jetbrains text-badge uppercase px-space-2 py-[2px] rounded-radius-sm"
-                style={{
-                  backgroundColor: 'rgba(0,229,255,0.1)',
-                  color: '#00E5FF',
-                }}
-              >
-                {rec.type}
-              </span>
-              <div className="flex">
-                {Array.from({ length: 5 }).map((_, si) => (
-                  <Zap
-                    key={si}
-                    size={10}
-                    style={{
-                      color: si < rec.difficulty ? '#FFD166' : '#1E2D3D',
-                      fill: si < rec.difficulty ? '#FFD166' : 'none',
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-            <h3 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-2">{rec.title}</h3>
-            <div className="flex flex-wrap gap-space-1">
-              {rec.skills.map((skill) => (
+            <Link
+              to={`/terminal/${rec.id}`}
+              aria-label={t('debrief.openRecommendedMission', { title: rec.title })}
+              className="block h-full rounded-radius-md p-space-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#00E5FF]"
+            >
+              <div className="flex items-center justify-between mb-space-2">
                 <span
-                  key={skill}
-                  className="font-jetbrains text-badge uppercase px-[10px] py-[4px] rounded-radius-full"
+                  className="font-jetbrains text-badge uppercase px-space-2 py-[2px] rounded-radius-sm"
                   style={{
-                    backgroundColor: 'rgba(0,255,136,0.08)',
-                    color: '#00FF88',
-                    border: '1px solid rgba(0,255,136,0.2)',
+                    backgroundColor: 'rgba(0,229,255,0.1)',
+                    color: '#00E5FF',
                   }}
                 >
-                  {skill}
+                  {rec.type}
                 </span>
-              ))}
-            </div>
+                <div className="flex">
+                  <span className="sr-only">{t('debrief.difficulty', { level: rec.difficulty })}</span>
+                  {Array.from({ length: 5 }).map((_, si) => (
+                    <Zap
+                      key={si}
+                      size={10}
+                      aria-hidden="true"
+                      style={{
+                        color: si < rec.difficulty ? '#FFD166' : '#1E2D3D',
+                        fill: si < rec.difficulty ? '#FFD166' : 'none',
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <h3 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-2">{rec.title}</h3>
+              <div className="flex flex-wrap gap-space-1">
+                {rec.skills.map((skill) => (
+                  <span
+                    key={skill}
+                    className="font-jetbrains text-badge uppercase px-[10px] py-[4px] rounded-radius-full"
+                    style={{
+                      backgroundColor: 'rgba(0,255,136,0.08)',
+                      color: '#00FF88',
+                      border: '1px solid rgba(0,255,136,0.2)',
+                    }}
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </Link>
           </motion.div>
         ))}
       </div>
@@ -422,11 +447,20 @@ function RecommendedSteps({ recommendations }: { recommendations: Recommendation
 export default function Debrief() {
   const { t, i18n } = useTranslation()
   const { missionId } = useParams<{ missionId: string }>()
+  const [shareStatus, setShareStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const headerRef = useRef<HTMLDivElement>(null)
   const headerInView = useInView(headerRef, { once: true })
-  const report = useMemo(() => missionId ? loadMissionRunReport(missionId) : null, [missionId])
+  const currentMissionStatus = useGameStore((state) => (
+    missionId ? state.missionProgress[missionId]?.status : undefined
+  ))
+  const sessionReport = useMemo(() => missionId ? loadMissionRunReport(missionId) : null, [missionId])
+  const report = currentMissionStatus === 'completed' ? sessionReport : null
   const level = missionId ? getLevelById(missionId) : undefined
   const language = i18n.resolvedLanguage?.startsWith('zh') ? 'zh' : 'en'
+  const scoreCategoryLabel = (category: string) => t(
+    `debrief.scoreCategories.${category}`,
+    { defaultValue: category },
+  )
 
   const completed = report?.completed ?? false
   const totalScore = report?.scoreResult.total ?? 0
@@ -436,12 +470,20 @@ export default function Debrief() {
     ? new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(report.completedAt))
     : ''
   const missionTitle = level?.getTitle(language) ?? missionId ?? t('debrief.title')
-  const missionType = level?.mode.toUpperCase() ?? ''
+  const missionType = level
+    ? t(`debrief.missionTypes.${level.mode}`, { defaultValue: level.mode })
+    : ''
   const grade = getGrade(totalScore)
 
-  const handleShare = () => {
+  const handleShare = async () => {
     const text = `${t('app.title')} \u2014 ${t('debrief.title')}\n${t('profile.tableHeaders.mission')}: ${missionTitle}\n${t('profile.tableHeaders.score')}: ${totalScore}/100 (${t(grade.label)})\n${t('terminal.hud.timer')}: ${timeTaken}\n${t('profile.tableHeaders.status')}: ${completed ? '\u2705 ' + t('profile.pass') : '\u274c ' + t('profile.fail')}\n`
-    navigator.clipboard.writeText(text).catch(() => {})
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard API unavailable')
+      await navigator.clipboard.writeText(text)
+      setShareStatus('success')
+    } catch {
+      setShareStatus('error')
+    }
   }
 
   const performanceStats = useMemo(
@@ -466,40 +508,53 @@ export default function Debrief() {
     [report, t, timeTaken]
   )
 
-  const scoreCategoryLabels: Record<string, string> = {
-    objectives: 'Objectives Complete',
-    safety: 'Safe Operations',
-    verification: 'State Verification',
-    efficiency: 'Time & Action Efficiency',
-    shortcuts: 'Keyboard Mastery',
-    noHints: 'No Hints Bonus',
-  }
   const categories: ScoreCategory[] = report
     ? Object.entries(report.scoreResult.breakdownMax).map(([name, maxPoints]) => ({
-        name: scoreCategoryLabels[name] ?? name,
+        name: scoreCategoryLabel(name),
         maxPoints,
         earned: report.scoreResult.breakdown[name] ?? 0,
         detail: name === 'efficiency'
-          ? 'Measured from configured action and time budgets'
-          : 'Backed by recorded mission evidence',
+          ? t('debrief.scoreDetails.efficiency')
+          : t('debrief.scoreDetails.evidence'),
       }))
     : []
-  const objectivePoints = level
-    ? Math.max(1, Math.round(level.scoring.objectives_weight / Math.max(1, level.objectives.filter(objective => objective.required).length)))
-    : 0
+  const requiredObjectives = level?.objectives.filter(objective => objective.required) ?? []
+  const completedRequiredObjectiveIds = report
+    ? requiredObjectives.flatMap(objective => (
+        report.validationResults.find(candidate => candidate.objectiveId === objective.id)?.completed
+          ? [objective.id]
+          : []
+      ))
+    : []
+  const objectivePointAllocations = allocateIntegerPoints(
+    report?.scoreResult.breakdown.objectives ?? 0,
+    completedRequiredObjectiveIds.length,
+  )
+  const objectivePointsById = new Map(
+    completedRequiredObjectiveIds.map((objectiveId, index) => (
+      [objectiveId, objectivePointAllocations[index] ?? 0] as const
+    )),
+  )
   const objectives: ObjectiveReview[] = level && report
-    ? level.objectives.filter(objective => objective.required).map(objective => {
+    ? requiredObjectives.map(objective => {
         const result = report.validationResults.find(candidate => candidate.objectiveId === objective.id)
-        const expected = objective.label_en.match(/^Master the use of (.+)$/i)?.[1]
-        const evidence = expected
-          ? report.successfulActions.find(action => action.toLowerCase().includes(expected.toLowerCase()))
-          : undefined
+        const completed = result?.completed === true
+        const commandPatterns = getObjectiveChecks(level, objective.id).flatMap(check => (
+          check.type === 'command_used' && check.pattern ? [check.pattern] : []
+        ))
+        const evidence = completed
+          ? [...new Set(report.successfulActions.filter(action => (
+              commandPatterns.some(pattern => matchesMissionCommand(action, pattern))
+            )))].join(' · ')
+          : ''
         return {
           id: objective.id,
           description: objective.getLabel(language),
-          completed: result?.completed === true,
-          evidence: evidence ?? (result?.completed ? 'Validated by the mission contract' : 'No matching evidence recorded'),
-          points: result?.completed ? objectivePoints : 0,
+          completed,
+          evidence: evidence || (completed
+            ? t('debrief.evidence.missionContract')
+            : t('debrief.evidence.notRecorded')),
+          points: objectivePointsById.get(objective.id) ?? 0,
         }
       })
     : []
@@ -514,41 +569,83 @@ export default function Debrief() {
           cwd: action.cwd,
           mode: action.mode,
           risk: red ? 'red' : action.kind === 'interaction' ? 'purple' : action.exitCode === 0 ? 'green' : 'yellow',
-          warning: red ? 'The simulator classified this as a red command.' : action.exitCode !== 0 ? 'This action returned a non-zero exit code.' : undefined,
+          warning: red
+            ? t('debrief.timeline.warnings.redCommand')
+            : action.exitCode !== 0
+              ? t('debrief.timeline.warnings.nonZeroExit')
+              : undefined,
         }
       })
     : []
   const learnedSkills: LearnedSkill[] = level
-    ? level.skills.map(command => ({ command, description: 'Practiced or reinforced by this mission contract.' }))
+    ? level.skills.map(command => ({ command, description: t('debrief.skillDescription') }))
     : []
   const warnings: Warning[] = report
     ? [
-        ...report.redCommandsUsed.map(command => ({ message: `Red command recorded: ${command}`, suggestion: 'Confirm the target and mission authorization before destructive operations.' })),
-        ...(report.hintsUsed > 0 ? [{ message: `${report.hintsUsed} hint${report.hintsUsed === 1 ? '' : 's'} used.`, suggestion: 'Replay the mission without hints to reclaim the no-hints bonus.' }] : []),
-        ...report.scoreResult.excludedCategories.map(category => ({ message: `${category} was not scored.`, suggestion: 'This category had no observable evidence and was excluded rather than awarded automatically.' })),
+        ...report.redCommandsUsed.map(command => ({
+          message: t('debrief.warningMessages.redCommand', { command }),
+          suggestion: t('debrief.warningSuggestions.redCommand'),
+        })),
+        ...(report.hintsUsed > 0 ? [{
+          message: t('debrief.warningMessages.hintsUsed', { count: report.hintsUsed }),
+          suggestion: t('debrief.warningSuggestions.hintsUsed'),
+        }] : []),
+        ...report.scoreResult.excludedCategories.map(category => ({
+          message: t('debrief.warningMessages.categoryNotScored', { category: scoreCategoryLabel(category) }),
+          suggestion: t('debrief.warningSuggestions.categoryNotScored'),
+        })),
       ]
     : []
   const recommendations: Recommendation[] = level
     ? ALL_LEVELS.filter(candidate => candidate.chapter_id === level.chapter_id && candidate.id !== level.id)
         .slice(0, 4)
-        .map(candidate => ({ id: candidate.id, title: candidate.getTitle(language), type: candidate.mode, difficulty: candidate.difficulty, skills: candidate.skills.slice(0, 3) }))
+        .map(candidate => ({
+          id: candidate.id,
+          title: candidate.getTitle(language),
+          type: t(`debrief.missionTypes.${candidate.mode}`, { defaultValue: candidate.mode }),
+          difficulty: candidate.difficulty,
+          skills: candidate.skills.slice(0, 3),
+        }))
     : []
   const verificationApplicable = report?.scoreResult.breakdownMax.verification !== undefined
   const verificationPassed = verificationApplicable
     ? report!.scoreResult.breakdown.verification === report!.scoreResult.breakdownMax.verification
     : null
+  const requiredObjectiveCount = level?.objectives.filter(objective => objective.required).length ?? 0
+  const validatedRequiredObjectiveCount = report && level
+    ? report.validationResults.filter(result => (
+        result.completed
+        && level.objectives.find(objective => objective.id === result.objectiveId)?.required
+      )).length
+    : 0
+  const excludedCategoryList = report
+    ? report.scoreResult.excludedCategories.map(scoreCategoryLabel).join(language === 'zh' ? '、' : ', ')
+      || t('debrief.none')
+    : t('debrief.none')
   const missionReport = report && level
-    ? `${missionTitle} completed in ${timeTaken} with ${report.attemptedActions.length} recorded action${report.attemptedActions.length === 1 ? '' : 's'}. ${report.validationResults.filter(result => result.completed && level.objectives.find(objective => objective.id === result.objectiveId)?.required).length}/${level.objectives.filter(objective => objective.required).length} required objectives were validated. The ${totalScore}/100 score is normalized only across evidence-bearing categories. Unsupported categories excluded from scoring: ${report.scoreResult.excludedCategories.join(', ') || 'none'}.`
+    ? t('debrief.reportNarrative', {
+        missionTitle,
+        timeTaken,
+        actionCount: report.attemptedActions.length,
+        validatedCount: validatedRequiredObjectiveCount,
+        requiredCount: requiredObjectiveCount,
+        totalScore,
+        excludedCategories: excludedCategoryList,
+      })
     : ''
 
   if (!report || !level) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center px-4" style={{ backgroundColor: '#0A0E14' }}>
         <div className="max-w-[560px] text-center p-8 rounded-lg border" style={{ backgroundColor: '#0F1419', borderColor: '#1E2D3D' }}>
-          <h1 className="font-jetbrains text-h1 text-[#E8EDF2]">No run report available</h1>
-          <p className="font-inter text-body text-[#8B9EB0] mt-3">Complete this mission in the current browser session to generate an evidence-backed debrief.</p>
-          <Link to={`/terminal/${missionId ?? ''}`} className="inline-flex mt-6 px-5 py-3 rounded-md font-jetbrains" style={{ backgroundColor: '#00FF88', color: '#0A0E14' }}>
-            Start mission
+          <h1 className="font-jetbrains text-h1 text-[#E8EDF2]">{t('debrief.reportUnavailableTitle')}</h1>
+          <p className="font-inter text-body text-[#8B9EB0] mt-3">{t('debrief.reportUnavailableDescription')}</p>
+          <Link
+            to={level && missionId ? `/terminal/${missionId}` : '/missions'}
+            className="inline-flex mt-6 px-5 py-3 rounded-md font-jetbrains"
+            style={{ backgroundColor: '#00FF88', color: '#0A0E14' }}
+          >
+            {level ? t('debrief.startMission') : t('nav.missions')}
           </Link>
         </div>
       </div>
@@ -688,23 +785,36 @@ export default function Debrief() {
               {t('debrief.nextMission')}
               <ChevronRight size={16} />
             </Link>
-            <button
-              onClick={handleShare}
-              className="flex items-center gap-space-2 px-space-4 py-space-2 rounded-radius-sm font-jetbrains text-h4 transition-all duration-fast"
-              style={{
-                backgroundColor: '#1A2332',
-                color: '#8B9EB0',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = '#E8EDF2'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = '#8B9EB0'
-              }}
-            >
-              <Share2 size={16} />
-              {t('debrief.share')}
-            </button>
+            <div className="flex flex-col items-start gap-1">
+              <button
+                type="button"
+                onClick={handleShare}
+                className="flex items-center gap-space-2 px-space-4 py-space-2 rounded-radius-sm font-jetbrains text-h4 transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+                style={{
+                  backgroundColor: '#1A2332',
+                  color: '#8B9EB0',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = '#E8EDF2'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = '#8B9EB0'
+                }}
+              >
+                <Share2 size={16} aria-hidden="true" />
+                {t('debrief.share')}
+              </button>
+              <span
+                role="status"
+                aria-live="polite"
+                className="min-h-[1rem] max-w-[240px] font-inter text-xs"
+                style={{ color: shareStatus === 'error' ? '#FF4757' : '#00FF88' }}
+              >
+                {shareStatus === 'success'
+                  ? t('debrief.shareSuccess')
+                  : shareStatus === 'error' ? t('debrief.shareFailed') : ''}
+              </span>
+            </div>
           </motion.div>
         </div>
       </div>
@@ -729,7 +839,7 @@ export default function Debrief() {
 
         <CommandTimeline entries={timeline} />
 
-        <WhatYouLearned skills={learnedSkills} />
+        <WhatYouLearned skills={learnedSkills} missionId={level.id} />
 
         <WarningsSection warnings={warnings} />
 

@@ -1,21 +1,44 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useInView, useReducedMotion } from 'framer-motion'
 import {
   Terminal, Target, BookOpen, Search, User, Settings,
-  Trophy, Clock, Calendar, ChevronRight, Zap, Crosshair,
+  Trophy, Clock, Calendar, ChevronRight, Crosshair,
   Activity, Star, Lock, TrendingUp
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useGameStore } from '@/store/gameStore'
-import type { Skill, Chapter } from '@/store/gameStore'
-import chapterSummaries from '@/data/chapter_summaries.json'
+import {
+  PROGRESS_CATALOG,
+  buildProgressChapters,
+  buildProgressMissions,
+} from '@/data/progressCatalog'
+import { deriveProgressMetrics, deriveSkillGroups } from '@/lib/progressMetrics'
+import type { SkillGroupMetric } from '@/lib/progressMetrics'
+import {
+  calculateTotalXP,
+  deriveProgressRank,
+  resolveAchievements,
+} from '@/data/achievements'
 import { publicAssetUrl } from '@/lib/publicAsset'
+import { useCurrentLocalDay } from '@/hooks/useCurrentLocalDay'
+import { segmentTextForTypewriter } from '@/lib/textSegmentation'
 
-const chapterNames = chapterSummaries.map(chapter => ({
-  zh: chapter.title_zh,
-  en: chapter.title_en,
-}))
+type LocalizedSkillGroupMetric = SkillGroupMetric & { name: string }
+
+interface StoryChapter {
+  id: number
+  title: string
+  status: 'completed' | 'current' | 'upcoming'
+}
+
+interface RecentActivity {
+  id: string
+  description: string
+  type: 'complete' | 'in-progress'
+  timestamp: string
+  sortTime: number
+}
 
 /* ------------------------------------------------------------------ */
 /*  useTypewriter hook                                                  */
@@ -28,6 +51,7 @@ function useTypewriter(text: string, speed = 40, delay = 300, reduceMotion = fal
     let i = 0
     let interval: ReturnType<typeof setInterval> | undefined
     let doneTimer: ReturnType<typeof setTimeout> | undefined
+    const segments = segmentTextForTypewriter(text)
     const timer = setTimeout(() => {
       if (reduceMotion) {
         setDisplayed(text)
@@ -38,8 +62,8 @@ function useTypewriter(text: string, speed = 40, delay = 300, reduceMotion = fal
       setDone(false)
       interval = setInterval(() => {
         i++
-        setDisplayed(text.slice(0, i))
-        if (i >= text.length) {
+        setDisplayed(segments.slice(0, i).join(''))
+        if (i >= segments.length) {
           clearInterval(interval)
           doneTimer = setTimeout(() => setDone(true), 500)
         }
@@ -64,7 +88,7 @@ const easeBounce = [0.34, 1.56, 0.64, 1] as [number, number, number, number]
 /* ------------------------------------------------------------------ */
 /*  Skill Radar Chart (SVG)                                             */
 /* ------------------------------------------------------------------ */
-function SkillRadar({ skills }: { skills: Skill[] }) {
+function SkillRadar({ skills }: { skills: LocalizedSkillGroupMetric[] }) {
   const { t } = useTranslation()
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true, amount: 0.3 })
@@ -231,12 +255,126 @@ function Section({
 export default function Home() {
   const { t, i18n } = useTranslation()
   const reduceMotion = useReducedMotion() ?? false
-  const isZh = i18n.language?.startsWith('zh') ?? true
+  const callsign = useGameStore((state) => state.callsign)
+  const missionProgress = useGameStore((state) => state.missionProgress)
+  const progressMilestones = useGameStore((state) => state.progressMilestones)
+  const currentLocalDay = useCurrentLocalDay()
+  const progressLanguage = i18n.resolvedLanguage ?? i18n.language
+  const missions = useMemo(
+    () => buildProgressMissions(progressLanguage, missionProgress),
+    [missionProgress, progressLanguage],
+  )
+  const academyChapters = useMemo(
+    () => buildProgressChapters(progressLanguage, missionProgress),
+    [missionProgress, progressLanguage],
+  )
 
-  const {
-    callsign, rank, skills, activities, chapters, currentChapter,
-    missionsCompleted, commandsLearned, currentStreak, dailyIncident,
-  } = useGameStore()
+  const progressMetrics = useMemo(
+    () => deriveProgressMetrics(
+      PROGRESS_CATALOG,
+      missionProgress,
+      `${currentLocalDay}T12:00:00`,
+      progressMilestones,
+    ),
+    [currentLocalDay, missionProgress, progressMilestones],
+  )
+  const missionsCompleted = progressMetrics.missionsCompleted
+  const commandsLearned = progressMetrics.validatedActions
+  const currentStreak = progressMetrics.currentStreak
+  const resolvedAchievements = useMemo(
+    () => resolveAchievements(progressMetrics),
+    [progressMetrics],
+  )
+  const rank = deriveProgressRank(calculateTotalXP(missionsCompleted, resolvedAchievements))
+
+  const skills = useMemo(() => {
+    return deriveSkillGroups(academyChapters).map((skill) => ({
+      ...skill,
+      name: t(`skills.${skill.domain}`),
+    }))
+  }, [academyChapters, t])
+
+  const weakSkills = useMemo(
+    () => [...skills]
+      .filter((skill) => skill.score < 100)
+      .sort((a, b) => a.score - b.score || a.name.localeCompare(b.name))
+      .slice(0, 4),
+    [skills],
+  )
+
+  const activeStoryChapter = academyChapters.find((chapter) =>
+    chapter.drills.some((drill) => drill.status === 'in-progress'),
+  )
+  const partialStoryChapter = academyChapters.find((chapter) =>
+    chapter.completedDrills > 0 && chapter.completedDrills < chapter.totalDrills,
+  )
+  const firstIncompleteChapter = academyChapters.find((chapter) =>
+    chapter.completedDrills < chapter.totalDrills,
+  )
+  const currentAcademyChapter = activeStoryChapter
+    ?? partialStoryChapter
+    ?? firstIncompleteChapter
+    ?? academyChapters.at(-1)
+  const currentChapter = currentAcademyChapter?.id ?? 1
+  const chapters = useMemo<StoryChapter[]>(() => academyChapters.map((chapter) => ({
+    id: chapter.id,
+    title: chapter.title,
+    status: chapter.completedDrills === chapter.totalDrills
+      ? 'completed'
+      : chapter.id === currentChapter
+        ? 'current'
+        : 'upcoming',
+  })), [academyChapters, currentChapter])
+
+  const inProgressMissions = useMemo(() => missions
+    .filter((mission) => mission.status === 'in-progress')
+    .sort((left, right) => (
+      Date.parse(missionProgress[right.id]?.updatedAt ?? '')
+      - Date.parse(missionProgress[left.id]?.updatedAt ?? '')
+    )), [missionProgress, missions])
+  const availableMissions = useMemo(
+    () => missions.filter((mission) => mission.status === 'available'),
+    [missions],
+  )
+  const completedMissions = useMemo(() => missions
+    .filter((mission) => mission.status === 'completed')
+    .sort((left, right) => (
+      Date.parse(missionProgress[right.id]?.completedAt ?? '')
+      - Date.parse(missionProgress[left.id]?.completedAt ?? '')
+    )), [missionProgress, missions])
+  const continuationMissions = inProgressMissions.length > 0
+    ? inProgressMissions.slice(0, 3)
+    : availableMissions.length > 0
+      ? availableMissions.slice(0, 3)
+      : completedMissions.slice(0, 3)
+  const hasActiveMissions = inProgressMissions.length > 0
+  const isReplaySelection = !hasActiveMissions && availableMissions.length === 0
+
+  const activityDateFormatter = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, { dateStyle: 'short', timeStyle: 'short' }),
+    [i18n.language],
+  )
+  const activities = useMemo<RecentActivity[]>(() => missions.flatMap<RecentActivity>((mission) => {
+    const progress = missionProgress[mission.id]
+    if (!progress) return []
+    if (progress.status === 'completed') {
+      return progress.completionHistory.map((attempt, index) => ({
+        id: `${mission.id}-${attempt.completedAt}-${index}`,
+        description: `${mission.title} · ${t('missionBoard.stats.completed')}`,
+        type: 'complete' as const,
+        timestamp: activityDateFormatter.format(new Date(attempt.completedAt)),
+        sortTime: Date.parse(attempt.completedAt),
+      }))
+    }
+    const timestamp = progress.updatedAt
+    return [{
+      id: mission.id,
+      description: `${mission.title} · ${t('missionBoard.stats.inProgress')}`,
+      type: 'in-progress' as const,
+      timestamp: activityDateFormatter.format(new Date(timestamp)),
+      sortTime: Date.parse(timestamp),
+    }]
+  }).sort((left, right) => right.sortTime - left.sortTime).slice(0, 8), [activityDateFormatter, missionProgress, missions, t])
 
   const { displayed: welcomeText, done: typewriterDone } = useTypewriter(t('home.welcome'), 40, 300, reduceMotion)
 
@@ -266,8 +404,6 @@ export default function Home() {
     achievement: '#C77DFF',
   }
 
-  const weakSkills = [...skills].sort((a, b) => a.score - b.score).slice(0, 4)
-
   const quickActions = [
     { label: t('home.quickActions.newMission'), icon: Target, href: '/missions' },
     { label: t('home.quickActions.academy'), icon: BookOpen, href: '/academy' },
@@ -277,39 +413,32 @@ export default function Home() {
     { label: t('home.quickActions.leaderboard'), icon: Trophy, href: '#', disabled: true },
   ]
 
-  const trainingCards = [
-    {
-      title: isZh ? '逃离 less' : 'Escape less',
-      type: t('academy.trainingDrills'),
-      difficulty: 2,
-      time: '~3 min',
-      skills: ['less', 'pager'],
-      risk: '#00FF88',
-      borderColor: '#FFD166',
-      cta: t('academy.trainingDrills'),
-    },
-    {
-      title: isZh ? '午夜分页器行动' : 'Midnight Pager Operation',
-      type: t('missionBoard.stats.inProgress'),
-      difficulty: 3,
-      time: '~10 min',
-      skills: ['pager', 'filesystem'],
-      risk: '#00E5FF',
-      borderColor: '#00FF88',
-      cta: t('common.next'),
-      progress: 0,
-    },
-    {
-      title: t('home.dailyChallenge'),
-      type: t('home.speedChallenge'),
-      difficulty: 4,
-      time: '~5 min',
-      skills: ['shell', 'vim'],
-      risk: '#FFD166',
-      borderColor: '#00E5FF',
-      cta: t('common.submit'),
-    },
-  ]
+  const missionModeLabel = (mode: string) => {
+    if (mode === 'operation') return t('academy.operations')
+    if (mode === 'nightmare') return t('academy.nightmareMode')
+    if (mode === 'red-zone') return t('academy.bossBattles')
+    return t('academy.trainingDrills')
+  }
+  const riskColors = ['#00FF88', '#00FF88', '#00E5FF', '#FFD166', '#FF4757', '#C77DFF', '#FF4757']
+  const trainingMissions = [...inProgressMissions, ...availableMissions, ...completedMissions]
+    .filter((mission, index, all) => all.findIndex((candidate) => candidate.id === mission.id) === index)
+    .slice(0, 3)
+  const trainingCards = trainingMissions.map((mission) => ({
+    id: mission.id,
+    title: mission.title,
+    type: missionModeLabel(mission.mode),
+    difficulty: mission.difficulty,
+    time: mission.estimatedTime,
+    skills: mission.skills.slice(0, 2),
+    risk: riskColors[mission.riskLevel] ?? '#8B9EB0',
+    borderColor: mission.status === 'in-progress' ? '#FFD166' : '#00E5FF',
+    cta: mission.status === 'in-progress'
+      ? t('missionBoard.continue')
+      : mission.status === 'completed'
+        ? t('missionBoard.replay')
+        : t('academy.start'),
+    href: `/terminal/${mission.id}`,
+  }))
 
   return (
     <div>
@@ -371,7 +500,7 @@ export default function Home() {
 
           {/* Callsign + Rank */}
           <motion.div
-            className="flex items-center gap-space-3"
+            className="flex max-w-full flex-wrap items-center justify-center gap-space-3"
             initial={{ opacity: 0, y: 12 }}
             animate={typewriterDone ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
             transition={{ duration: 0.3, ease: easeOutExpo }}
@@ -381,7 +510,7 @@ export default function Home() {
               alt={rank}
               className="w-9 h-9 rounded-full object-cover"
             />
-            <span className="font-jetbrains text-h3 text-[#00E5FF] tracking-tight">
+            <span className="min-w-0 max-w-full break-words text-center font-jetbrains text-h3 text-[#00E5FF] tracking-tight">
               &ldquo;{callsign}&rdquo;
             </span>
             <span
@@ -475,7 +604,13 @@ export default function Home() {
           <div className="flex items-center justify-between mb-space-3">
             <div className="flex items-center gap-space-2">
               <Clock size={18} className="text-[#FFD166]" />
-              <h2 className="font-jetbrains text-h4 text-[#E8EDF2]">{t('home.continue')}</h2>
+              <h2 className="font-jetbrains text-h4 text-[#E8EDF2]">
+                {hasActiveMissions
+                  ? t('home.continue')
+                  : isReplaySelection
+                    ? t('missionBoard.replay')
+                    : t('home.recommended')}
+              </h2>
             </div>
             <Link
               to="/missions"
@@ -486,16 +621,24 @@ export default function Home() {
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-space-3">
-            {[
-              { title: isZh ? '午夜分页器行动' : 'Midnight Pager Op', type: t('missionBoard.stats.inProgress'), progress: 0, color: '#00FF88' },
-              { title: isZh ? '霓虹商场渗透' : 'NeonMall Infiltration', type: t('home.progress.available'), progress: 0, color: '#00E5FF' },
-              { title: isZh ? '日志猎人' : 'Log Hunter', type: t('home.progress.available'), progress: 0, color: '#FFD166' },
-            ].map((mission, i) => (
+            {continuationMissions.map((mission, i) => {
+              const color = riskColors[mission.riskLevel] ?? '#8B9EB0'
+              const statusLabel = mission.status === 'in-progress'
+                ? t('missionBoard.stats.inProgress')
+                : mission.status === 'completed'
+                  ? t('missionBoard.stats.completed')
+                  : t('home.progress.available')
+              const sectionLabel = hasActiveMissions
+                ? t('home.continue')
+                : isReplaySelection
+                  ? t('missionBoard.replay')
+                  : t('home.recommended')
+              return (
               <Link
-                key={mission.title}
-                to="/missions"
+                key={mission.id}
+                to={`/terminal/${mission.id}`}
                 className="rounded-radius-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
-                aria-label={`${t('home.continue')}: ${mission.title}`}
+                aria-label={`${sectionLabel}: ${mission.title}`}
               >
               <motion.article
                 className="relative rounded-radius-md p-space-4"
@@ -517,29 +660,19 @@ export default function Home() {
                   <span
                     className="font-jetbrains text-badge uppercase px-space-1.5 py-space-0.5 rounded-sm"
                     style={{
-                      color: mission.color,
-                      backgroundColor: `${mission.color}15`,
+                      color,
+                      backgroundColor: `${color}15`,
                     }}
                   >
-                    {mission.type}
+                    {statusLabel}
                   </span>
                   <ChevronRight size={14} className="text-[#788DA1]" />
                 </div>
                 <h3 className="font-jetbrains text-body text-[#E8EDF2] truncate">{mission.title}</h3>
-                {mission.progress > 0 && (
-                  <div className="mt-space-2">
-                    <div className="h-1 w-full rounded-full" style={{ backgroundColor: '#1A2332' }}>
-                      <div
-                        className="h-full rounded-full"
-                        style={{ width: `${mission.progress}%`, backgroundColor: mission.color }}
-                      />
-                    </div>
-                    <span className="font-jetbrains text-code-sm text-[#788DA1] mt-space-0.5 block">{mission.progress}% {t('common.complete')}</span>
-                  </div>
-                )}
               </motion.article>
               </Link>
-            ))}
+              )
+            })}
           </div>
         </div>
       </Section>
@@ -614,7 +747,7 @@ export default function Home() {
                 <h3 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-2">{card.title}</h3>
 
                 {/* Meta */}
-                <div className="flex items-center gap-space-3 mb-space-3">
+                <div className="flex flex-wrap items-center gap-space-3 mb-space-3">
                   <span className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#788DA1]">
                     <Clock size={12} />
                     {card.time}
@@ -634,32 +767,9 @@ export default function Home() {
                   ))}
                 </div>
 
-                {/* Progress bar */}
-                {card.progress !== undefined && (
-                  <div className="mb-space-3">
-                    <div
-                      className="h-1 w-full rounded-full"
-                      style={{ backgroundColor: '#1A2332' }}
-                      role="progressbar"
-                      aria-label={card.title}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={card.progress}
-                    >
-                      <div
-                        className="h-full rounded-full transition-all duration-slow"
-                        style={{ width: `${card.progress}%`, backgroundColor: '#00FF88' }}
-                      />
-                    </div>
-                    <span className="font-jetbrains text-code-sm text-[#788DA1] mt-space-1 block">
-                      {card.progress}% {t('common.complete')}
-                    </span>
-                  </div>
-                )}
-
                 {/* CTA */}
                 <Link
-                  to="/academy"
+                  to={card.href}
                   className="-ml-2 inline-flex min-h-11 items-center gap-space-1 px-2 font-jetbrains text-body-sm font-semibold transition-colors duration-fast"
                   style={{ color: '#00FF88' }}
                 >
@@ -686,15 +796,25 @@ export default function Home() {
               {t('home.seasonTitle')}
             </h2>
             <p className="font-inter text-body text-[#8B9EB0]">
-              {t('home.chapter', { current: currentChapter, total: chapters.length })} — {chapterNames[currentChapter - 1]?.[isZh ? 'zh' : 'en'] || chapters[currentChapter - 1]?.title}
+              {t('home.chapter', { current: currentChapter, total: chapters.length })} — {currentAcademyChapter?.title}
             </p>
           </div>
 
           {/* Timeline */}
-          <div className="overflow-x-auto pb-space-4">
-            <div className="flex items-center min-w-max px-space-2">
-              {chapters.map((chapter: Chapter, i: number) => (
-                <div key={chapter.id} className="flex items-center">
+          <div
+            className="overflow-x-auto pb-space-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+            tabIndex={0}
+            role="region"
+            aria-label={t('home.storyProgress')}
+          >
+            <div className="flex items-center min-w-max px-space-2" role="list">
+              {chapters.map((chapter: StoryChapter, i: number) => (
+                <div
+                  key={chapter.id}
+                  className="flex items-center"
+                  role="listitem"
+                  aria-label={`${chapter.title}: ${chapter.status === 'completed' ? t('missionBoard.stats.completed') : chapter.status === 'current' ? t('missionBoard.stats.inProgress') : t('home.progress.available')}`}
+                >
                   {/* Node */}
                   <div className="flex flex-col items-center relative">
                     <TimelineNode chapter={chapter} index={i} />
@@ -709,7 +829,7 @@ export default function Home() {
                               : '#788DA1',
                       }}
                     >
-                      {chapterNames[i]?.[isZh ? 'zh' : 'en'] || chapter.title}
+                      {chapter.title}
                     </span>
                   </div>
 
@@ -740,7 +860,7 @@ export default function Home() {
             viewport={{ once: true }}
             transition={{ duration: 0.4, delay: 0.3 }}
           >
-            {t('home.storySummary')}
+            {currentAcademyChapter?.description ?? t('home.storySummary')}
           </motion.p>
         </div>
       </Section>
@@ -771,7 +891,11 @@ export default function Home() {
               </p>
 
               <div className="flex flex-col gap-space-3">
-                {weakSkills.map((skill, i) => (
+                {weakSkills.length === 0 ? (
+                  <div className="rounded-radius-md border border-[#1E2D3D] bg-[#0F1419] p-space-4 font-inter text-body text-[#8B9EB0]">
+                    {t('home.allSkillsMastered')}
+                  </div>
+                ) : weakSkills.map((skill, i) => (
                   <motion.div
                     key={skill.name}
                     className="rounded-radius-md p-space-4"
@@ -807,7 +931,7 @@ export default function Home() {
                         {skill.score}%
                       </span>
                       <span className="font-inter text-body-sm text-[#788DA1]">
-                        {t('home.lastPracticed', { days: 3 + i })}
+                        {skill.completed}/{skill.total} {t('academy.drills')}
                       </span>
                     </div>
                   </motion.div>
@@ -817,98 +941,6 @@ export default function Home() {
           </div>
         </div>
       </Section>
-
-      {/* ============================================================ */}
-      {/* SECTION 5: DAILY INCIDENT                                    */}
-      {/* ============================================================ */}
-      {dailyIncident && (
-        <Section className="w-full" delay={0}>
-          <div className="max-w-[1200px] mx-auto px-space-4" style={{ margin: 'var(--space-8) auto' }}>
-            <motion.div
-              className="relative rounded-radius-md p-space-6 overflow-hidden"
-              style={{
-                backgroundColor: '#131B23',
-                borderLeft: '4px solid #FF6B35',
-              }}
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, amount: 0.3 }}
-              transition={{ duration: 0.5, ease: easeOutExpo }}
-            >
-              <div className="flex flex-wrap items-center gap-space-4">
-                {/* Left: Icon + Label */}
-                <div className="flex flex-col items-center gap-space-1 min-w-[80px]">
-                  <motion.div
-                    animate={{ scale: [1, 1.1, 1] }}
-                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                  >
-                    <Zap size={24} className="text-[#FF6B35]" />
-                  </motion.div>
-                  <span className="font-jetbrains text-badge uppercase text-[#FF6B35]">
-                    {t('home.dailyIncident')}
-                  </span>
-                </div>
-
-                {/* Center: Title + Description */}
-                <div className="flex-1 min-w-[200px]">
-                  <h3 className="font-jetbrains text-h3 text-[#E8EDF2] mb-space-1">
-                    {t('home.dailyIncidentTitle')}
-                  </h3>
-                  <p className="font-inter text-body text-[#8B9EB0]">
-                    {t('home.dailyIncidentDesc')}
-                  </p>
-                </div>
-
-                {/* Meta */}
-                <div className="flex flex-wrap items-center gap-space-3">
-                  <span className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#788DA1]">
-                    <Clock size={14} />
-                    {dailyIncident.estimatedTime}
-                  </span>
-                  <span className="flex items-center gap-space-1 font-jetbrains text-body-sm text-[#788DA1]">
-                    <Star size={14} />
-                    {dailyIncident.difficulty}
-                  </span>
-                  {dailyIncident.skills.map((skill) => (
-                    <span
-                      key={skill}
-                      className="font-jetbrains text-badge uppercase px-space-1.5 py-space-0.5 rounded-radius-full border"
-                      style={{
-                        color: '#8B9EB0',
-                        borderColor: 'rgba(139,158,176,0.3)',
-                        backgroundColor: 'rgba(139,158,176,0.1)',
-                      }}
-                    >
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-
-                {/* CTA */}
-                <Link
-                  to="/missions"
-                  className="inline-flex min-h-11 items-center whitespace-nowrap rounded-radius-sm px-space-4 py-space-2 font-jetbrains text-body font-semibold transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
-                  style={{
-                    backgroundColor: 'rgba(0,255,136,0.15)',
-                    border: '1px solid #00FF88',
-                    color: '#00FF88',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(0,255,136,0.25)'
-                    e.currentTarget.style.boxShadow = '0 0 20px rgba(0,255,136,0.15)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(0,255,136,0.15)'
-                    e.currentTarget.style.boxShadow = 'none'
-                  }}
-                >
-                  {t('home.respondNow')}
-                </Link>
-              </div>
-            </motion.div>
-          </div>
-        </Section>
-      )}
 
       {/* ============================================================ */}
       {/* SECTION 6: RECENT ACTIVITY + QUICK ACTIONS                   */}
@@ -927,7 +959,24 @@ export default function Home() {
               </div>
 
               <div className="flex flex-col">
-                {activities.map((activity, i) => (
+                {activities.length === 0 ? (
+                  <div
+                    className="rounded-radius-md border border-dashed p-space-5"
+                    style={{ borderColor: '#1E2D3D', backgroundColor: '#0F1419' }}
+                    role="status"
+                  >
+                    <p className="font-inter text-body text-[#8B9EB0]">
+                      {t('home.noRecentActivity')}
+                    </p>
+                    <Link
+                      to="/missions"
+                      className="-ml-2 mt-space-2 inline-flex min-h-11 items-center gap-space-1 px-2 font-jetbrains text-body-sm text-[#00E5FF] transition-colors hover:text-[#00FF88]"
+                    >
+                      {t('home.quickActions.newMission')}
+                      <ChevronRight size={14} aria-hidden="true" />
+                    </Link>
+                  </div>
+                ) : activities.map((activity, i) => (
                   <motion.div
                     key={activity.id}
                     className="flex items-start gap-space-3 py-space-3 border-b"
@@ -1033,10 +1082,11 @@ export default function Home() {
 /* ------------------------------------------------------------------ */
 /*  Timeline Node sub-component                                       */
 /* ------------------------------------------------------------------ */
-function TimelineNode({ chapter, index }: { chapter: Chapter; index: number }) {
+function TimelineNode({ chapter, index }: { chapter: StoryChapter; index: number }) {
   if (chapter.status === 'completed') {
     return (
       <motion.div
+        aria-hidden="true"
         className="w-3 h-3 rounded-full"
         style={{ backgroundColor: '#00FF88' }}
         initial={{ scale: 0 }}
@@ -1050,6 +1100,7 @@ function TimelineNode({ chapter, index }: { chapter: Chapter; index: number }) {
   if (chapter.status === 'current') {
     return (
       <motion.div
+        aria-hidden="true"
         className="w-4 h-4 rounded-full"
         style={{
           backgroundColor: '#00E5FF',
@@ -1069,6 +1120,7 @@ function TimelineNode({ chapter, index }: { chapter: Chapter; index: number }) {
 
   return (
     <div
+      aria-hidden="true"
       className="w-2 h-2 rounded-full border"
       style={{
         borderColor: '#1E2D3D',

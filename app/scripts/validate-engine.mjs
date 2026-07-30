@@ -32,24 +32,72 @@ async function loadEngineModule(relativePath) {
   return import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
 }
 
-const [vfsModule, shellModule, gitModule, validatorModule, runReportModule] = await Promise.all([
+const [
+  vfsModule,
+  shellModule,
+  gitModule,
+  validatorModule,
+  runReportModule,
+  levelsModule,
+  textSegmentationModule,
+] = await Promise.all([
   loadEngineModule('src/engine/vfs.ts'),
   loadEngineModule('src/engine/shell.ts'),
   loadEngineModule('src/engine/git.ts'),
   loadEngineModule('src/engine/validator.ts'),
   loadEngineModule('src/engine/runReport.ts'),
+  loadEngineModule('src/engine/levels.ts'),
+  loadEngineModule('src/lib/textSegmentation.ts'),
 ])
 
-const { VFS } = vfsModule
-const { ShellEngine } = shellModule
+const {
+  MAX_VFS_DEPTH,
+  MAX_VFS_FILE_CODE_UNITS,
+  MAX_VFS_SYMLINK_HOPS,
+  MAX_VFS_TOTAL_CODE_UNITS,
+  VFS,
+} = vfsModule
+const {
+  MAX_SIMULATOR_STATE_CODE_UNITS,
+  MAX_SHELL_COMMAND_LENGTH,
+  MAX_SHELL_HISTORY_CODE_UNITS,
+  MAX_SHELL_COMMAND_SEGMENTS,
+  MAX_SHELL_HISTORY_ENTRIES,
+  MAX_SHELL_OUTPUT_CODE_UNITS,
+  MAX_SYSTEM_LOG_CODE_UNITS,
+  MAX_SYSTEM_LOG_ENTRIES,
+  ShellEngine,
+  createShellState,
+  seedGitBisectTrainingRepository,
+} = shellModule
 const { createGitState, gitCommand } = gitModule
-const { validateMission, calculateScore, isMissionComplete } = validatorModule
+const { validateMission, calculateScore, getObjectiveChecks, isMissionComplete } = validatorModule
 const { loadMissionRunReport, saveMissionRunReport } = runReportModule
+const { getLevelById } = levelsModule
+const {
+  MAX_TERMINAL_PASTE_SUBMISSIONS,
+  planTerminalInputChunk,
+  truncateTextToUtf16Limit,
+} = textSegmentationModule
 const catalog = JSON.parse(readFileSync(fileURLToPath(new URL('../src/data/all_levels.json', import.meta.url)), 'utf8'))
 
 const tests = []
 function test(name, run) {
   tests.push({ name, run })
+}
+
+function hasUnpairedSurrogate(text) {
+  for (let index = 0; index < text.length; index += 1) {
+    const codeUnit = text.charCodeAt(index)
+    if (codeUnit >= 0xD800 && codeUnit <= 0xDBFF) {
+      const next = text.charCodeAt(index + 1)
+      if (next < 0xDC00 || next > 0xDFFF) return true
+      index += 1
+    } else if (codeUnit >= 0xDC00 && codeUnit <= 0xDFFF) {
+      return true
+    }
+  }
+  return false
 }
 
 function mission({ objectives, checks }) {
@@ -139,6 +187,9 @@ test('VFS: cyclic symlinks fail closed instead of overflowing', () => {
   assert.equal(vfs.symlink('cycle-a', '/home/ghost/cycle-b', []).error, undefined)
   assert.doesNotThrow(() => vfs.readFile('/home/ghost/cycle-a', []))
   assert.match(vfs.readFile('/home/ghost/cycle-a', []).error ?? '', /No such file or directory/)
+  assert.match(vfs.symlink('', '/home/ghost/empty-target', []).error ?? '', /Invalid argument/)
+  assert.equal(vfs.lstat('/home/ghost/empty-target', []).node, null)
+  assert.equal(vfs.getUsage().valid, true)
 })
 
 test('VFS: writing through a dangling symlink creates its target without replacing the link', () => {
@@ -236,6 +287,372 @@ test('Shell: stderr and exit code survive execute()', () => {
   assert.equal(shell.state.lastExitCode, 1)
 })
 
+test('Shell: oversized commands fail closed before history or execution', () => {
+  const shell = new ShellEngine(new VFS())
+  const oversized = 'x'.repeat(MAX_SHELL_COMMAND_LENGTH + 1)
+  const result = shell.execute(oversized)
+  assert.equal(result.exitCode, 2)
+  assert.match(result.stderr, /command exceeds/)
+  assert.deepEqual(result.successfulCommands, [])
+  assert.deepEqual(shell.state.history, [])
+  assert.equal(shell.state.lastExitCode, 2)
+})
+
+test('Shell: command history retains only the latest bounded window', () => {
+  const shell = new ShellEngine(new VFS())
+  shell.execute('echo oldest')
+  for (let index = 0; index < MAX_SHELL_HISTORY_ENTRIES; index++) shell.execute(`echo ${index}`)
+  assert.equal(shell.state.history.length, MAX_SHELL_HISTORY_ENTRIES)
+  assert.equal(shell.state.history.includes('echo oldest'), false)
+  assert.equal(shell.state.history.at(-1), `echo ${MAX_SHELL_HISTORY_ENTRIES - 1}`)
+  const largeHistoryPayload = 'h'.repeat(19_000)
+  for (let index = 0; index < 60; index += 1) shell.execute(`echo ${largeHistoryPayload}${index}`)
+  assert.ok(
+    shell.state.history.reduce((total, entry) => total + entry.length, 0) <= MAX_SHELL_HISTORY_CODE_UNITS,
+  )
+  assert.equal(shell.state.history.at(-1), `echo ${largeHistoryPayload}59`)
+})
+
+test('Unicode bounds: UTF-16 budgets never bisect a surrogate pair', () => {
+  const splitBoundary = `${'a'.repeat(4_999)}\u{1F600}z`
+  const splitResult = truncateTextToUtf16Limit(splitBoundary, 5_000)
+  assert.equal(splitResult.wasTruncated, true)
+  assert.equal(splitResult.totalCodeUnits, 5_002)
+  assert.equal(splitResult.text, 'a'.repeat(4_999))
+  assert.ok(splitResult.text.length <= 5_000)
+  assert.equal(hasUnpairedSurrogate(splitResult.text), false)
+
+  const completePairBoundary = `${'a'.repeat(4_998)}\u{1F600}z`
+  const completePairResult = truncateTextToUtf16Limit(completePairBoundary, 5_000)
+  assert.equal(completePairResult.text, `${'a'.repeat(4_998)}\u{1F600}`)
+  assert.equal(completePairResult.text.length, 5_000)
+  assert.equal(hasUnpairedSurrogate(completePairResult.text), false)
+
+  const exactBudget = `${'a'.repeat(4_998)}\u{1F600}`
+  assert.deepEqual(truncateTextToUtf16Limit(exactBudget, 5_000), {
+    text: exactBudget,
+    wasTruncated: false,
+    totalCodeUnits: 5_000,
+  })
+  assert.throws(() => truncateTextToUtf16Limit('x', -1), RangeError)
+})
+
+test('Shell: output truncation preserves the UTF-16 budget and Unicode pairs', () => {
+  const vfs = new VFS()
+  const shell = new ShellEngine(vfs)
+  const content = `${'a'.repeat(MAX_SHELL_OUTPUT_CODE_UNITS - 1)}\u{1F600}z`
+  assert.equal(vfs.writeFile('/home/ghost/unicode-boundary.txt', [], content).error, undefined)
+  const result = shell.execute('cat /home/ghost/unicode-boundary.txt')
+  assert.equal(result.exitCode, 0)
+  assert.match(result.stdout, /output truncated/)
+  assert.equal(hasUnpairedSurrogate(result.stdout), false)
+  assert.ok(result.stdout.startsWith('a'.repeat(MAX_SHELL_OUTPUT_CODE_UNITS - 1)))
+})
+
+test('Terminal paste plan rejects excessive submissions atomically', () => {
+  const directTrigger = ':\r'.repeat(10_000)
+  const rejected = planTerminalInputChunk(directTrigger, MAX_TERMINAL_PASTE_SUBMISSIONS)
+  assert.equal(rejected.accepted, false)
+  assert.equal(rejected.submissionCount, 10_000)
+  assert.deepEqual(rejected.characters, [], 'a rejected paste must expose no executable prefix')
+
+  const atLimit = planTerminalInputChunk(':\r\n'.repeat(MAX_TERMINAL_PASTE_SUBMISSIONS))
+  assert.equal(atLimit.accepted, true)
+  assert.equal(atLimit.submissionCount, MAX_TERMINAL_PASTE_SUBMISSIONS)
+  assert.ok(atLimit.characters.length > 0)
+  assert.deepEqual(
+    planTerminalInputChunk('first\r\nsecond\nthird').characters,
+    [...'first\rsecond\rthird'],
+    'CRLF and bare LF must normalize to one executable terminal submission',
+  )
+  const overLimit = planTerminalInputChunk('\n'.repeat(MAX_TERMINAL_PASTE_SUBMISSIONS + 1))
+  assert.equal(overLimit.accepted, false)
+  assert.deepEqual(overLimit.characters, [])
+})
+
+test('Shell: command segment budgets reject control and pipeline floods atomically', () => {
+  const vfs = new VFS()
+  const shell = new ShellEngine(vfs)
+  const controlFlood = [
+    'touch /tmp/segment-limit-must-be-atomic',
+    ...Array.from({ length: MAX_SHELL_COMMAND_SEGMENTS }, () => ':'),
+  ].join(';')
+  const controlResult = shell.execute(controlFlood)
+  assert.equal(controlResult.exitCode, 2)
+  assert.match(controlResult.stderr, /segment simulator limit/)
+  assert.deepEqual(controlResult.successfulCommands, [])
+  assert.equal(vfs.lstat('/tmp/segment-limit-must-be-atomic', []).node, null)
+
+  const pipelineFlood = [
+    'printf x',
+    ...Array.from({ length: MAX_SHELL_COMMAND_SEGMENTS }, () => 'cat'),
+  ].join(' | ')
+  const pipelineResult = shell.execute(pipelineFlood)
+  assert.equal(pipelineResult.exitCode, 2)
+  assert.match(pipelineResult.stderr, /segment simulator limit|pipeline exceeds/)
+  assert.deepEqual(pipelineResult.successfulCommands, [])
+})
+
+test('Shell: one root execution budget bounds nested loops and delegated commands', () => {
+  const values = Array.from({ length: MAX_SHELL_COMMAND_SEGMENTS }, () => 'x').join(' ')
+  const pipeline = Array.from({ length: MAX_SHELL_COMMAND_SEGMENTS }, () => ':').join(' | ')
+  const nestedVfs = new VFS()
+  const shell = new ShellEngine(nestedVfs)
+  const nested = shell.execute(`touch /tmp/nested-budget-must-be-atomic; for i in ${values}; do for j in ${values}; do ${pipeline}; done; done`)
+  assert.equal(nested.exitCode, 2)
+  assert.match(nested.stderr, /segment simulator limit/)
+  assert.equal(nestedVfs.lstat('/tmp/nested-budget-must-be-atomic', []).node, null)
+
+  const delegatedVfs = new VFS()
+  const delegatedState = createShellState()
+  const delegatedShell = new ShellEngine(delegatedVfs, delegatedState)
+  const delegatedServices = delegatedShell.services
+  const delegatedGitState = delegatedShell.gitState
+  const items = Array.from(
+    { length: MAX_SHELL_COMMAND_SEGMENTS + 1 },
+    (_, index) => `/tmp/xargs-budget-side-${index}`,
+  ).join('\n')
+  assert.equal(delegatedVfs.writeFile('/tmp/xargs-items.txt', [], `${items}\n`).error, undefined)
+  assert.equal(delegatedVfs.writeFile('/tmp/hardlink-source', [], 'stable').error, undefined)
+  assert.equal(delegatedVfs.hardlink('/tmp/hardlink-source', '/tmp/hardlink-alias', []).error, undefined)
+  const delegated = delegatedShell.execute(
+    'export BUDGET_SIDE=changed; service nginx stop; git init; echo changed > /tmp/hardlink-source; cat /tmp/xargs-items.txt | xargs -n 1 touch',
+  )
+  assert.equal(delegated.exitCode, 2)
+  assert.match(delegated.stderr, /segment execution budget/)
+  assert.equal(delegatedShell.state.env.BUDGET_SIDE, undefined)
+  assert.equal(delegatedShell.services.services.get('nginx')?.status, 'running')
+  assert.equal(delegatedShell.gitState.initialized, false)
+  assert.equal(delegatedShell.state, delegatedState, 'rollback must preserve a constructor-supplied state reference')
+  assert.equal(delegatedShell.services, delegatedServices, 'rollback must preserve the public services reference')
+  assert.equal(delegatedShell.gitState, delegatedGitState, 'rollback must preserve the public Git state reference')
+  assert.ok(items.split('\n').every(path => delegatedVfs.lstat(path, []).node === null))
+  assert.equal(delegatedVfs.readFile('/tmp/xargs-items.txt', []).content, `${items}\n`)
+  assert.equal(delegatedVfs.readFile('/tmp/hardlink-source', []).content, 'stable')
+  assert.equal(delegatedVfs.readFile('/tmp/hardlink-alias', []).content, 'stable')
+  assert.equal(delegatedVfs.writeFile('/tmp/hardlink-alias', [], 'shared-after-rollback').error, undefined)
+  assert.equal(delegatedVfs.readFile('/tmp/hardlink-source', []).content, 'shared-after-rollback')
+
+  const functionVfs = new VFS()
+  const functionShell = new ShellEngine(functionVfs)
+  const invocations = Array.from({ length: 40 }, () => 'f').join(';')
+  const functionResult = functionShell.execute(
+    `function f() { export FUNCTION_SIDE=changed; touch /tmp/function-budget-side; :; }; ${invocations}`,
+  )
+  assert.equal(functionResult.exitCode, 2)
+  assert.match(functionResult.stderr, /segment execution budget/)
+  assert.equal(functionShell.state.env.FUNCTION_SIDE, undefined)
+  assert.equal(functionVfs.lstat('/tmp/function-budget-side', []).node, null)
+
+  const scriptVfs = new VFS()
+  const scriptShell = new ShellEngine(scriptVfs)
+  const dynamicScript = [
+    `seq 1 ${MAX_SHELL_COMMAND_SEGMENTS + 1} > /tmp/generated-budget-lines`,
+    'while read -r item; do touch /tmp/bash-budget-side; done < /tmp/generated-budget-lines',
+  ].join('\n')
+  assert.equal(scriptVfs.writeFile('/tmp/dynamic-budget.sh', [], `${dynamicScript}\n`).error, undefined)
+  const scriptResult = scriptShell.execute('bash /tmp/dynamic-budget.sh')
+  assert.equal(scriptResult.exitCode, 2)
+  assert.match(scriptResult.stderr, /segment execution budget/)
+  assert.equal(scriptVfs.lstat('/tmp/generated-budget-lines', []).node, null)
+  assert.equal(scriptVfs.lstat('/tmp/bash-budget-side', []).node, null)
+
+  const makeVfs = new VFS()
+  const makeShell = new ShellEngine(makeVfs)
+  const recipes = Array.from({ length: MAX_SHELL_COMMAND_SEGMENTS + 1 }, () => '\ttouch /tmp/make-budget-side')
+  assert.equal(makeVfs.writeFile('/tmp/BudgetMakefile', [], `all:\n${recipes.join('\n')}\n`).error, undefined)
+  const makeResult = makeShell.execute('make -f /tmp/BudgetMakefile all')
+  assert.equal(makeResult.exitCode, 2)
+  assert.match(makeResult.stderr, /segment execution budget/)
+  assert.equal(makeVfs.lstat('/tmp/make-budget-side', []).node, null)
+
+  const capacityVfs = new VFS()
+  const oneMiB = 'x'.repeat(1_024 * 1_024)
+  let capacityError = ''
+  for (let index = 0; index < 64; index += 1) {
+    const result = capacityVfs.writeFile(`/tmp/capacity-${index}`, [], oneMiB)
+    if (result.error) {
+      capacityError = result.error
+      break
+    }
+  }
+  assert.match(capacityError, /No space left on device/)
+  assert.ok(capacityVfs.getUsage().storageCodeUnits <= MAX_VFS_TOTAL_CODE_UNITS)
+  assert.equal(new ShellEngine(capacityVfs).execute('pwd').exitCode, 0)
+
+  const batchedCapacityVfs = new VFS()
+  const splitChunk = 's'.repeat(700_000)
+  assert.equal(
+    batchedCapacityVfs.writeFile('/tmp/capacity-source', [], `${splitChunk}\n${splitChunk}\n`).error,
+    undefined,
+  )
+  const desiredRemaining = 900_000
+  for (let index = 0; ; index += 1) {
+    const usage = batchedCapacityVfs.getUsage()
+    const remaining = MAX_VFS_TOTAL_CODE_UNITS - usage.storageCodeUnits
+    const entryName = `capacity-fill-${index}`
+    const contentLength = Math.min(
+      MAX_VFS_FILE_CODE_UNITS,
+      remaining - desiredRemaining - entryName.length,
+    )
+    if (contentLength <= 0) break
+    assert.equal(
+      batchedCapacityVfs.writeFile(`/tmp/${entryName}`, [], 'f'.repeat(contentLength)).error,
+      undefined,
+    )
+  }
+  const usageBeforeSplit = batchedCapacityVfs.getUsage()
+  assert.equal(MAX_VFS_TOTAL_CODE_UNITS - usageBeforeSplit.storageCodeUnits, desiredRemaining)
+  const capacityShell = new ShellEngine(batchedCapacityVfs)
+  const splitResult = capacityShell.execute('split -l 1 /tmp/capacity-source /tmp/capacity-split-')
+  assert.equal(splitResult.exitCode, 1)
+  assert.match(splitResult.stderr, /No space left on device/)
+  assert.equal(batchedCapacityVfs.lstat('/tmp/capacity-split-aa', []).node, null)
+  assert.equal(batchedCapacityVfs.lstat('/tmp/capacity-split-ab', []).node, null)
+  assert.deepEqual(batchedCapacityVfs.getUsage(), usageBeforeSplit, 'a failed batch write must roll back atomically')
+
+  const deepVfs = new VFS()
+  assert.equal(deepVfs.createDirectory('/home/ghost/depth-tree', []).error, undefined)
+  assert.equal(deepVfs.createDirectory('/home/ghost/depth-tree/child', []).error, undefined)
+  const deepSegments = ['/tmp']
+  for (let index = 0; index < MAX_VFS_DEPTH - 1; index += 1) {
+    deepSegments.push(`d${index}`)
+    assert.equal(deepVfs.createDirectory(deepSegments.join('/'), []).error, undefined)
+  }
+  assert.equal(deepVfs.getUsage().maxDepth, MAX_VFS_DEPTH)
+  assert.equal(deepVfs.getUsage().valid, true)
+  const tooDeepPath = `${deepSegments.join('/')}/overflow`
+  assert.match(deepVfs.createDirectory(tooDeepPath, []).error ?? '', /File name too long/)
+  assert.equal(deepVfs.lstat(tooDeepPath, []).node, null)
+  const deepestDirectory = deepSegments.join('/')
+  assert.equal(deepVfs.symlink(deepestDirectory, '/tmp/deep-link', []).error, undefined)
+  assert.equal(deepVfs.writeFile('/home/ghost/depth-source', [], 'bounded').error, undefined)
+  assert.equal(deepVfs.createDirectory('/home/ghost/depth-move-source', []).error, undefined)
+  for (const result of [
+    deepVfs.createDirectory('/tmp/deep-link/child', []),
+    deepVfs.writeFile('/tmp/deep-link/file', [], 'bounded'),
+    deepVfs.copy('/home/ghost/depth-source', '/tmp/deep-link/copied', []),
+    deepVfs.move('/home/ghost/depth-move-source', '/tmp/deep-link/moved', []),
+  ]) {
+    assert.match(result.error ?? '', /File name too long/)
+  }
+  assert.equal(deepVfs.lstat(`${deepestDirectory}/child`, []).node, null)
+  assert.equal(deepVfs.lstat(`${deepestDirectory}/file`, []).node, null)
+  assert.equal(deepVfs.lstat(`${deepestDirectory}/copied`, []).node, null)
+  assert.notEqual(deepVfs.lstat('/home/ghost/depth-move-source', []).node, null)
+  assert.equal(deepVfs.getUsage().valid, true)
+  const depthLimitedMove = deepVfs.move(
+    '/home/ghost/depth-tree',
+    deepSegments.slice(0, -1).join('/'),
+    [],
+  )
+  assert.match(depthLimitedMove.error ?? '', /File name too long/)
+  assert.notEqual(deepVfs.lstat('/home/ghost/depth-tree', []).node, null)
+  assert.equal(deepVfs.createDirectory('/home/ghost/self-copy-source', []).error, undefined)
+  assert.equal(deepVfs.symlink('/home/ghost/self-copy-source', '/tmp/self-copy-link', []).error, undefined)
+  assert.match(deepVfs.copy('/home/ghost/self-copy-source', '/tmp/self-copy-link', [], true).error ?? '', /into itself/)
+  assert.equal(deepVfs.lstat('/home/ghost/self-copy-source/self-copy-source', []).node, null)
+  assert.match(deepVfs.move('/home/ghost/self-copy-source', '/tmp/self-copy-link', []).error ?? '', /subdirectory of itself/)
+  assert.notEqual(deepVfs.lstat('/home/ghost/self-copy-source', []).node, null)
+  assert.doesNotThrow(() => deepVfs.createSnapshot())
+
+  const symlinkVfs = new VFS()
+  assert.equal(symlinkVfs.writeFile('/tmp/symlink-target', [], 'bounded').error, undefined)
+  for (let index = MAX_VFS_SYMLINK_HOPS; index >= 0; index -= 1) {
+    const target = index === MAX_VFS_SYMLINK_HOPS ? '/tmp/symlink-target' : `/tmp/symlink-${index + 1}`
+    assert.equal(symlinkVfs.symlink(target, `/tmp/symlink-${index}`, []).error, undefined)
+  }
+  assert.match(symlinkVfs.readFile('/tmp/symlink-0', []).error ?? '', /No such file or directory/)
+
+  const invalidGraphVfs = new VFS()
+  const mutableTmpNode = invalidGraphVfs.lstat('/tmp', []).node
+  assert.equal(mutableTmpNode?.type, 'directory')
+  mutableTmpNode.children.set('cycle', mutableTmpNode)
+  assert.equal(invalidGraphVfs.getUsage().valid, false)
+  const invalidGraphResult = new ShellEngine(invalidGraphVfs).execute('pwd')
+  assert.equal(invalidGraphResult.exitCode, 1)
+  assert.match(invalidGraphResult.stderr, /filesystem graph violates simulator limits/)
+  mutableTmpNode.children.delete('cycle')
+  assert.equal(invalidGraphVfs.getUsage().valid, true)
+
+  const boundedStateVfs = new VFS()
+  const boundedStateShell = new ShellEngine(boundedStateVfs)
+  const boundedStateTarget = boundedStateShell.state
+  const boundedServicesTarget = boundedStateShell.services
+  const stateUsageBeforeFill = boundedStateShell.getPersistentStateUsage()
+  const reserve = 10
+  const seedKey = 'budget-seed'
+  const fillerLength = MAX_SIMULATOR_STATE_CODE_UNITS
+    - stateUsageBeforeFill.codeUnits
+    - seedKey.length
+    - reserve
+  assert.ok(fillerLength > 0)
+  boundedStateShell.services.remoteFiles.set(seedKey, 'r'.repeat(fillerLength))
+  const stateUsageNearLimit = boundedStateShell.getPersistentStateUsage()
+  assert.equal(stateUsageNearLimit.valid, true)
+  assert.equal(MAX_SIMULATOR_STATE_CODE_UNITS - stateUsageNearLimit.codeUnits, reserve)
+  const stateLimitResult = boundedStateShell.execute('export STATE_BUDGET=overflow')
+  assert.equal(stateLimitResult.exitCode, 1)
+  assert.match(stateLimitResult.stderr, /persistent state limit exceeded/)
+  assert.equal(boundedStateShell.state.env.STATE_BUDGET, undefined)
+  assert.equal(boundedStateShell.state, boundedStateTarget)
+  assert.equal(boundedStateShell.services, boundedServicesTarget)
+  assert.equal(boundedStateShell.services.remoteFiles.get(seedKey)?.length, fillerLength)
+  assert.equal(boundedStateShell.getPersistentStateUsage().valid, true)
+
+  const boundedLogShell = new ShellEngine(new VFS())
+  boundedLogShell.services.systemLogs = ['l'.repeat(MAX_SYSTEM_LOG_CODE_UNITS)]
+  assert.equal(boundedLogShell.execute('logger newest-entry').exitCode, 0)
+  assert.ok(
+    boundedLogShell.services.systemLogs.reduce((total, entry) => total + entry.length, 0)
+      <= MAX_SYSTEM_LOG_CODE_UNITS,
+  )
+  assert.match(boundedLogShell.services.systemLogs.at(-1) ?? '', /newest-entry/)
+  boundedLogShell.services.systemLogs = Array.from({ length: MAX_SYSTEM_LOG_ENTRIES }, (_, index) => `old-${index}`)
+  assert.equal(boundedLogShell.execute('logger ring-entry').exitCode, 0)
+  assert.equal(boundedLogShell.services.systemLogs.length, MAX_SYSTEM_LOG_ENTRIES)
+  assert.match(boundedLogShell.services.systemLogs.at(-1) ?? '', /ring-entry/)
+})
+
+test('Shell: report-incompatible expanded traces are not emitted as progress evidence', () => {
+  const shell = new ShellEngine(new VFS())
+  assert.equal(shell.execute(`export BIG=${'a'.repeat(11_000)}`).exitCode, 0)
+  const expanded = shell.execute('echo $BIG$BIG')
+  assert.equal(expanded.exitCode, 0)
+  assert.equal(expanded.stdout.length, MAX_SHELL_OUTPUT_CODE_UNITS + '\n... (output truncated)\n'.length)
+  assert.deepEqual(expanded.successfulCommands, [])
+})
+
+test('Shell: bash and loop failures preserve exact successful-prefix traces', () => {
+  const vfs = new VFS()
+  const shell = new ShellEngine(vfs)
+  assert.equal(vfs.writeFile('/home/ghost/prefix.sh', [], 'whoami\nfalse\n').error, undefined)
+  const script = shell.execute('bash prefix.sh')
+  assert.equal(script.exitCode, 1)
+  assert.deepEqual(script.successfulCommands, ['whoami'])
+
+  const forLoop = shell.execute('for f in /etc/hostname /missing; do cat "$f"; done')
+  assert.equal(forLoop.exitCode, 1)
+  assert.deepEqual(forLoop.successfulCommands, ['cat /etc/hostname', '"', '$VAR'])
+
+  assert.equal(vfs.writeFile('/home/ghost/paths.txt', [], '/etc/hostname\n/missing\n').error, undefined)
+  const whileLoop = shell.execute('while read -r f; do cat "$f"; done < paths.txt')
+  assert.equal(whileLoop.exitCode, 1)
+  assert.deepEqual(whileLoop.successfulCommands, ['cat /etc/hostname', '"', '$VAR'])
+})
+
+test('Shell: aggregate control output remains Unicode-safe and bounded', () => {
+  const vfs = new VFS()
+  const shell = new ShellEngine(vfs)
+  const content = `${'a'.repeat(5_999)}\u{1F600}`
+  assert.equal(vfs.writeFile('/home/ghost/control-output.txt', [], content).error, undefined)
+  const result = shell.execute('cat control-output.txt; cat control-output.txt')
+  assert.equal(result.exitCode, 0)
+  assert.match(result.stdout, /output truncated/)
+  assert.equal(hasUnpairedSurrogate(result.stdout), false)
+  assert.ok(result.stdout.length <= MAX_SHELL_OUTPUT_CODE_UNITS + 32)
+})
+
 test('Shell: unknown commands expose command-not-found stderr', () => {
   const shell = new ShellEngine(new VFS())
   const result = shell.execute('definitely-not-a-command')
@@ -254,6 +671,110 @@ test('Shell: Git commands share a live repository state', () => {
   assert.equal(shell.gitState.initialized, true)
   assert.equal(shell.gitState.commits.length, 1)
   assert.match(shell.execute('git status').stdout, /working tree clean/)
+})
+
+test('Shell/Git: VFS is the worktree source for add, status, deletion, and duplicate commits', () => {
+  const vfs = new VFS()
+  const shell = new ShellEngine(vfs)
+  assert.equal(shell.execute('mkdir /tmp/repo-sync').exitCode, 0)
+  assert.equal(shell.execute('cd /tmp/repo-sync').exitCode, 0)
+  assert.equal(shell.execute('git init').exitCode, 0)
+  assert.equal(shell.execute('touch tracked.txt').exitCode, 0)
+  assert.equal(shell.execute('git add .').exitCode, 0)
+  assert.equal(shell.gitState.stagingArea.get('tracked.txt'), '')
+  assert.equal(shell.execute('git commit -m first').exitCode, 0)
+
+  assert.equal(shell.execute('git add tracked.txt').exitCode, 0)
+  assert.equal(shell.gitState.stagingArea.size, 0)
+  assert.notEqual(shell.execute('git commit -m duplicate').exitCode, 0)
+
+  assert.equal(shell.execute('echo changed > tracked.txt').exitCode, 0)
+  assert.match(shell.execute('git status').stdout, /modified:\s+tracked\.txt/)
+  assert.equal(shell.execute('git add tracked.txt').exitCode, 0)
+  assert.equal(shell.gitState.stagingArea.get('tracked.txt'), 'changed\n')
+  assert.equal(shell.execute('git commit -m changed').exitCode, 0)
+
+  assert.equal(shell.execute('rm tracked.txt').exitCode, 0)
+  assert.match(shell.execute('git status').stdout, /deleted:\s+tracked\.txt/)
+})
+
+test('Shell/Git: clean removes only VFS-untracked files and preserves tracked modifications', () => {
+  const vfs = new VFS()
+  const redCommands = []
+  const shell = new ShellEngine(vfs, undefined, command => redCommands.push(command))
+  shell.execute('mkdir /tmp/repo-clean')
+  shell.execute('cd /tmp/repo-clean')
+  shell.execute('git init')
+  shell.execute('echo original > tracked.txt')
+  shell.execute('git add tracked.txt')
+  shell.execute('git commit -m baseline')
+  shell.execute('echo modified > tracked.txt')
+  shell.execute('touch untracked.txt')
+  shell.execute('mkdir untracked-dir')
+  shell.execute('touch untracked-dir/nested.txt')
+
+  const preview = shell.execute('git clean -n')
+  assert.equal(preview.exitCode, 0)
+  assert.match(preview.stdout, /Would remove untracked\.txt/)
+  assert.doesNotMatch(preview.stdout, /untracked-dir/)
+  assert.ok(vfs.lstat('/tmp/repo-clean/untracked.txt', []).node)
+  assert.ok(vfs.lstat('/tmp/repo-clean/untracked-dir/nested.txt', []).node)
+
+  const combinedPreview = shell.execute('git clean -nf')
+  assert.equal(combinedPreview.exitCode, 0)
+  assert.match(combinedPreview.stdout, /Would remove untracked\.txt/)
+  assert.doesNotMatch(combinedPreview.stdout, /untracked-dir/)
+  assert.ok(vfs.lstat('/tmp/repo-clean/untracked.txt', []).node)
+  assert.ok(vfs.lstat('/tmp/repo-clean/untracked-dir/nested.txt', []).node)
+
+  const recursivePreview = shell.execute('git clean -dfn')
+  assert.equal(recursivePreview.exitCode, 0)
+  assert.match(recursivePreview.stdout, /Would remove untracked-dir\//)
+  assert.match(recursivePreview.stdout, /Would remove untracked\.txt/)
+  assert.ok(vfs.lstat('/tmp/repo-clean/untracked-dir/nested.txt', []).node)
+
+  const unsupportedIgnoredMode = shell.execute('git clean -x')
+  assert.equal(unsupportedIgnoredMode.exitCode, 129)
+  assert.ok(vfs.lstat('/tmp/repo-clean/untracked.txt', []).node)
+  assert.ok(vfs.lstat('/tmp/repo-clean/untracked-dir/nested.txt', []).node)
+
+  const cleaned = shell.execute('git clean -f')
+  assert.equal(cleaned.exitCode, 0)
+  assert.equal(vfs.lstat('/tmp/repo-clean/untracked.txt', []).node, null)
+  assert.ok(vfs.lstat('/tmp/repo-clean/untracked-dir/nested.txt', []).node)
+  assert.equal(vfs.readFile('/tmp/repo-clean/tracked.txt', []).content, 'modified\n')
+  assert.match(shell.execute('git status').stdout, /modified:\s+tracked\.txt/)
+
+  const recursiveCleaned = shell.execute('git clean -fd')
+  assert.equal(recursiveCleaned.exitCode, 0)
+  assert.match(recursiveCleaned.stdout, /Removing untracked-dir\//)
+  assert.equal(vfs.lstat('/tmp/repo-clean/untracked-dir', []).node, null)
+  assert.equal(vfs.readFile('/tmp/repo-clean/tracked.txt', []).content, 'modified\n')
+  assert.deepEqual(redCommands, ['git clean -f', 'git clean -fd'])
+})
+
+test('Shell/Git: both bisect missions seed five real VFS-backed commits', () => {
+  for (const missionId of ['git-bisect', 'op-broken-timeline']) {
+    const level = getLevelById(missionId)
+    assert.ok(level, `${missionId}: level missing`)
+    assert.ok(
+      level.checks.some(check => check.pattern?.toLowerCase().startsWith('git bisect')),
+      `${missionId}: runtime contract must trigger bisect seeding`,
+    )
+
+    const vfs = new VFS()
+    const shell = new ShellEngine(vfs)
+    assert.equal(shell.execute('git init', 0, false).exitCode, 0)
+    const seeded = seedGitBisectTrainingRepository(shell)
+    assert.deepEqual(seeded, { ok: true, commitCount: 5 }, `${missionId}: ${seeded.error ?? ''}`)
+    assert.equal(shell.gitState.commits.length, 5)
+    assert.equal(shell.gitState.branches.get('main')?.length, 5)
+    assert.equal(shell.gitState.tags.get('v1.0')?.hash, shell.gitState.commits[0].hash)
+    assert.equal(shell.gitState.commits[0].changes.get('training-base.txt'), 'known-good baseline\n')
+    assert.equal(vfs.readFile('/home/ghost/training-base.txt', []).content, 'known-good baseline\n')
+    assert.equal(vfs.readFile('/home/ghost/checkpoint-4.txt', []).content, 'checkpoint 4: regression reproduced\n')
+    assert.equal(shell.execute('git bisect start HEAD v1.0').exitCode, 0)
+  }
 })
 
 test('Shell: interactive command mode survives execute()', () => {
@@ -462,6 +983,21 @@ test('Shell: red-command detection uses command boundaries', () => {
   assert.equal(shellModule.isRedCommand('rm'), true)
   assert.equal(shellModule.isRedCommand('/bin/rm'), true)
   assert.equal(shellModule.isRedCommand('rmate'), false)
+  assert.equal(shellModule.isRedCommand('systemctl', ['status', 'nginx']), false)
+  assert.equal(shellModule.isRedCommand('systemctl', ['list-timers']), false)
+  assert.equal(shellModule.isRedCommand('systemctl', ['restart', 'nginx']), true)
+  assert.equal(shellModule.isRedCommand('docker', ['ps']), false)
+  assert.equal(shellModule.isRedCommand('docker', ['rm', 'api']), true)
+  assert.equal(shellModule.isRedCommand('docker', ['logs', 'rm']), false)
+  assert.equal(shellModule.isRedCommand('kubectl', ['get', 'pods']), false)
+  assert.equal(shellModule.isRedCommand('kubectl', ['delete', 'pod', 'api']), true)
+  assert.equal(shellModule.isRedCommand('kubectl', ['--context', 'production', 'delete', 'pod', 'api']), true)
+  assert.equal(shellModule.isRedCommand('kubectl', ['get', 'pod', 'delete']), false)
+  assert.equal(shellModule.isRedCommand('apt', ['search', 'nginx']), false)
+  assert.equal(shellModule.isRedCommand('apt', ['install', 'nginx']), true)
+  assert.equal(shellModule.isRedCommand('git', ['clean', '-df']), true)
+  assert.equal(shellModule.isRedCommand('git', ['clean', '--force']), true)
+  assert.equal(shellModule.isRedCommand('kill', ['-0', '1842']), false)
 })
 
 test('Shell: executable paths require execute permission', () => {
@@ -902,6 +1438,11 @@ test('Shell: npm ci requires a synchronized lockfile and persists an install sna
   assert.match(vfs.readFile('/home/ghost/node_modules/.package-lock.json', []).content, /chalk/)
   assert.match(vfs.readFile('/home/ghost/node_modules/.package-lock.json', []).content, /vitest/)
   assert.match(vfs.readFile('/home/ghost/node_modules/.package-lock.json', []).content, /fsevents/)
+  assert.deepEqual(shell.services.installedPackages.sort(), ['chalk', 'fsevents', 'vitest'])
+  assert.equal(shell.services.npmPackages.size, 3)
+  assert.equal(shell.execute('npm install chalk').exitCode, 0)
+  assert.equal(shell.execute('npm install chalk').exitCode, 0)
+  assert.equal(shell.services.installedPackages.filter(name => name === 'chalk').length, 1)
 })
 
 test('Shell: npm ci validates manifest and lockfile schemas before creating node_modules', () => {
@@ -1611,6 +2152,21 @@ test('Validator: command names are matched at execution boundaries, not in argum
     validateMission(level, missionState({ commandHistory: ['printf data | sudo dd of=/tmp/image'] }))[0].completed,
     true,
   )
+
+  const evidenceLevel = mission({
+    objectives: [{ id: 'listed', required: true }],
+    checks: [{ type: 'command_used', pattern: 'ls -l', objectiveId: 'listed' }],
+  })
+  const [evidenceCheck] = getObjectiveChecks(evidenceLevel, 'listed')
+  assert.equal(evidenceCheck?.pattern, 'ls -l')
+  assert.equal(
+    validateMission(evidenceLevel, missionState({ commandHistory: ['echo "ls -l"'] }))[0].completed,
+    false,
+  )
+  assert.equal(
+    validateMission(evidenceLevel, missionState({ commandHistory: ['ls -l /tmp'] }))[0].completed,
+    true,
+  )
 })
 
 test('Validator: multi-token commands and punctuation interactions remain literal', () => {
@@ -1936,14 +2492,20 @@ test('Validator: broad dangerous objectives never authorize arbitrary operands',
 test('Catalog: hardened red-command H5 solutions execute and complete from a fresh simulator', () => {
   const missionIds = [
     'delete-decoys',
+    'truncate-trap',
+    'op-red-button',
     'nightmare-recursive-rm',
     'execute-bit',
+    'minimal-chmod',
+    'numeric-perms',
     'owner-switch',
+    'sticky-alley',
     'op-777-trap',
     'boss-perm-lockdown',
     'nightmare-service-read',
     'boss-zombie-theater',
     'dd-red-zone',
+    'service-restart',
   ]
 
   for (const id of missionIds) {
@@ -1964,6 +2526,24 @@ test('Catalog: hardened red-command H5 solutions execute and complete from a fre
   }
 })
 
+test('Catalog safety: truncate only authorizes the exact practice target', () => {
+  const level = catalogMission('truncate-trap')
+  const vfs = new VFS()
+  const before = vfs.readFile('/home/ghost/.bashrc', []).content.length
+  const redCommandsUsed = []
+  const shell = new ShellEngine(vfs, undefined, command => redCommandsUsed.push(command))
+  const result = shell.execute('truncate -s 0 /home/ghost/.bashrc')
+  assert.equal(result.exitCode, 0)
+  assert.equal(vfs.readFile('/home/ghost/.bashrc', []).content.length, 0)
+  assert.ok(before > 0)
+  assert.deepEqual(redCommandsUsed, ['truncate -s 0 /home/ghost/.bashrc'])
+  const validation = validateMission(level, missionState({
+    commandHistory: result.successfulCommands ?? [],
+    redCommandsUsed,
+  }))
+  assert.equal(isMissionComplete(level, validation), false)
+})
+
 test('Run report: corrupted session data fails closed while a complete report round-trips', () => {
   const values = new Map()
   globalThis.sessionStorage = {
@@ -1982,22 +2562,23 @@ test('Run report: corrupted session data fails closed while a complete report ro
   const validationResults = validateMission(level, state)
   assert.equal(isMissionComplete(level, validationResults), true)
   const scoreResult = calculateScore(level, validationResults, state, 12, 2)
+  const reportCompletedAt = new Date().toISOString()
   const report = {
     version: 1,
     missionId: level.id,
     completed: true,
-    completedAt: new Date(0).toISOString(),
+    completedAt: reportCompletedAt,
     elapsedSeconds: 12,
     hintsUsed: 0,
     redCommandsUsed: [],
     attemptedActions: [
       {
         id: '1', timestampSeconds: 2, command: 'whoami', exitCode: 0,
-        kind: 'command', cwd: '/home/ghost', mode: 'shell', redCommands: [],
+        kind: 'command', cwd: '/home/ghost', mode: 'shell', successfulCommands: ['whoami'], redCommands: [],
       },
       {
         id: '2', timestampSeconds: 4, command: 'id', exitCode: 0,
-        kind: 'command', cwd: '/home/ghost', mode: 'shell', redCommands: [],
+        kind: 'command', cwd: '/home/ghost', mode: 'shell', successfulCommands: ['id'], redCommands: [],
       },
     ],
     successfulActions: ['whoami', 'id'],
@@ -2021,13 +2602,14 @@ test('Run report: corrupted session data fails closed while a complete report ro
     version: 1,
     missionId: generatedLevel.id,
     completed: true,
-    completedAt: new Date(0).toISOString(),
+    completedAt: reportCompletedAt,
     elapsedSeconds: 5,
     hintsUsed: 0,
     redCommandsUsed: [],
     attemptedActions: [{
       id: '1', timestampSeconds: 2, command: 'echo report-source | cat', exitCode: 0,
-      kind: 'command', cwd: '/home/ghost', mode: 'shell', redCommands: [],
+      kind: 'command', cwd: '/home/ghost', mode: 'shell',
+      successfulCommands: generatedResult.successfulCommands ?? [], redCommands: [],
     }],
     successfulActions: generatedResult.successfulCommands ?? [],
     validationResults: generatedValidation,
@@ -2036,8 +2618,133 @@ test('Run report: corrupted session data fails closed while a complete report ro
   assert.equal(saveMissionRunReport(generatedReport), true)
   assert.deepEqual(loadMissionRunReport(generatedReport.missionId), generatedReport)
 
+  const forgedState = missionState({
+    commandHistory: ['|'],
+    attemptedCommandHistory: ['false'],
+  })
+  const forgedValidation = validateMission(generatedLevel, forgedState)
+  const forgedReport = {
+    ...generatedReport,
+    elapsedSeconds: 1,
+    attemptedActions: [{
+      id: '1', timestampSeconds: 0, command: 'false', exitCode: 1,
+      kind: 'command', cwd: '/home/ghost', mode: 'shell', successfulCommands: [], redCommands: [],
+    }],
+    successfulActions: ['|'],
+    validationResults: forgedValidation,
+    scoreResult: calculateScore(generatedLevel, forgedValidation, forgedState, 1, 1),
+  }
+  assert.equal(
+    saveMissionRunReport(forgedReport),
+    false,
+    'global successful evidence must exactly aggregate the engine traces stored per action',
+  )
+
+  const compoundShell = new ShellEngine(new VFS())
+  const compoundCommand = 'whoami; id; false'
+  const compoundResult = compoundShell.execute(compoundCommand)
+  assert.equal(compoundResult.exitCode, 1)
+  assert.deepEqual(compoundResult.successfulCommands, ['whoami', 'id'])
+  const compoundState = missionState({
+    commandHistory: compoundResult.successfulCommands,
+    attemptedCommandHistory: [compoundCommand],
+  })
+  const compoundValidation = validateMission(level, compoundState)
+  assert.equal(isMissionComplete(level, compoundValidation), true)
+  const compoundReport = {
+    ...report,
+    elapsedSeconds: 3,
+    attemptedActions: [{
+      id: '1', timestampSeconds: 1, command: compoundCommand, exitCode: compoundResult.exitCode,
+      kind: 'command', cwd: '/home/ghost', mode: 'shell',
+      successfulCommands: compoundResult.successfulCommands ?? [], redCommands: [],
+    }],
+    successfulActions: compoundResult.successfulCommands ?? [],
+    validationResults: compoundValidation,
+    scoreResult: calculateScore(level, compoundValidation, compoundState, 3, 1),
+  }
+  assert.equal(
+    saveMissionRunReport(compoundReport),
+    true,
+    'successful child commands remain valid evidence when a later compound segment fails',
+  )
+
+  const repeatedState = missionState({
+    commandHistory: ['whoami', 'whoami', 'id'],
+    attemptedCommandHistory: ['whoami; whoami', 'id'],
+  })
+  const repeatedValidation = validateMission(level, repeatedState)
+  const repeatedReport = {
+    ...report,
+    elapsedSeconds: 4,
+    attemptedActions: [
+      {
+        id: '1', timestampSeconds: 1, command: 'whoami; whoami', exitCode: 0,
+        kind: 'command', cwd: '/home/ghost', mode: 'shell',
+        successfulCommands: ['whoami', 'whoami'], redCommands: [],
+      },
+      {
+        id: '2', timestampSeconds: 2, command: 'id', exitCode: 0,
+        kind: 'command', cwd: '/home/ghost', mode: 'shell', successfulCommands: ['id'], redCommands: [],
+      },
+    ],
+    successfulActions: ['whoami', 'whoami', 'id'],
+    validationResults: repeatedValidation,
+    scoreResult: calculateScore(level, repeatedValidation, repeatedState, 4, 2),
+  }
+  assert.equal(
+    saveMissionRunReport(repeatedReport),
+    true,
+    'exact action traces preserve repeated successes and their order',
+  )
+
+  const redirectedShell = new ShellEngine(new VFS())
+  const redirectedCommand = 'whoami > /etc/forbidden; id > /etc/forbidden; true'
+  const redirectedResult = redirectedShell.execute(redirectedCommand)
+  assert.equal(redirectedResult.exitCode, 0)
+  assert.deepEqual(redirectedResult.successfulCommands, ['true', '>'])
+  const redirectedForgedState = missionState({
+    commandHistory: ['whoami', 'id'],
+    attemptedCommandHistory: [redirectedCommand],
+  })
+  const redirectedForgedValidation = validateMission(level, redirectedForgedState)
+  const redirectedForgedReport = {
+    ...report,
+    elapsedSeconds: 3,
+    attemptedActions: [{
+      id: '1', timestampSeconds: 1, command: redirectedCommand, exitCode: redirectedResult.exitCode,
+      kind: 'command', cwd: '/home/ghost', mode: 'shell',
+      successfulCommands: redirectedResult.successfulCommands ?? [], redCommands: [],
+    }],
+    successfulActions: ['whoami', 'id'],
+    validationResults: redirectedForgedValidation,
+    scoreResult: calculateScore(level, redirectedForgedValidation, redirectedForgedState, 3, 1),
+  }
+  assert.equal(
+    saveMissionRunReport(redirectedForgedReport),
+    false,
+    'a successful final segment cannot launder failed earlier segments into mission evidence',
+  )
+
   const store = value => values.set(`ghostops_run_report:${report.missionId}`, JSON.stringify(value))
   store({ ...report, completedAt: 'not-a-date' })
+  assert.equal(loadMissionRunReport(report.missionId), null)
+  store({ ...report, completedAt: new Date(Date.UTC(2099, 0, 1)).toISOString() })
+  assert.equal(loadMissionRunReport(report.missionId), null)
+  store({ ...report, completedAt: new Date(reportCompletedAt).toUTCString() })
+  assert.equal(loadMissionRunReport(report.missionId), null)
+  store({ ...report, elapsedSeconds: 30 * 24 * 60 * 60 + 1 })
+  assert.equal(loadMissionRunReport(report.missionId), null)
+  store({ ...report, hintsUsed: level.hints.length + 1 })
+  assert.equal(loadMissionRunReport(report.missionId), null)
+  store({
+    ...report,
+    attemptedActions: report.attemptedActions.map((action, index) => (
+      index === 0 ? { ...action, timestampSeconds: 2.5 } : action
+    )),
+  })
+  assert.equal(loadMissionRunReport(report.missionId), null)
+  values.set(`ghostops_run_report:${report.missionId}`, ' '.repeat(3 * 1024 * 1024 + 1))
   assert.equal(loadMissionRunReport(report.missionId), null)
   store({ ...report, scoreResult: { total: 100 } })
   assert.equal(loadMissionRunReport(report.missionId), null)
@@ -2058,7 +2765,7 @@ test('Run report: corrupted session data fails closed while a complete report ro
   store({
     ...report,
     attemptedActions: report.attemptedActions.map((action, index) => (
-      index === 0 ? { ...action, command: 'echo not-whoami' } : action
+      index === 0 ? { ...action, successfulCommands: ['echo not-whoami'] } : action
     )),
   })
   assert.equal(loadMissionRunReport(report.missionId), null)
@@ -2071,6 +2778,98 @@ test('Run report: corrupted session data fails closed while a complete report ro
     )),
   })
   assert.equal(loadMissionRunReport(report.missionId), null)
+  store({
+    ...report,
+    validationResults: report.validationResults.map(result => (
+      result.objectiveId === 'obj-3' ? { ...result, completed: true } : result
+    )),
+  })
+  assert.equal(
+    loadMissionRunReport(report.missionId),
+    null,
+    'an unbound optional objective cannot be promoted without canonical evidence',
+  )
+})
+
+test('Run report: all 29 executable H5 solutions persist exact engine traces', () => {
+  const values = new Map()
+  globalThis.sessionStorage = {
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: key => values.delete(key),
+    clear: () => values.clear(),
+    key: index => [...values.keys()][index] ?? null,
+    get length() { return values.size },
+  }
+
+  let completedSolutions = 0
+  const rejectedReports = []
+  for (const rawLevel of catalog) {
+    const level = getLevelById(rawLevel.id)
+    assert.ok(level, `${rawLevel.id}: level missing`)
+    const solution = level.hints.find(hint => hint.level === 5)?.text_en.replace(/^Full solution:\s*/i, '')
+    if (!solution) continue
+
+    const vfs = new VFS()
+    const emittedRedCommands = []
+    const shell = new ShellEngine(vfs, undefined, command => emittedRedCommands.push(command))
+    if (level.startingState?.cwd) {
+      shell.state.cwd = [...level.startingState.cwd]
+      shell.state.env.PWD = `/${level.startingState.cwd.join('/')}`
+    }
+    if (level.startingState?.env) Object.assign(shell.state.env, level.startingState.env)
+    if (level.chapter_skill.toLowerCase() === 'git') {
+      shell.execute('git init', 0, false)
+      if (level.checks.some(check => check.pattern?.toLowerCase().startsWith('git bisect'))) {
+        const seeded = seedGitBisectTrainingRepository(shell)
+        assert.equal(seeded.ok, true, `${level.id}: ${seeded.error ?? 'bisect seed failed'}`)
+      }
+    }
+
+    const execution = shell.execute(solution)
+    const successfulCommands = execution.successfulCommands
+      ?? (execution.exitCode === 0 ? [solution] : [])
+    const redCommandsUsed = [...new Set(emittedRedCommands)]
+    const state = missionState({
+      commandHistory: successfulCommands,
+      attemptedCommandHistory: [solution],
+      gitState: shell.gitState,
+      redCommandsUsed,
+    })
+    const validationResults = validateMission(level, state)
+    if (!isMissionComplete(level, validationResults)) continue
+    completedSolutions += 1
+
+    const runReport = {
+      version: 1,
+      missionId: level.id,
+      completed: true,
+      completedAt: new Date().toISOString(),
+      elapsedSeconds: 5,
+      hintsUsed: 0,
+      redCommandsUsed,
+      attemptedActions: [{
+        id: '1',
+        timestampSeconds: 2,
+        command: solution,
+        exitCode: execution.exitCode,
+        kind: 'command',
+        cwd: `/${shell.state.cwd.join('/')}`,
+        mode: 'shell',
+        successfulCommands,
+        redCommands: emittedRedCommands,
+      }],
+      successfulActions: successfulCommands,
+      validationResults,
+      scoreResult: calculateScore(level, validationResults, state, 5, 1),
+    }
+    if (!saveMissionRunReport(runReport) || !loadMissionRunReport(level.id)) {
+      rejectedReports.push(level.id)
+    }
+  }
+
+  assert.equal(completedSolutions, 29, 'the known executable H5 coverage set changed')
+  assert.deepEqual(rejectedReports, [])
 })
 
 let failures = 0

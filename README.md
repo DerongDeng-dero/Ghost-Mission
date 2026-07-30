@@ -17,7 +17,7 @@
 
 ![Terminal Ghost Ops 首页总览](./app/docs/images/home-dashboard.jpg)
 
-<sub>截图采集于 2026-07-24，用于展示真实视觉结构而非概念稿；核心内容统计与图片引用由脚本核对，最新验收快照见下文。</sub>
+<sub>截图更新于 2026-07-30，来自本地真实运行页面而非概念稿；核心内容统计、图片引用与构建指标由脚本反向核对。</sub>
 
 </div>
 
@@ -40,15 +40,15 @@
 | 内容 | 数量 | 说明 |
 | --- | ---: | --- |
 | 任务定义 | **221** | 17 章 × 每章 13 个训练场景 |
-| 运行时调用覆盖 | **221 / 221** | 100%；334 条命令检查、234 种 pattern 均有明确运行时归属，但不等于逐关端到端验收 |
+| 运行时调用覆盖 | **221 / 221** | 100%；334 条命令检查、235 种 pattern 均有明确运行时归属，但不等于逐关端到端验收 |
 | 学习章节 | **17** | 从帮助、导航、权限、Bash、IO 到进程、存储、网络、服务、Git 与远程操作 |
 | 任务模式 | **4** | 170 Academy / 17 Operation / 17 Boss / 17 Nightmare |
 | 目标 | **610** | 553 个必做目标，57 个可选目标 |
-| 五级提示 | **1,105** | 每个任务固定 5 级；结构完整，但 194 关的 H5 仍是批量模板，不能等同于 194 份可执行完整解法 |
+| 五级提示 | **1,105** | 每个任务固定 5 级；结构完整，但 188/221 关的第五级提示仍是通用模板，不能等同于 188 份可执行完整解法 |
 | 命令图谱 | **87** | 87 nodes / 95 links，覆盖 12 个技能领域，包含风险、参数、示例与反模式 |
-| 成就定义 | **20** | 当前为静态展示数据，尚未接入真实运行后的动态解锁 |
+| 成就定义 | **20** | Profile 只展示 3 个可由本地证据验证的成就；其余 17 个是隐藏的规划项，不会伪装成可解锁内容 |
 
-这里刻意区分“任务定义”“调用可达”和“结果可验证”：能力报告以未知能力默认不支持的严格口径审计全部 221 关，目前所有命令检查都能归入 Shell、终端交互或语法模型，未映射项为 0。与此同时，目录的 555 条检查仍只由 334 条 `command_used` 和 221 条 `no_red_command_used` 构成，所以 **221/221 不能表述成 221 关业务结果验收**。详见[当前边界](#当前边界与已知问题)。
+这里刻意区分“任务定义”“调用可达”和“结果可验证”：能力报告以未知能力默认不支持的严格口径审计全部 221 关，目前所有命令检查都能归入 Shell、终端交互或语法模型，未映射项为 0。与此同时，目录的 555 条检查仍只由 334 条 `command_used` 和 221 条 `no_red_command_used` 构成，所以 **221/221 不能表述成 221 次任务 E2E，更不能表述成 221 关业务结果验收**。详见[当前边界](#当前边界与已知问题)。
 
 ## 产品一览
 
@@ -74,12 +74,24 @@
     </td>
   </tr>
   <tr>
-    <td colspan="2">
+    <td width="50%">
       <img src="./app/docs/images/academy.jpg" alt="幽灵学院" />
       <br /><sub><b>幽灵学院</b> · 17 章 × 13 个训练节点；每章由基础训练逐步进入 Operation、Boss 与 Nightmare</sub>
     </td>
+    <td width="50%">
+      <img src="./app/docs/images/profile.jpg" alt="特工档案中的真实本地进度" />
+      <br /><sub><b>特工档案</b> · 从真实本地任务记录推导 XP、段位、连续训练、热力图、技能与 3 个可验证成就</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <img src="./app/docs/images/settings.jpg" alt="设置页的真实能力与预览边界" />
+      <br /><sub><b>设置与数据控制</b> · 呼号、语言、导出和重置真实可用；尚未接线的外观、终端、玩法、无障碍和音效控件明确禁用</sub>
+    </td>
   </tr>
 </table>
+
+<sub>Profile 与 Settings 截图分别来自独立的本地浏览器状态，只用于证明页面与文案边界，不代表同一账号或连续会话。</sub>
 
 <details>
 <summary><b>查看移动端适配</b></summary>
@@ -88,6 +100,35 @@
 </p>
 <p align="center"><sub>390 × 844 视口实测，无横向溢出。</sub></p>
 </details>
+
+## 真实本地成长，而不是预填数字
+
+任务完成后，首页、任务板、导航段位与 Profile 会共同读取 `ghostops_progress_v1`，展示已开始/已完成任务、最佳与最近得分、完成次数、最近活动、训练热力图、技能覆盖、XP、段位和连续训练。刷新页面后仍可恢复；数据只留在当前浏览器，不会上传到项目后端。
+
+进度模型专门处理了“重复训练、多个标签页和重置互相打架”这几个浏览器本地状态的基本问题：
+
+- **50 条/任务的审计边界**：每个任务只保留最近 50 条完整完成记录，避免历史无限膨胀；总完成次数由独立计数保留，历史截断不会把第 51 次训练变成“从未发生”。
+- **按标签页 writer 划分的 G-counter**：每个 writer 的完成计数只增不减，合并时取各 writer 最大值，两个标签页离线完成后再汇合也不会简单地后写覆盖前写。
+- **重置墓碑**：`progressResetAt` 加逻辑序号 `progressResetSerial` 组成 reset tombstone；即使时钟停在同一毫秒或回拨，旧标签页也不能把已重置的数据复活。
+- **收敛路径**：支持浏览器 Web Locks 时先合并再写；同时监听 `storage` 事件做跨标签页收敛，锁服务不可用时仍保留事件合并路径。
+- **把存储当不可信输入**：只接收生成目录中的 221 个任务 ID，逐条规范化时间、分数、记录与 writer，拒绝伪造未知任务，并对单份进度存储设置 3 MiB 上限。
+- **证据不会随短历史一起消失**：最长连续训练等 lifetime milestone 单独持久化，所以最近 50 条历史滚动淘汰后，已经获得的 7 日成就不会重新上锁。
+
+当前真正可判定的成就只有 3 个：任一任务满分、达到 7 日最长连续训练、通过已完成任务验证 50 种不同命令 pattern。XP 按每个已完成任务 120 点、每个已解锁成就 100 点计算；另外 17 个成就定义缺少对应持久化证据，UI 会将它们隐藏，直到实现真实采集与回归测试。
+
+> [!NOTE]
+> 这是可靠的浏览器本地进度，不是账号云存档，也不是防篡改成绩系统。用户能修改自己的 `localStorage`；不同浏览器、设备或浏览器配置文件之间不会自动同步。
+
+## 设置页：哪些真的生效
+
+| 能力 | 当前行为 |
+| --- | --- |
+| 呼号 | 校验并更新全站 callsign，尝试写入本地存储；写入被拒绝时保留当前会话值并明确反馈 |
+| 中文 / English | 立即切换 i18next 语言并尝试持久化；失败时显示“仅本次会话”反馈 |
+| 导出进度 | 下载带 schema/version、任务记录、milestone 与 reset tombstone 的 JSON 快照 |
+| 重置进度 | 先写入并复核 reset tombstone，再清理任务报告与引导标记；主重置失败、辅助清理不完整和完全成功是三种不同反馈 |
+| 退出登录 | 明确禁用，因为项目没有账号系统 |
+| 外观、无障碍、终端、玩法、音效 | 目前是 preview-only 设计稿，整个 fieldset 禁用并标注尚不可用；不会声称已经改变终端或全站行为 |
 
 ## 五分钟启动
 
@@ -131,14 +172,14 @@ npm run dev
 
 | 路由 | 页面 | 主要能力 |
 | --- | --- | --- |
-| `#/` | 首页 / Dashboard | 训练入口、继续任务、技能雷达、故事进度、活动、快捷操作与 Three.js 幽灵向导 |
+| `#/` | 首页 / Dashboard | 训练入口、继续任务、真实本地统计、故事进度、活动、快捷操作，以及按需加载的 3D 幽灵向导 |
 | `#/missions` | 任务板 | 模式、状态、难度、技能筛选；精选与进行中任务；结果按 24 条渐进加载 |
 | `#/terminal/:missionId` | 终端驾驶舱 | 简报、目标、xterm、HUD、提示、危险命令警告、得分与完成态 |
 | `#/academy` | 幽灵学院 | 17 章训练结构、技能树、训练卡与敌人图鉴 |
 | `#/atlas` | 命令图谱 | 搜索、12 领域筛选、风险/类型过滤、命令详情，以及可拖拽/缩放的 D3 关系图 |
-| `#/profile` | 特工档案 | 技能雷达、热力图、成就和任务记录；当前主要为演示数据 |
-| `#/settings` | 设置 | 主题、终端、辅助功能、声音、玩法与本地配置 |
-| `#/debrief/:missionId` | 任务复盘 | 读取本次会话的真实分数、耗时、动作、退出码、模式、目录、风险事件和验证结果；无记录时明确显示空态 |
+| `#/profile` | 特工档案 | 从持久化任务进度推导技能雷达、热力图、3 个证据型成就、XP、段位与完整可用的最近任务记录 |
+| `#/settings` | 设置 | 真实呼号/语言/导出/重置；其余 preview-only 控件禁用并标明边界 |
+| `#/debrief/:missionId` | 任务复盘 | 读取本次标签页的真实分数、耗时、动作、退出码、模式、目录、风险事件和验证结果；报告未保存时禁用入口，直达无记录时显示空态 |
 
 ## 训练系统
 
@@ -182,11 +223,14 @@ flowchart LR
   K --> C
   L --> C
   C --> P["Objectives / evidence-only score"]
-  P --> Q["sessionStorage run report"]
+  P --> Q["严格校验的 sessionStorage run report"]
   Q --> B["真实 Debrief"]
+  P --> W["Zustand 本地进度"]
+  W --> M["G-counter 合并 / reset tombstone"]
+  M --> UI["首页 / 档案 / 导航 / 任务板"]
   A["87 条命令关系"] --> G["D3 力导向图"]
-  R["Three.js"] --> H["3D 幽灵向导"]
-  Z["Zustand 演示状态"] --> UI["首页 / 档案 / 导航"]
+  F["静态 SVG 幽灵"] --> H["可用的默认向导"]
+  R["按交互加载 Three.js"] --> H
   I["i18next"] --> UI
   I --> T
 ```
@@ -197,7 +241,8 @@ flowchart LR
 - **数据驱动**：任务、目标、提示、计分配置和剧情来自关卡目录；计分只纳入当前能观察到证据的类别。
 - **即时反馈**：命令事件进入 Validator，目标面板随状态更新。
 - **渐进复杂度**：同一章节包含 Academy、Operation、Boss、Nightmare。
-- **可视化探索**：D3 展示命令关系，Three.js 提供轻量的全局幽灵引导。
+- **可视化探索**：D3 展示命令关系；幽灵先以静态 SVG 可用，只在用户指针/聚焦/点击时加载 Three.js。Reduced Motion、WebGL 不可用或 chunk 失败时继续使用静态回退。
+- **按需动画**：GSAP 只服务 Debrief，并与 Three.js、完整关卡目录分别形成动态 chunk，不进入首载依赖闭包。
 - **静态可部署**：`HashRouter` + `base: './'`，构建产物无需服务端路由重写。
 
 ## 项目结构
@@ -215,12 +260,12 @@ ghost/
 │  ├─ src/
 │  │  ├─ components/               # 导航、任务、学院、终端、档案与 UI 组件
 │  │  │  ├─ atlas/CommandGraph3D   # D3 力导向命令关系图
-│  │  │  └─ guide/GhostGuide3D     # Three.js 幽灵向导
+│  │  │  └─ guide/GhostGuide3D     # 静态回退壳；交互后再加载 Three.js
 │  │  ├─ data/                     # 任务、命令、学院与成就数据
 │  │  ├─ engine/                   # VFS、Shell、Git、Validator、Hints、Levels
 │  │  ├─ i18n/                     # English / 中文资源与语言检测
 │  │  ├─ pages/                    # 8 个路由页面
-│  │  └─ store/                    # Zustand 演示状态
+│  │  └─ store/                    # Zustand 本地进度、并发合并与重置墓碑
 │  ├─ package.json
 │  └─ vite.config.ts
 └─ .gitignore                      # 排除依赖、构建物、导入快照与内部规划稿
@@ -235,26 +280,34 @@ ghost/
 | 命令 | 用途 | 当前状态 |
 | --- | --- | --- |
 | `npm run dev` | 启动 Vite 开发服务器 | 已验证，`127.0.0.1:3000` |
+| `npm run generate:progress-catalog` | 从 `all_levels.json` 确定性生成本地进度可接受的任务 ID/轻量目录 | 任务目录变更后必须运行；避免手写副本漂移 |
 | `npm run validate:content` | 校验关卡 ID、目标/check 数量和五级提示 | 已通过 |
-| `npm run validate:engine` | 回归 VFS、Shell、Git、Validator、计分和危险任务契约 | 已通过，126 项回归 |
-| `npm run report:capabilities` | 严格盘点 221 关的命令、交互与语法调用覆盖 | 221/221 调用已映射；0 个未支持 pattern，仍不代表 mission E2E |
+| `npm run validate:engine` | 回归 VFS、Shell、Git、Validator、计分、报告证据链和危险任务契约 | 已通过，141 项回归；不是 141 次任务 E2E |
+| `npm run validate:progress` | 对抗性校验真实本地进度、成就、历史边界、多标签页合并和重置墓碑 | 已通过 |
+| `npm run validate:audit-policy` | 离线回归审计策略的 JSON 一致性、精确例外、完整依赖范围与 AST 架构护栏 | 已通过；不依赖安全数据库网络状态 |
+| `npm run report:capabilities` | 严格盘点 221 关的命令、交互与语法调用覆盖 | 221/221 调用已映射；334 条命令检查、235 种 pattern，仍不代表 mission E2E |
 | `npm run validate:assets` | 校验 README 图片、公开资产引用与体积 | 已通过 |
 | `npm run validate:dependencies` | 校验直接依赖使用情况与锁文件来源 | 已通过 |
 | `npm run validate:readme` | 用源码统计反向校验本文数字、版本与图片 | 已通过 |
+| `npm run validate:build` | 按 manifest 校验引用、首载闭包、动态分块、源码映射和体积预算 | 由 `build` 自动执行 |
 | `npm run typecheck` | TypeScript 项目检查 | 已通过 |
-| `npm run check` | 汇总内容、引擎、资产、依赖、README 与类型检查 | 已通过 |
+| `npm run check` | 汇总内容、引擎、进度、资产、依赖、README 与类型检查 | 已通过 |
 | `npm run build` | 生成 `dist/` 并校验分包和体积预算 | 已通过 |
 | `npm run verify` | `check` + ESLint + 生产构建的一站式门禁 | 已通过 |
-| `npm run audit:prod` / `audit:all` | npm 生产/完整依赖安全审计 | 均报告 2 个 high，来自同一 React Router RSC 公告；本项目未使用 RSC API，详见安全边界 |
+| `npm run audit:prod` / `npm run audit:all` | npm 生产/完整依赖安全审计 | 均报告 2 个 high，来自同一 React Router RSC 公告；本项目未使用 RSC API，详见安全边界 |
+| `npm run audit:policy` | 通过官方 npm registry 联网审计全部生产、开发、可选与 peer 依赖，只临时放行精确匹配的 RSC 公告 | 未知 high/critical、报告不一致、架构越界或例外过期直接失败；临时例外到 2026-09-30 |
+| `npm run release:check` | `verify`（含离线策略回归）+ `audit:policy`（实时安全数据库），用于真实发布判定 | 发布前的完整门禁 |
 | `npm run preview` | 在 `127.0.0.1:4173` 预览生产构建 | 可用 |
 | `npm run lint` | ESLint 全量检查 | 已通过，0 error / 0 warning |
 
 生产构建：
 
 ```bash
-npm run verify
+npm run release:check
 npm run preview
 ```
+
+当前生产 manifest 的首载闭包只有入口、React vendor 与 Motion vendor：**首载 3 个 JS 块，约 587 KiB raw / 185 KiB gzip；11 个动态边界，约 680 KiB total JS gzip**。Three.js、GSAP 与完整关卡目录都保持在首载闭包之外。
 
 ## 添加或修改任务
 
@@ -290,59 +343,74 @@ npm run preview
 修改后运行完整门禁：
 
 ```bash
+npm run generate:progress-catalog
 npm run validate:content
 npm run validate:engine
+npm run validate:progress
 npm run report:capabilities
 npm run verify
 ```
 
 旧目录绝大多数 check 没有显式 `objectiveId`；目前只有 2/221 关完成了全量显式绑定。兼容层会把必做的 `obj-N` 依次绑定到进度检查，并用所有进度检查汇总唯一的任务总目标；optional 不会被误算作通关条件。加载器还会根据目标契约把可确定的通用 pattern（例如两个连续的 `git`）细化为 `git status`、`git add`。正向目标只读取 `exitCode === 0` 的动作，失败尝试仍进入安全审计；pattern 按字面量/Token 边界匹配，不会把 `*`、`?`、`|` 当作正则表达式。
 
-## 本次真实验收（2026-07-29）
+## 本次真实验收（2026-07-30）
 
 | 检查 | 结果 |
 | --- | --- |
 | 开发服务器首页 | HTTP 200，标题 `Terminal Ghost Ops` |
 | 任务与学院真源 | 17 章标题/领域、每章 13 关与首页摘要均由目录或受校验的轻量摘要生成；不再显示旧 Docker/Vim/Git 章节 |
 | 任务可达性 | 移除 `< 50` 魔法锁；221 个任务当前都可从任务板选择，尚无伪造的成长解锁门槛 |
+| 本地成长真源 | 首页、任务板、Navbar 与 Profile 共同读取任务存档；不再导入 demo mission history，XP、段位、热力图、技能和活动均从已完成任务推导 |
+| 进度对抗性回归 | 覆盖重复训练、同毫秒完成、时钟回拨、50 条/任务淘汰、未知 ID 洪泛、3 MiB 限制、G-counter 多标签页合并、reset tombstone 和冻结时钟连续重置 |
+| 成就证据 | UI 只返回 3 个可验证成就；7 日 lifetime milestone 在短历史淘汰或当前 streak 归零后仍保持已获得状态，17 个无证据规划项不展示 |
+| 设置边界 | 呼号、语言、导出、重置真实执行且报告持久化结果；外观、无障碍、终端、玩法、音效和退出登录保持禁用，不制造“点了但没生效”的假设置 |
 | 移动视口 | 390 × 844；任务简报、终端与复盘无页面级横向溢出 |
 | Unicode 输入 | 输入 emoji 后 Backspace 再执行 `whoami`，命令没有残留 UTF-16 半个代理项，目标显示 1/3 |
 | 语法与模式 | 未闭合引号返回 exit 2；PSQL、screen、tmux 嵌套进入/退出后能恢复正确宿主模式 |
 | 首关对抗路径 | 14 个动作、2 次预期失败后完成 3/3，得分 93/100；Debrief 精确还原 01:58、动作、退出码、模式与目录 |
 | 无报告直达复盘 | 显示 “No run report available”，不再回退到静态 87 分 |
+| 报告持久化失败 | 报告必须先通过完整 schema/证据校验再写入 `sessionStorage`；写入失败会在完成弹窗告警并禁用 Debrief，而不是链接到空复盘 |
 | 提示计分 | 浏览器中首次显示提示后明确显示 “-5 points total”，后续提示不叠加扣分 |
 | 危险任务契约 | 9 个已加固危险关卡的 H5 从全新模拟器执行并完成；宽泛危险 objective 不能授权任意操作数 |
 | 应用 Console | 实测路径无应用 error；仅有系统开启 Reduced Motion 时的 Framer Motion 开发提示 |
-| `npm run validate:engine` | 126 项回归通过 |
-| `npm run report:capabilities` | 221/221 curated invocation mapping；334 条命令检查、234 种 pattern，0 个未映射项 |
-| `npm run verify` | 内容、引擎、资产、依赖、README、类型、Lint 与生产构建全部通过 |
+| `npm run validate:engine` | 141 项回归通过；它验证引擎契约，不冒充 141 次浏览器 E2E |
+| `npm run validate:progress` | 本地进度、成就、活动与 demo-data 防回流门禁通过 |
+| `npm run validate:audit-policy` | 13 个离线策略回归通过；覆盖元数据/记录不一致、缺失根公告、伪造 URL、部分例外集、未知 high、到期时刻、报告版本、JS/TS 扩展和注释伪装 |
+| `npm run report:capabilities` | 221/221 curated invocation mapping；334 条命令检查、235 种 pattern，0 个未映射项；明确标注 not mission E2E |
+| 公开资产 | 删除 `asterion-logo.png`、`neomall-logo.png` 两个孤儿资源；`public/` 当前 11.9 MiB，校验器默认拒绝无引用文件 |
+| 延迟加载 | Three.js 只在用户与幽灵交互时加载并有静态回退；GSAP 只随 Debrief 加载；两者和完整任务目录均不在首载闭包 |
+| `npm run verify` | 内容、引擎、进度、资产、依赖、README、类型、Lint 与生产构建统一纳入门禁 |
 | `npm run audit:prod` / `audit:all` | 均为 2 high；同属未使用的 React Router experimental RSC 路径，普通 SPA 路由实测正常 |
-| 生产构建 | 首载 4 个 JS 块，约 1,108 KiB raw / 330 KiB gzip；10 个动态边界，约 645 KiB total JS gzip |
+| 生产构建 | 首载 3 个 JS 块，约 587 KiB raw / 185 KiB gzip；11 个动态边界，约 680 KiB total JS gzip |
 
 ## 当前边界与已知问题
 
 这是当前实现状态，不隐藏工程债务：
 
-- **221/221 是人工维护的调用映射，不是运行证明**：能力报告用 curated allowlist 把 334 条检查归类到命令运行时、终端交互或语法模型；0 个未支持 pattern 影响 0 关、0 条检查，但报告本身不会逐条执行 Shell，也不是 mission E2E。
+- **221/221 是人工维护的调用映射，不是 221 次 E2E**：能力报告用 curated allowlist 把 334 条命令检查、235 种 pattern 归类到命令运行时、终端交互或语法模型；0 个未支持 pattern 影响 0 关、0 条检查，但报告本身不会逐条执行 Shell，也不是 mission E2E。
 - **目录缺少结果契约**：555 条检查全部由 334 条 `command_used` 与 221 条 `no_red_command_used` 组成，没有关卡级文件、Git、进程或输出 fixture/check。因此可以证明调用与状态机回归，不能证明 221 关业务结果已经逐项验收。
-- **H5 与目标绑定尚未完成源头治理**：194/221 关的第五级提示仍是通用模板，只有 2/221 关的所有 check 显式绑定 `objectiveId`。兼容层会 fail-closed 地修复可确定的旧 pattern，但长期方案仍是结构化 fixture、绑定和逐关执行测试。
+- **H5 与目标绑定尚未完成源头治理**：188/221 关的第五级提示仍是通用模板，只有 2/221 关的所有 check 显式绑定 `objectiveId`。兼容层会 fail-closed 地修复可确定的旧 pattern，但长期方案仍是结构化 fixture、绑定和逐关执行测试。
 - **计分分母因证据而异**：verification 在当前目录中全部 N/A，review 永久排除，shortcuts 只在有关联交互检查时适用；`par_actions` / `par_time_seconds` 目前由检查数和预计时间推导。得分会按适用类别归一到 100，再应用可观察到的危险操作配置罚分，所以不同关卡的 100 分并非同一原始分母。
-- **动作报告可审计但不是防篡改日志**：当前记录时间、命令/交互、exitCode、cwd、mode 和每次危险回调，并对 sessionStorage schema 做完整 fail-closed 校验；仍缺 tokens 与前后 state 快照，而且用户可以修改自己的浏览器存储。
-- **成长系统仍是演示层**：Debrief 的运行事实来自本次会话，但“新技能”取自关卡 skills，“推荐”是同章候选；Profile、热力图、成就和 XP 仍是静态/内存展示。刷新同一标签页可保留 session report，新的浏览器会话不会保留完整成长状态。
+- **动作报告可审计但不是防篡改日志**：当前记录时间、命令/交互、exitCode、cwd、mode、每个动作由引擎实际发出的成功轨迹和每次危险回调；全局成功证据必须按顺序精确等于逐动作聚合，命令型目标与可选目标会从这些轨迹重新计算。终端与引擎统一将单条命令限制为 20,000 个 UTF-16 code unit，并让一次顶层执行共享最多 100 个执行段；静态可判定的嵌套循环洪泛会在任何副作用前拒绝，函数、脚本、xargs 与 make 的动态展开若触及运行时预算，则回滚该顶层命令对 VFS、Shell、Git 与模拟服务的全部状态变更。事务快照会复制可变容器并复用不可变字符串；VFS 限制为单文件 10 Mi code unit、全局 32 Mi code unit、10,000 个目录项、128 层目录和 40 次符号链接跳转，文件名、软链目标、批量写入或容量中途越界都会 fail-closed，容量型失败会回滚整个顶层命令。Shell、Git 与模拟服务另共享 16 Mi code unit / 20,000 条目的持久状态预算，超限同样整条回滚；系统日志使用 1 Mi code unit / 1,000 条环形缓冲。单次多行粘贴最多提交 100 条命令，且整批超限时原子拒绝；Shell 历史最多保留 1,000 条且总计不超过 1 Mi code unit。任务证据另外限制为 10,000 条成功轨迹与四个实际保留数组合计 512 KiB 的精确 UTF-8 序列化预算，任何 schema 或预算超限都会粘性停止计分并要求 Replay；所有聚合输出均受统一预算约束，截断也不会切开 Unicode 代理对。这些边界避免超长粘贴、深目录、动态展开、批量满盘、无限历史或日志洪泛破坏报告契约并拖垮页面。由于 v1 仍缺 tokens 与前后 state 快照，遇到文件/Git 状态型检查会拒绝保存，而不会信任不可重放的结果。用户仍可整体伪造一份自洽的浏览器存储，因此它不是密码学防篡改日志。保存失败会明确告警并禁用 Debrief，不会把失败伪装成成功。
+- **成长是真实本地状态，不是云存档**：Profile、首页、任务板和导航已读取同一份持久化进度；每任务只保留最近 50 条详细历史，G-counter 保留总次数，reset tombstone 阻止旧标签页复活数据。它没有账号、服务端同步、加密或防篡改能力，清理站点数据会删除进度。
+- **成就只公开可证明的 3 个**：满分、7 日最长 streak 与 50 种已验证 pattern 可由现有存档推导；其余 17 个定义保持隐藏规划项。诸如“释放 10 GB 空间”在浏览器模拟器中没有可信证据，因此当前不能解锁。
+- **设置页刻意 fail-closed**：呼号、语言、导出与重置真实可用；外观、无障碍、终端、玩法和音效仍是 disabled preview-only 控件。它们需要先接入全站消费者、持久化与浏览器回归，才会开放交互。
 - **排行榜未实现**：首页入口当前禁用。
 - **多语言仍在完善**：内置 English / 中文切换和双语关卡字段，但部分深层任务文案仍固定显示英文。
-- **包体仍偏大**：当前首载约 1,108 KiB raw / 330 KiB gzip，总 JS 约 645 KiB gzip；关卡目录和 Three.js 仍是最大的延迟块，适合继续按页面与能力拆分。
-- **资源待正式化**：`public/` 仍有 14.1 MiB，并包含两个未使用 Logo；现有剧情人物图属于占位资产，公开发布前应完成权属确认、替换与压缩。
+- **首载已缩小，总量仍需预算**：首载 3 个 JS 块，约 587 KiB raw / 185 KiB gzip；11 个动态边界，约 680 KiB total JS gzip。Three.js、GSAP 和完整任务目录已延迟加载，但总 JS 仍接近 750 KiB gzip 门限，需要持续防回归。
+- **孤儿资源已删除，素材权属仍需正式化**：`public/` 当前 11.9 MiB，两个无引用 Logo 已移除，资产门禁默认拒绝新孤儿文件；现有剧情人物图仍属于占位素材，公开发布前应完成权属确认、替换与压缩。
 
 ## 安全与隐私模型
 
 - 不执行宿主机命令，不读取本机真实文件系统。
 - 没有账号系统、后端 API 或数据库。
-- 浏览器 `localStorage` 保存 `ghostops_*` 设置、`i18nextLng`、教程/引导标记；`sessionStorage` 以 `ghostops_run_report:*` 保存当前标签页的任务报告。没有把这些数据发送到项目后端。
+- 浏览器 `localStorage` 保存任务进度、呼号、`i18nextLng` 与教程/引导标记；`sessionStorage` 以 `ghostops_run_report:*` 保存当前标签页的任务报告。没有把这些数据发送到项目后端；报告写入被拒绝时，完成弹窗会告警并禁用复盘入口。
 - 开发服务器默认只绑定 `127.0.0.1`；不要在不可信网络上改成 `0.0.0.0`。
 - Google Fonts 是唯一运行时外部资源；请求失败时界面会降级到系统等宽/无衬线字体，训练功能仍可用。
-- 当前 npm 审计的 2 个 high 来自 [React Router RSC CSRF 公告](https://github.com/advisories/GHSA-qwww-vcr4-c8h2)。公告明确只影响 experimental RSC API；本项目使用客户端 `HashRouter`，没有 RSC、Action 或服务端请求处理。项目不为消除一条不适用运行路径的告警而强制降级到 7.11.0；目前保留最新 7.18.2，等待 7.x 修复版或单独评估 8.3 升级。
-- 依赖安全数据库会随时间变化，发布前请在联网环境运行 `npm audit` 并人工评估，不要盲目执行破坏性升级。
+- 当前生产依赖审计与全依赖审计的 2 个 high 来自同一份 [React Router RSC CSRF 公告](https://github.com/advisories/GHSA-qwww-vcr4-c8h2)，分别落在 `react-router` 与 `react-router-dom`。公告影响 experimental RSC API；本项目锁定 7.18.2，只使用客户端 `HashRouter`。AST 门禁扫描 `.js/.jsx/.mjs/.cjs/.ts/.tsx`，并确认 `createRoot(...).render(...)` 的实际树包含从 `react-router-dom` 导入的 `HashRouter`，不会被注释或未使用 import 伪装。
+- `npm run audit:policy` 不是笼统忽略 high：它固定使用 `https://registry.npmjs.org/` 和 lockfile，显式纳入全部生产、开发、可选与 peer 依赖，校验 audit report v2 的各严重度元数据与漏洞记录逐项一致；临时 allowlist 精确绑定上述公告 URL、完整的两个包名、`high` 严重度和 `fixAvailable === false`，并在 **2026-09-30** 到期。字符串形式的传递漏洞只有在同一报告内存在已通过 URL 校验的 `react-router` 根记录时才可引用。任何未知 high/critical、部分例外集、公告链变化、代码开始使用 RSC、审计失败或例外过期都会使发布门禁失败。
+- 上游已在 [React Router v8.3.0 官方发布页](https://github.com/remix-run/react-router/releases/tag/react-router%408.3.0)提供修复版本；升级跨越 major，需要单独验证 HashRouter、构建产物和全路由浏览器流程，不能为了让审计数字归零而无验证替换。
+- 依赖安全数据库会随时间变化；真实发布使用联网的 `npm run release:check`，不要把旧审计快照或破坏性的自动升级当成安全证明。
 
 ## 静态部署
 
@@ -362,14 +430,20 @@ npm run build
 - [x] 为 Validator、Shell、Git 和 VFS 建立无浏览器回归套件。
 - [x] 为 221 个任务建立结构化 curated invocation mapping（当前 221/221、0 未映射）。
 - [x] 记录动作时间、cwd、mode、exitCode、危险事件，并让 Debrief 读取 schema 校验后的会话报告。
-- [ ] 为 221 关补齐 fixture、结果型检查、显式 objective 绑定与逐关 E2E；优先替换 194 个模板 H5。
+- [x] 用真实本地进度驱动首页、任务板、导航与 Profile，并实现 50 条/任务历史边界、G-counter 多标签页合并、reset tombstone 和存储失败反馈。
+- [x] 只公开 3 个证据完备的成就；隐藏无法由当前存档证明的 17 个规划定义。
+- [x] 将 Three.js、GSAP 与完整任务目录移出首载闭包，并为 3D 引导保留 Reduced Motion / WebGL / chunk 失败回退。
+- [x] 删除两个孤儿 Logo，并把“无引用公开资产”升级为默认失败的门禁。
+- [ ] 为 221 关补齐 fixture、结果型检查、显式 objective 绑定与逐关 E2E；优先替换 188 个模板 H5。
 - [ ] 为动作补充 tokens 与前后 state 快照，支持确定性重放。
-- [ ] 把成长、成就、XP 和长期历史从演示状态迁移到可版本化本地存档。
+- [ ] 为另外 17 个成就补充可观察证据，或删除不适用于浏览器模拟器的定义。
+- [ ] 逐项接通并验证设置页的外观、无障碍、终端、玩法和音效控件；在此之前保持禁用。
+- [ ] 如果产品需要跨设备连续训练，再设计账号、同步冲突、隐私与数据导出/删除契约；当前不伪装成云存档。
 - [ ] 完成全站中英文案覆盖。
 - [x] 清零 ESLint 基线，并补齐内容、资产、依赖、README、TypeScript 与构建门禁。
 - [x] 清理未使用的直接依赖、迁移到统一的 `@xterm/*` 包，并升级 ESLint 工具链消除开发依赖告警。
-- [ ] 跟进 React Router 的非 RSC 修复版本；当前审计保留 2 个仅命中未使用 RSC 路径的 high。
-- [ ] 替换并压缩占位图片，降低当前约 14.1 MB 的公共素材体积。
+- [ ] 在临时 allowlist 于 2026-09-30 到期前，完成 React Router 8.3+ 升级验证或采用上游 7.x 修复版。
+- [ ] 替换并压缩剩余占位图片，完成素材权属清单；`public/` 当前 11.9 MiB。
 
 ## 贡献约定
 
@@ -377,9 +451,7 @@ npm run build
 
 ```bash
 npm ci
-npm run verify
-npm run audit:prod
-npm run audit:all
+npm run release:check
 ```
 
 如果改动了 UI，请同时检查桌面和 390 px 移动视口；如果改动了任务，请给出“命令输入 → 目标状态 → 完成条件”的可复现证据。
