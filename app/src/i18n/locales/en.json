@@ -713,6 +713,10 @@
   "guide": {
     "showTip": "Show a Ghost tip",
     "hideMessage": "Hide Ghost message",
+    "regionLabel": "Interactive Ghost guide",
+    "requestQuip": "Ask Ghost for a comment",
+    "pauseBanter": "Pause automatic remarks this session",
+    "resumeBanter": "Resume automatic remarks",
     "messages": {
       "welcome": "Welcome to Terminal Ghost Ops! I am Ghost, your AI guide. Open the Mission Board to begin your first operation.",
       "missions": "Choose an available mission to begin. Each mission recreates a practical terminal scenario.",

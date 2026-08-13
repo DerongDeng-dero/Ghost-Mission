@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import {
   appRoot,
@@ -16,6 +17,10 @@ const failures = []
 const readme = await readFile(path.resolve(workspaceRoot, 'README.md'), 'utf8')
 const packageJson = JSON.parse(await readFile(path.resolve(appRoot, 'package.json'), 'utf8'))
 const levels = JSON.parse(await readFile(path.resolve(appRoot, 'src/data/all_levels.json'), 'utf8'))
+const ghostGuideModelSource = await readFile(
+  path.resolve(appRoot, 'src/components/guide/ghostGuideModel.ts'),
+  'utf8',
+)
 const content = await getContentMetrics()
 const commands = await getCommandMetrics()
 const achievements = await getAchievementMetrics()
@@ -45,6 +50,49 @@ const fullyBoundChecks = levels.reduce(
   ).length,
   0,
 )
+
+let ghostGuideMetrics = null
+try {
+  const output = execFileSync(
+    process.execPath,
+    [path.resolve(appRoot, 'scripts/validate-ghost-guide.mjs')],
+    { cwd: appRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
+  )
+  const match = output.match(
+    /Ghost guide OK: (\d+) bilingual quips and (\d+) adversarial checks passed\./,
+  )
+  if (!match) {
+    failures.push('ghost guide validation: success metrics were not reported')
+  } else {
+    ghostGuideMetrics = {
+      quips: Number(match[1]),
+      checks: Number(match[2]),
+    }
+  }
+} catch (error) {
+  failures.push(
+    `ghost guide validation: ${error instanceof Error ? error.message : String(error)}`,
+  )
+}
+
+function readGhostModelConstant(name) {
+  const match = ghostGuideModelSource.match(
+    new RegExp(`export const ${name} = ([0-9_]+)`),
+  )
+  if (!match) {
+    failures.push(`ghost guide model: missing numeric export ${name}`)
+    return null
+  }
+  return Number(match[1].replaceAll('_', ''))
+}
+
+const ghostTiming = {
+  firstMin: readGhostModelConstant('FIRST_AUTO_QUIP_MIN_DELAY_MS'),
+  firstMax: readGhostModelConstant('FIRST_AUTO_QUIP_MAX_DELAY_MS'),
+  nextMin: readGhostModelConstant('AUTO_QUIP_MIN_DELAY_MS'),
+  nextMax: readGhostModelConstant('AUTO_QUIP_MAX_DELAY_MS'),
+  recentWindow: readGhostModelConstant('RECENT_QUIP_WINDOW'),
+}
 
 if (commands.unresolvedRelated !== 0) {
   failures.push(`command graph: ${commands.unresolvedRelated} related references do not resolve`)
@@ -156,9 +204,65 @@ expectIncludes(
   `${fullyBoundChecks}/${content.checks} 条 check`,
 )
 
+if (ghostGuideMetrics) {
+  expectIncludes('ghost guide content row', `| 幽灵点评 | **${ghostGuideMetrics.quips}**`)
+  expectIncludes('ghost guide bilingual catalogue', `${ghostGuideMetrics.quips} 条中英双语语录`)
+  expectIncludes('ghost guide adversarial checks', `${ghostGuideMetrics.checks} 个对抗性检查`)
+
+  const readmeLines = readme.split(/\r?\n/)
+  for (const [lineIndex, line] of readmeLines.entries()) {
+    for (const pattern of [
+      /(\d+)\s*条中英双语语录/g,
+      /(\d+)\s*条双语语录/g,
+      /已通过，(\d+)\s*条语录/g,
+      /幽灵点评\s*\|\s*\*\*(\d+)\*\*/g,
+    ]) {
+      pattern.lastIndex = 0
+      let match
+      while ((match = pattern.exec(line)) !== null) {
+        if (Number(match[1]) !== ghostGuideMetrics.quips) {
+          failures.push(
+            `ghost guide quip count: README line ${lineIndex + 1} reports ${match[1]}, ` +
+              `expected ${ghostGuideMetrics.quips}`,
+          )
+        }
+      }
+    }
+    if (line.includes('幽灵') || line.includes('validate:ghost-guide')) {
+      const checkPattern = /(\d+)\s*个对抗性检查/g
+      let checkMatch
+      while ((checkMatch = checkPattern.exec(line)) !== null) {
+        if (Number(checkMatch[1]) !== ghostGuideMetrics.checks) {
+          failures.push(
+            `ghost guide check count: README line ${lineIndex + 1} reports ${checkMatch[1]}, ` +
+              `expected ${ghostGuideMetrics.checks}`,
+          )
+        }
+      }
+    }
+  }
+}
+
+if (Object.values(ghostTiming).every(value => value !== null)) {
+  expectIncludes(
+    'ghost guide timing contract',
+    `首句等待 ${ghostTiming.firstMin / 1000}–${ghostTiming.firstMax / 1000} 秒，` +
+      `后续 ${ghostTiming.nextMin / 1000}–${ghostTiming.nextMax / 1000} 秒`,
+  )
+  expectIncludes('ghost guide repeat window', `最近 ${ghostTiming.recentWindow} 条不会重复`)
+}
+
+for (const sourceName of [
+  'GhostGuide3D', 'GhostAvatar3D', 'GhostAvatarFallback', 'ghostGuideModel',
+]) {
+  expectIncludes(`documented ghost source ${sourceName}`, sourceName)
+}
+expectIncludes('ghost guide evidence boundary', '不是幽灵在真实浏览器中的视觉回归或完整交互 E2E')
+
 for (const script of [
   'dev', 'generate:progress-catalog', 'validate:content', 'validate:engine',
-  'validate:progress', 'validate:settings', 'validate:audit-policy', 'report:capabilities',
+  'validate:progress', 'validate:settings', 'validate:ghost-guide', 'validate:audit-policy',
+  'report:capabilities',
   'validate:assets', 'validate:dependencies', 'validate:readme', 'validate:build',
   'check', 'lint', 'build', 'verify', 'preview', 'audit:prod', 'audit:all',
   'audit:policy', 'release:check',
@@ -175,6 +279,9 @@ if (!packageJson.scripts.check?.includes('npm run validate:audit-policy')) {
 if (!packageJson.scripts.check?.includes('npm run validate:settings')) {
   failures.push('package scripts: check must include the settings contract regression')
 }
+if (!packageJson.scripts.check?.includes('npm run validate:ghost-guide')) {
+  failures.push('package scripts: check must include the ghost guide contract regression')
+}
 if (packageJson.scripts['release:check'] !== 'npm run verify && npm run audit:policy') {
   failures.push('package scripts: release:check must run verify before the live audit policy')
 }
@@ -187,7 +294,8 @@ for (const staleClaim of [
   '201/221', '201 / 221', '551 个必做目标', '59 个可选目标',
   '96 项回归', '均为 0 vulnerabilities', 'npm audit 清零',
   '24 个未支持 pattern', '余下 20 关', '188/221', '2/221',
-  '2026-09-30', '临时 allowlist',
+  '2026-09-30', '临时 allowlist', 'Three.js 只在用户与幽灵交互时加载',
+  '静态回退壳；交互后再加载 Three.js', '按交互加载 Three.js',
 ]) {
   expectAbsent('stale README metric', staleClaim)
 }
@@ -198,6 +306,6 @@ if (failures.length > 0) {
   process.exitCode = 1
 } else {
   console.log(
-    'README OK: source metrics, screenshots, versions, capability boundaries, and known debts match.',
+    'README OK: source metrics, ghost-guide contracts, screenshots, versions, capability boundaries, and known debts match.',
   )
 }

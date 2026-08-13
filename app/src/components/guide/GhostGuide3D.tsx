@@ -4,222 +4,715 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   type ComponentType,
+  type CSSProperties,
+  type FocusEvent as ReactFocusEvent,
 } from 'react'
-import { AnimatePresence, motion, useReducedMotionConfig } from 'framer-motion'
+import {
+  animate,
+  AnimatePresence,
+  motion,
+  useMotionValue,
+  useReducedMotionConfig,
+} from 'framer-motion'
 import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { useSettingsStore } from '../../store/settingsStore'
 import GhostAvatarFallback from './GhostAvatarFallback'
+import type { GhostMood, GhostQuip, PerimeterPoint } from './ghostGuideModel'
 
-interface Message {
-  id: string
-  key: string
-  type: 'info' | 'tip' | 'success' | 'warning'
+const AVATAR_SIZE = 80
+const AUTO_BANTER_SESSION_KEY = 'ghostops_guide_auto_banter_paused'
+const BLOCKING_DIALOG_SELECTOR = [
+  'dialog[open]',
+  '[aria-modal="true"]',
+  '[role="dialog"]:not([aria-hidden="true"]):not([data-state="closed"])',
+  '[role="alertdialog"]:not([aria-hidden="true"]):not([data-state="closed"])',
+].join(', ')
+
+type GhostGuideModel = typeof import('./ghostGuideModel')
+type MessageSource = 'auto' | 'manual'
+
+interface VisibleMessage {
+  quip: GhostQuip
+  source: MessageSource
+  placement: ReturnType<typeof getBubblePlacement>
+}
+
+interface LiveViewport {
+  width: number
+  height: number
+  offsetLeft: number
+  offsetTop: number
 }
 
 interface GhostAvatarProps {
   reduceMotion: boolean
+  mood: GhostMood
+  isSpeaking: boolean
+  isHovered: boolean
+  interactionPulse: number
 }
 
 function StaticGhostAvatar(props: GhostAvatarProps) {
-  void props
-  return <GhostAvatarFallback />
+  return (
+    <GhostAvatarFallback
+      reduceMotion={props.reduceMotion}
+      mood={props.mood}
+      isSpeaking={props.isSpeaking}
+      isHovered={props.isHovered}
+    />
+  )
 }
 
-const DeferredGhostAvatar3D = lazy<ComponentType<GhostAvatarProps>>(() =>
-  import('./GhostAvatar3D').catch((error) => {
-    console.warn('[Ghost avatar] The 3D chunk failed to load; using the static avatar.', error)
-    return { default: StaticGhostAvatar }
-  }),
-)
+const DeferredGhostAvatar3D = lazy<ComponentType<GhostAvatarProps>>(() => (
+  import('./GhostAvatar3D')
+    .then((module) => ({ default: module.default as ComponentType<GhostAvatarProps> }))
+    .catch((error) => {
+      console.warn('[Ghost avatar] The 3D chunk failed to load; using the static avatar.', error)
+      return { default: StaticGhostAvatar }
+    })
+))
 
-const routeMessages: Record<string, Message[]> = {
-  '/': [
-    { id: 'welcome', key: 'guide.messages.welcome', type: 'info' },
-    { id: 'tip1', key: 'guide.tips.previousCommand', type: 'tip' },
-  ],
-  '/missions': [
-    { id: 'mission', key: 'guide.messages.missions', type: 'info' },
-  ],
-  '/academy': [
-    { id: 'academy', key: 'guide.messages.academy', type: 'info' },
-  ],
-  '/atlas': [
-    { id: 'atlas', key: 'guide.messages.atlas', type: 'tip' },
-  ],
-  '/terminal': [
-    { id: 'terminal', key: 'guide.messages.terminal', type: 'info' },
-  ],
+function readViewport(): LiveViewport {
+  if (typeof window === 'undefined') {
+    return { width: 320, height: 568, offsetLeft: 0, offsetTop: 0 }
+  }
+  const visualViewport = window.visualViewport
+  return {
+    width: Math.max(1, visualViewport?.width ?? window.innerWidth),
+    height: Math.max(1, visualViewport?.height ?? window.innerHeight),
+    offsetLeft: Math.max(0, visualViewport?.offsetLeft ?? 0),
+    offsetTop: Math.max(0, visualViewport?.offsetTop ?? 0),
+  }
 }
 
-const randomTips: Message[] = [
-  { id: 't1', key: 'guide.tips.autocomplete', type: 'tip' },
-  { id: 't2', key: 'guide.tips.interrupt', type: 'tip' },
-  { id: 't3', key: 'guide.tips.history', type: 'tip' },
-  { id: 't4', key: 'guide.tips.previousCommand', type: 'tip' },
-  { id: 't5', key: 'guide.tips.previousDirectory', type: 'tip' },
-  { id: 't6', key: 'guide.tips.hiddenFiles', type: 'tip' },
-  { id: 't7', key: 'guide.tips.recursiveSearch', type: 'tip' },
-  { id: 't8', key: 'guide.tips.scoreCost', type: 'tip' },
-]
+function getFallbackDock(viewport: LiveViewport): PerimeterPoint {
+  const sideInset = viewport.width < 640 ? 12 : 20
+  const bottomInset = viewport.width < 640 ? 38 : 22
+  return {
+    x: Math.max(viewport.offsetLeft, viewport.offsetLeft + viewport.width - AVATAR_SIZE - sideInset),
+    y: Math.max(viewport.offsetTop, viewport.offsetTop + viewport.height - AVATAR_SIZE - bottomInset),
+    edge: 'bottom',
+  }
+}
+
+function isTextEntry(element: Element | null): boolean {
+  if (!(element instanceof HTMLElement)) return false
+  return Boolean(element.closest(
+    'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
+  ))
+}
+
+function hasBlockingDialog(): boolean {
+  if (typeof document === 'undefined') return false
+  return [...document.querySelectorAll(BLOCKING_DIALOG_SELECTOR)].some((element) => (
+    !element.hasAttribute('hidden') && element.getAttribute('aria-hidden') !== 'true'
+  ))
+}
+
+function nearestPointIndex(path: readonly PerimeterPoint[], x: number, y: number): number {
+  if (path.length === 0) return -1
+  let closestIndex = 0
+  let closestDistance = Number.POSITIVE_INFINITY
+  path.forEach((point, index) => {
+    const distance = (point.x - x) ** 2 + (point.y - y) ** 2
+    if (distance < closestDistance) {
+      closestIndex = index
+      closestDistance = distance
+    }
+  })
+  return closestIndex
+}
+
+function edgeForSegment(
+  from: PerimeterPoint,
+  to: PerimeterPoint,
+  path: readonly PerimeterPoint[],
+): PerimeterPoint['edge'] {
+  const xs = path.map((point) => point.x)
+  const ys = path.map((point) => point.y)
+  const middleX = (Math.min(...xs) + Math.max(...xs)) / 2
+  const middleY = (Math.min(...ys) + Math.max(...ys)) / 2
+  if (Math.abs(from.x - to.x) < 1) return from.x <= middleX ? 'left' : 'right'
+  return from.y <= middleY ? 'top' : 'bottom'
+}
+
+function getBubblePlacement(
+  edge: PerimeterPoint['edge'],
+  avatarX: number,
+  avatarY: number,
+  viewport: LiveViewport,
+): { bubble: CSSProperties; tail: CSSProperties } {
+  const compact = viewport.width < 520
+  const midpointX = viewport.offsetLeft + viewport.width / 2
+  const midpointY = viewport.offsetTop + viewport.height / 2
+  const effectiveEdge = compact ? (avatarY > midpointY ? 'bottom' : 'top') : edge
+  const alignToEnd = avatarX + AVATAR_SIZE / 2 > midpointX
+  const alignToBottom = avatarY + AVATAR_SIZE / 2 > midpointY
+  // Use the visual viewport rather than CSS `vw`: under pinch zoom the layout
+  // viewport can be wider than the actually visible area.
+  const bubble: CSSProperties = {
+    width: Math.min(300, Math.max(1, viewport.width - 24)),
+  }
+  const tail: CSSProperties = {
+    width: 12,
+    height: 12,
+    position: 'absolute',
+    transform: 'rotate(45deg)',
+    background: 'rgba(10, 14, 25, 0.98)',
+  }
+
+  if (effectiveEdge === 'bottom') {
+    bubble.bottom = AVATAR_SIZE + 12
+    if (alignToEnd) bubble.right = 0
+    else bubble.left = 0
+    tail.bottom = -6
+    if (alignToEnd) tail.right = 30
+    else tail.left = 30
+    tail.borderRight = '1px solid rgba(0, 229, 255, 0.28)'
+    tail.borderBottom = '1px solid rgba(0, 229, 255, 0.28)'
+  } else if (effectiveEdge === 'top') {
+    bubble.top = AVATAR_SIZE + 12
+    if (alignToEnd) bubble.right = 0
+    else bubble.left = 0
+    tail.top = -6
+    if (alignToEnd) tail.right = 30
+    else tail.left = 30
+    tail.borderLeft = '1px solid rgba(0, 229, 255, 0.28)'
+    tail.borderTop = '1px solid rgba(0, 229, 255, 0.28)'
+  } else if (effectiveEdge === 'left') {
+    bubble.left = AVATAR_SIZE + 12
+    if (alignToBottom) bubble.bottom = 0
+    else bubble.top = 0
+    tail.left = -6
+    if (alignToBottom) tail.bottom = 30
+    else tail.top = 30
+    tail.borderLeft = '1px solid rgba(0, 229, 255, 0.28)'
+    tail.borderBottom = '1px solid rgba(0, 229, 255, 0.28)'
+  } else {
+    bubble.right = AVATAR_SIZE + 12
+    if (alignToBottom) bubble.bottom = 0
+    else bubble.top = 0
+    tail.right = -6
+    if (alignToBottom) tail.bottom = 30
+    else tail.top = 30
+    tail.borderRight = '1px solid rgba(0, 229, 255, 0.28)'
+    tail.borderTop = '1px solid rgba(0, 229, 255, 0.28)'
+  }
+
+  return { bubble, tail }
+}
 
 export default function GhostGuide3D() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const location = useLocation()
-  const reduceMotion = useReducedMotionConfig() ?? false
-  const tipIndexRef = useRef(0)
+  const animationIntensity = useSettingsStore((state) => state.animationIntensity)
+  const reducedByConfig = useReducedMotionConfig() ?? false
+  const movementAllowed = animationIntensity === 'full' && !reducedByConfig
   const messageId = useId()
-  const [message, setMessage] = useState<Message | null>(null)
+  const [initialDock] = useState(() => getFallbackDock(readViewport()))
+  const x = useMotionValue(initialDock.x)
+  const y = useMotionValue(initialDock.y)
+  const [model, setModel] = useState<GhostGuideModel | null>(null)
+  const [message, setMessage] = useState<VisibleMessage | null>(null)
+  const [viewport, setViewport] = useState<LiveViewport>(readViewport)
+  const [targetIndex, setTargetIndex] = useState(1)
   const [shouldLoad3D, setShouldLoad3D] = useState(false)
-  const msgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [isHovered, setIsHovered] = useState(false)
+  const [isFocusWithin, setIsFocusWithin] = useState(false)
+  const [isPointerDown, setIsPointerDown] = useState(false)
+  const [pageHidden, setPageHidden] = useState(() => typeof document !== 'undefined' && document.hidden)
+  const [dialogOpen, setDialogOpen] = useState(hasBlockingDialog)
+  const [textEntryActive, setTextEntryActive] = useState(() => (
+    typeof document !== 'undefined' && isTextEntry(document.activeElement)
+  ))
+  const [interactionPulse, setInteractionPulse] = useState(0)
+  const [autoBanterPaused, setAutoBanterPaused] = useState(() => {
+    try {
+      return typeof window !== 'undefined'
+        && window.sessionStorage.getItem(AUTO_BANTER_SESSION_KEY) === 'true'
+    } catch {
+      return false
+    }
+  })
 
-  const showMessage = useCallback((nextMessage: Message) => {
-    setMessage(nextMessage)
-    if (msgTimerRef.current) clearTimeout(msgTimerRef.current)
-    msgTimerRef.current = setTimeout(() => {
-      setMessage(null)
-      msgTimerRef.current = null
-    }, 8000)
+  const mountedRef = useRef(true)
+  const positionInitializedRef = useRef(false)
+  const currentEdgeRef = useRef<PerimeterPoint['edge']>('bottom')
+  const modelRef = useRef<GhostGuideModel | null>(null)
+  const modelPromiseRef = useRef<Promise<GhostGuideModel | null> | null>(null)
+  const messageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const firstAutoQuipRef = useRef(true)
+  const recentQuipIdsRef = useRef<string[]>([])
+  const bagByPoolRef = useRef(new Map<string, number[]>())
+  const selectionOrdinalRef = useRef(0)
+
+  const requestModel = useCallback((): Promise<GhostGuideModel | null> => {
+    if (modelRef.current) return Promise.resolve(modelRef.current)
+    if (!modelPromiseRef.current) {
+      modelPromiseRef.current = import('./ghostGuideModel')
+        .then((loadedModel) => {
+          modelRef.current = loadedModel
+          if (mountedRef.current) setModel(loadedModel)
+          return loadedModel
+        })
+        .catch((error) => {
+          console.warn('[Ghost guide] Banter model failed to load.', error)
+          modelPromiseRef.current = null
+          return null
+        })
+    }
+    return modelPromiseRef.current
   }, [])
 
   const hideMessage = useCallback(() => {
-    if (msgTimerRef.current) {
-      clearTimeout(msgTimerRef.current)
-      msgTimerRef.current = null
+    if (messageTimerRef.current) {
+      clearTimeout(messageTimerRef.current)
+      messageTimerRef.current = null
     }
     setMessage(null)
   }, [])
 
-  const request3D = useCallback(() => {
-    // Reduced-motion users keep the equivalent static avatar and never pay for
-    // a decorative WebGL runtime they did not request.
-    if (!reduceMotion) setShouldLoad3D(true)
-  }, [reduceMotion])
+  const showMessage = useCallback((quip: GhostQuip, source: MessageSource) => {
+    if (messageTimerRef.current) clearTimeout(messageTimerRef.current)
+    setMessage({
+      quip,
+      source,
+      placement: getBubblePlacement(currentEdgeRef.current, x.get(), y.get(), viewport),
+    })
+  }, [viewport, x, y])
 
-  useEffect(() => () => {
-    if (msgTimerRef.current) clearTimeout(msgTimerRef.current)
+  const selectNextQuip = useCallback((loadedModel: GhostGuideModel): GhostQuip | null => {
+    const available = loadedModel.getQuipsForPath(location.pathname)
+    if (available.length === 0) return null
+    const route = loadedModel.routeFromPathname(location.pathname)
+    const contextual = available.filter((quip) => quip.route === route)
+    const global = available.filter((quip) => quip.route === 'global')
+    const preferContext = selectionOrdinalRef.current % 3 === 0
+    selectionOrdinalRef.current += 1
+    const pool = preferContext && contextual.length > 0 ? contextual : (global.length > 0 ? global : available)
+    const poolKey = `${route}:${pool[0]?.route ?? 'all'}`
+    let bag = bagByPoolRef.current.get(poolKey)
+    if (!bag || bag.length === 0) {
+      bag = loadedModel.buildQuipShuffleBag(
+        pool,
+        recentQuipIdsRef.current,
+        Math.random(),
+      )
+      bagByPoolRef.current.set(poolKey, bag)
+    }
+    const index = bag.shift()
+    const quip = index === undefined ? null : pool[index] ?? null
+    if (!quip) return null
+    recentQuipIdsRef.current.push(quip.id)
+    if (recentQuipIdsRef.current.length > loadedModel.RECENT_QUIP_WINDOW) {
+      recentQuipIdsRef.current.splice(
+        0,
+        recentQuipIdsRef.current.length - loadedModel.RECENT_QUIP_WINDOW,
+      )
+    }
+    return quip
+  }, [location.pathname])
+
+  const requestAvatar = useCallback(() => {
+    void requestModel()
+    if (movementAllowed) setShouldLoad3D(true)
+  }, [movementAllowed, requestModel])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (messageTimerRef.current) clearTimeout(messageTimerRef.current)
+    }
   }, [])
 
   useEffect(() => {
-    let greeted = false
-    try {
-      greeted = localStorage.getItem('ghost-greeted') === 'true'
-    } catch {
-      // Storage is optional; a hardened browser may show the greeting again.
-    }
-    if (greeted) return
+    bagByPoolRef.current.clear()
+    selectionOrdinalRef.current = 0
+  }, [location.pathname])
 
-    const greetingTimer = window.setTimeout(() => {
-      const routeKey = location.pathname.startsWith('/terminal') ? '/terminal' : location.pathname
-      showMessage(routeMessages[routeKey]?.[0] ?? routeMessages['/'][0])
-      try {
-        localStorage.setItem('ghost-greeted', 'true')
-      } catch {
-        // Keep the guide usable even when browser persistence is denied.
+  useEffect(() => {
+    let cancelled = false
+    const prepare = () => {
+      void requestModel().then(() => {
+        if (!cancelled && movementAllowed) setShouldLoad3D(true)
+      })
+    }
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+      cancelIdleCallback?: (handle: number) => void
+    }
+    if (idleWindow.requestIdleCallback) {
+      const handle = idleWindow.requestIdleCallback(prepare, { timeout: 2_500 })
+      return () => {
+        cancelled = true
+        idleWindow.cancelIdleCallback?.(handle)
       }
-    }, 0)
+    }
+    const timer = window.setTimeout(prepare, 1_400)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [movementAllowed, requestModel])
 
-    return () => window.clearTimeout(greetingTimer)
-  }, [location.pathname, showMessage])
+  useEffect(() => {
+    let frame = 0
+    const updateViewport = () => {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(() => {
+        const nextViewport = readViewport()
+        if (messageTimerRef.current) {
+          clearTimeout(messageTimerRef.current)
+          messageTimerRef.current = null
+        }
+        setMessage(null)
+        setViewport((current) => (
+          current.width === nextViewport.width
+          && current.height === nextViewport.height
+          && current.offsetLeft === nextViewport.offsetLeft
+          && current.offsetTop === nextViewport.offsetTop
+            ? current
+            : nextViewport
+        ))
+      })
+    }
+    window.addEventListener('resize', updateViewport, { passive: true })
+    window.visualViewport?.addEventListener('resize', updateViewport, { passive: true })
+    window.visualViewport?.addEventListener('scroll', updateViewport, { passive: true })
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('resize', updateViewport)
+      window.visualViewport?.removeEventListener('resize', updateViewport)
+      window.visualViewport?.removeEventListener('scroll', updateViewport)
+    }
+  }, [])
 
-  const handleClick = () => {
-    request3D()
-    if (message) {
-      hideMessage()
-      return
+  useEffect(() => {
+    const updateVisibility = () => setPageHidden(document.hidden)
+    document.addEventListener('visibilitychange', updateVisibility)
+    return () => document.removeEventListener('visibilitychange', updateVisibility)
+  }, [])
+
+  useEffect(() => {
+    let frame = 0
+    const updateInteractionContext = () => {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(() => {
+        const nextDialogOpen = hasBlockingDialog()
+        if (nextDialogOpen) {
+          if (messageTimerRef.current) {
+            clearTimeout(messageTimerRef.current)
+            messageTimerRef.current = null
+          }
+          setMessage(null)
+          // Removing a hovered/focused subtree does not reliably dispatch
+          // pointerleave/blur. Clear transient input state so patrol can resume
+          // after the modal closes.
+          setIsHovered(false)
+          setIsFocusWithin(false)
+          setIsPointerDown(false)
+        }
+        setDialogOpen(nextDialogOpen)
+        setTextEntryActive(isTextEntry(document.activeElement))
+      })
+    }
+    const observer = new MutationObserver(updateInteractionContext)
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['open', 'hidden', 'aria-hidden', 'aria-modal', 'data-state'],
+    })
+    document.addEventListener('focusin', updateInteractionContext)
+    document.addEventListener('focusout', updateInteractionContext)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      observer.disconnect()
+      document.removeEventListener('focusin', updateInteractionContext)
+      document.removeEventListener('focusout', updateInteractionContext)
+    }
+  }, [])
+
+  useEffect(() => {
+    const releasePointer = () => setIsPointerDown(false)
+    window.addEventListener('pointerup', releasePointer)
+    window.addEventListener('pointercancel', releasePointer)
+    window.addEventListener('blur', releasePointer)
+    return () => {
+      window.removeEventListener('pointerup', releasePointer)
+      window.removeEventListener('pointercancel', releasePointer)
+      window.removeEventListener('blur', releasePointer)
+    }
+  }, [])
+
+  const perimeterPath = useMemo(() => {
+    if (!model) return [getFallbackDock(viewport)]
+    return model.buildPerimeterPath(viewport, AVATAR_SIZE).map((point) => ({
+      ...point,
+      x: point.x + viewport.offsetLeft,
+      y: point.y + viewport.offsetTop,
+    }))
+  }, [model, viewport])
+
+  useEffect(() => {
+    if (perimeterPath.length === 0) return
+    const nearestIndex = movementAllowed && positionInitializedRef.current
+      ? nearestPointIndex(perimeterPath, x.get(), y.get())
+      : 0
+    const safeIndex = Math.max(0, nearestIndex)
+    const point = perimeterPath[safeIndex]
+    if (!point) return
+    x.set(point.x)
+    y.set(point.y)
+    currentEdgeRef.current = point.edge
+    setTargetIndex(perimeterPath.length > 1 ? (safeIndex + 1) % perimeterPath.length : 0)
+    positionInitializedRef.current = true
+  }, [movementAllowed, perimeterPath, x, y])
+
+  const interactionPaused = Boolean(message)
+    || isHovered
+    || isFocusWithin
+    || isPointerDown
+    || pageHidden
+    || dialogOpen
+    || textEntryActive
+
+  useEffect(() => {
+    if (messageTimerRef.current) {
+      clearTimeout(messageTimerRef.current)
+      messageTimerRef.current = null
+    }
+    if (!message || isHovered || isFocusWithin || pageHidden) return
+    messageTimerRef.current = setTimeout(() => {
+      setMessage(null)
+      messageTimerRef.current = null
+    }, message.source === 'manual' ? 10_000 : 8_000)
+    return () => {
+      if (messageTimerRef.current) {
+        clearTimeout(messageTimerRef.current)
+        messageTimerRef.current = null
+      }
+    }
+  }, [isFocusWithin, isHovered, message, pageHidden])
+
+  useEffect(() => {
+    if (!movementAllowed || interactionPaused || perimeterPath.length < 2) return
+    const target = perimeterPath[targetIndex % perimeterPath.length]
+    if (!target) return
+    const from = { x: x.get(), y: y.get(), edge: currentEdgeRef.current }
+    const distance = Math.hypot(target.x - from.x, target.y - from.y)
+    if (distance < 1) {
+      const advanceTimer = window.setTimeout(() => {
+        setTargetIndex((current) => (current + 1) % perimeterPath.length)
+      }, 0)
+      return () => window.clearTimeout(advanceTimer)
     }
 
-    const routeKey = location.pathname.startsWith('/terminal') ? '/terminal' : location.pathname
-    const contextualMessages = routeMessages[routeKey] ?? []
-    const tips = [...contextualMessages, ...randomTips]
-    const tip = tips[tipIndexRef.current % tips.length]
-    tipIndexRef.current += 1
-    showMessage(tip)
+    currentEdgeRef.current = edgeForSegment(from, target, perimeterPath)
+    const pixelsPerSecond = viewport.width < 640 ? 18 : 24
+    const duration = Math.min(18, Math.max(4, distance / pixelsPerSecond))
+    let active = true
+    const xAnimation = animate(x, target.x, { duration, ease: 'linear' })
+    const yAnimation = animate(y, target.y, { duration, ease: 'linear' })
+    void Promise.all([xAnimation, yAnimation]).then(() => {
+      if (active) setTargetIndex((current) => (current + 1) % perimeterPath.length)
+    })
+    return () => {
+      active = false
+      xAnimation.stop()
+      yAnimation.stop()
+    }
+  }, [interactionPaused, movementAllowed, perimeterPath, targetIndex, viewport.width, x, y])
+
+  const autoQuipBlocked = autoBanterPaused || interactionPaused
+  useEffect(() => {
+    if (!model || autoQuipBlocked) return
+    const timer = window.setTimeout(() => {
+      if (document.hidden || hasBlockingDialog() || isTextEntry(document.activeElement)) return
+      const quip = selectNextQuip(model)
+      if (!quip) return
+      firstAutoQuipRef.current = false
+      showMessage(quip, 'auto')
+    }, model.getAutoQuipDelayMs(firstAutoQuipRef.current, Math.random()))
+    return () => window.clearTimeout(timer)
+  }, [autoQuipBlocked, model, selectNextQuip, showMessage])
+
+  const handleAvatarClick = async () => {
+    requestAvatar()
+    setInteractionPulse((current) => current + 1)
+    const loadedModel = await requestModel()
+    if (!loadedModel || !mountedRef.current) return
+    const quip = selectNextQuip(loadedModel)
+    if (quip) showMessage(quip, 'manual')
   }
 
-  const renderDeferredAvatar = shouldLoad3D && !reduceMotion
+  const toggleAutoBanter = () => {
+    setAutoBanterPaused((current) => {
+      const next = !current
+      try {
+        window.sessionStorage.setItem(AUTO_BANTER_SESSION_KEY, String(next))
+      } catch {
+        // Session persistence is optional; the visible control still works.
+      }
+      return next
+    })
+  }
+
+  const handleBlurWithin = (event: ReactFocusEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget
+    if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+      setIsFocusWithin(false)
+    }
+  }
+
+  const mood = message?.quip.mood ?? 'curious'
+  const language = (i18n.resolvedLanguage ?? i18n.language).startsWith('zh') ? 'zh' : 'en'
+  const renderDeferredAvatar = shouldLoad3D && movementAllowed
+
+  // A decorative guide must never sit above a modal or enter its focus order.
+  if (dialogOpen) return null
 
   return (
-    <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-[20] flex flex-col items-end gap-3 sm:bottom-6 sm:left-auto sm:right-6">
-      <AnimatePresence>
-        {message && (
-          <motion.div
-            id={messageId}
-            role="status"
-            aria-live="polite"
-            initial={{ opacity: 0, y: 10, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.9 }}
-            transition={{ duration: 0.3 }}
-            className="pointer-events-auto relative w-full max-w-[300px] rounded-xl p-4 pr-12"
-            style={{
-              background: 'linear-gradient(135deg, rgba(15, 20, 30, 0.95), rgba(10, 14, 25, 0.98))',
-              border: '1px solid rgba(0, 229, 255, 0.25)',
-              backdropFilter: 'blur(12px)',
-              boxShadow: '0 8px 32px rgba(0, 229, 255, 0.1), 0 0 0 1px rgba(0, 229, 255, 0.05)',
-            }}
-          >
-            <div
-              className="absolute -bottom-2 right-8 h-4 w-4 rotate-45"
-              style={{
-                background: 'rgba(10, 14, 25, 0.98)',
-                borderRight: '1px solid rgba(0, 229, 255, 0.25)',
-                borderBottom: '1px solid rgba(0, 229, 255, 0.25)',
-              }}
-            />
-            <p className="font-jetbrains text-[13px] leading-relaxed text-[#E8EDF2]">
-              {t(message.key)}
-            </p>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation()
-                hideMessage()
-              }}
-              aria-label={t('common.close')}
-              className="absolute right-1 top-1 flex min-h-11 min-w-11 items-center justify-center rounded-radius-sm text-sm text-[#788DA1] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
-            >
-              ✕
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <motion.button
-        type="button"
-        onClick={handleClick}
-        onFocus={request3D}
-        onPointerEnter={request3D}
-        aria-label={message ? t('guide.hideMessage') : t('guide.showTip')}
-        aria-expanded={Boolean(message)}
-        aria-controls={message ? messageId : undefined}
-        whileHover={reduceMotion ? undefined : { scale: 1.08 }}
-        whileTap={reduceMotion ? undefined : { scale: 0.95 }}
-        className="pointer-events-auto relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
-        style={{
-          background: 'radial-gradient(circle, rgba(0, 229, 255, 0.08), transparent 70%)',
-          border: '1px solid rgba(0, 229, 255, 0.2)',
-          boxShadow: '0 0 30px rgba(0, 229, 255, 0.15), inset 0 0 20px rgba(0, 229, 255, 0.05)',
+    <div
+      className="pointer-events-none fixed inset-0 z-[30] overflow-visible"
+      role="region"
+      aria-label={t('guide.regionLabel')}
+      data-ghost-guide-root
+    >
+      <motion.div
+        className="pointer-events-none absolute h-20 w-20"
+        style={{ x, y }}
+        onPointerEnter={() => {
+          setIsHovered(true)
+          requestAvatar()
         }}
+        onPointerLeave={() => setIsHovered(false)}
+        onPointerDownCapture={() => setIsPointerDown(true)}
+        onFocusCapture={() => {
+          setIsFocusWithin(true)
+          requestAvatar()
+        }}
+        onBlurCapture={handleBlurWithin}
       >
-        {renderDeferredAvatar ? (
-          <Suspense fallback={<GhostAvatarFallback />}>
-            <DeferredGhostAvatar3D reduceMotion={reduceMotion} />
-          </Suspense>
-        ) : (
-          <GhostAvatarFallback />
-        )}
-        {!reduceMotion && (
-          <motion.div
-            className="absolute inset-0 rounded-full"
-            style={{ border: '1.5px solid rgba(0, 229, 255, 0.3)' }}
-            animate={{ scale: [1, 1.4, 1], opacity: [0.4, 0, 0.4] }}
-            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-          />
-        )}
-      </motion.button>
+        <motion.button
+          type="button"
+          onClick={() => void handleAvatarClick()}
+          aria-label={t('guide.requestQuip')}
+          aria-expanded={Boolean(message)}
+          aria-controls={message ? messageId : undefined}
+          aria-describedby={message?.source === 'manual' ? messageId : undefined}
+          whileHover={movementAllowed ? { scale: 1.08, rotate: -2 } : undefined}
+          whileTap={movementAllowed ? { scale: 0.94, rotate: 2 } : undefined}
+          className="pointer-events-auto relative flex h-20 w-20 items-center justify-center overflow-visible rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0E14]"
+          style={{
+            background: 'radial-gradient(circle, rgba(0, 229, 255, 0.11), transparent 72%)',
+            border: '1px solid rgba(0, 229, 255, 0.23)',
+            boxShadow: '0 0 34px rgba(0, 229, 255, 0.18), inset 0 0 22px rgba(0, 229, 255, 0.06)',
+          }}
+          data-ghost-mood={mood}
+          data-auto-banter={autoBanterPaused ? 'paused' : 'active'}
+          data-ghost-avatar
+        >
+          {renderDeferredAvatar ? (
+            <Suspense
+              fallback={(
+                <GhostAvatarFallback
+                  reduceMotion={!movementAllowed}
+                  mood={mood}
+                  isSpeaking={Boolean(message)}
+                  isHovered={isHovered || isFocusWithin}
+                />
+              )}
+            >
+              <DeferredGhostAvatar3D
+                reduceMotion={!movementAllowed}
+                mood={mood}
+                isSpeaking={Boolean(message)}
+                isHovered={isHovered || isFocusWithin}
+                interactionPulse={interactionPulse}
+              />
+            </Suspense>
+          ) : (
+            <GhostAvatarFallback
+              reduceMotion={!movementAllowed}
+              mood={mood}
+              isSpeaking={Boolean(message)}
+              isHovered={isHovered || isFocusWithin}
+            />
+          )}
+          {movementAllowed && (
+            <motion.span
+              className="pointer-events-none absolute inset-0 rounded-full"
+              style={{ border: '1.5px solid rgba(0, 229, 255, 0.32)' }}
+              animate={{ scale: [1, 1.34, 1], opacity: [0.38, 0, 0.38] }}
+              transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+              aria-hidden="true"
+            />
+          )}
+        </motion.button>
+
+        <AnimatePresence>
+          {message && (
+            <motion.div
+              key={message.quip.id}
+              id={messageId}
+              role={message.source === 'manual' ? 'status' : undefined}
+              aria-live={message.source === 'manual' ? 'polite' : 'off'}
+              aria-atomic="true"
+              initial={movementAllowed ? { opacity: 0, y: 8, scale: 0.94 } : { opacity: 0 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={movementAllowed ? { opacity: 0, y: 6, scale: 0.96 } : { opacity: 0 }}
+              transition={{ duration: movementAllowed ? 0.22 : 0 }}
+              className="pointer-events-auto absolute rounded-xl p-4 pt-5"
+              style={{
+                ...message.placement.bubble,
+                background: 'linear-gradient(135deg, rgba(15, 20, 30, 0.97), rgba(10, 14, 25, 0.99))',
+                border: '1px solid rgba(0, 229, 255, 0.28)',
+                backdropFilter: 'blur(14px)',
+                boxShadow: '0 12px 38px rgba(0, 0, 0, 0.35), 0 0 28px rgba(0, 229, 255, 0.12)',
+              }}
+              data-message-source={message.source}
+              data-ghost-mood={message.quip.mood}
+            >
+              <span aria-hidden="true" style={message.placement.tail} />
+              <div className="mb-2 flex items-center justify-between gap-3 pr-8">
+                <span className="font-jetbrains text-[10px] font-bold tracking-[0.18em] text-[#00E5FF]">
+                  GHOST // COMMS
+                </span>
+                <span className="h-1.5 w-1.5 rounded-full bg-[#00E5FF] shadow-[0_0_8px_#00E5FF]" aria-hidden="true" />
+              </div>
+              <p className="font-jetbrains text-[13px] leading-relaxed text-[#E8EDF2]">
+                {message.quip.text[language]}
+              </p>
+              <div className="mt-3 border-t border-white/10 pt-2">
+                <button
+                  type="button"
+                  onClick={toggleAutoBanter}
+                  aria-pressed={autoBanterPaused}
+                  className="inline-flex min-h-11 items-center rounded-md px-2 font-jetbrains text-[11px] text-[#9CB0C2] transition-colors hover:bg-white/5 hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+                >
+                  {autoBanterPaused ? t('guide.resumeBanter') : t('guide.pauseBanter')}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={hideMessage}
+                aria-label={t('common.close')}
+                className="absolute right-1 top-1 flex min-h-11 min-w-11 items-center justify-center rounded-md text-sm text-[#788DA1] transition-colors hover:text-[#E8EDF2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+              >
+                ✕
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+      </motion.div>
     </div>
   )
 }

@@ -4,7 +4,7 @@
 
 ### 终端幽灵行动 · 在浏览器里练会 Linux / DevOps，而不是只背命令
 
-一个赛博朋克风格的终端训练模拟器：接取任务、阅读简报、在隔离的虚拟 Shell 中行动、观察目标即时判定，并在复盘里理解自己为什么成功。
+一个赛博朋克风格的终端训练模拟器：接取任务、阅读简报、在隔离的虚拟 Shell 中行动、观察目标即时判定，并在复盘里理解自己为什么成功；一只会沿视口边缘巡游、追踪指针并偶尔吐槽的原创 3D 幽灵会全程担任你的嘴欠搭档。
 
 <p>
   <img alt="Version 1.0.0" src="https://img.shields.io/badge/version-1.0.0-00E5FF?style=flat-square" />
@@ -46,6 +46,7 @@
 | 目标 | **610** | 553 个必做目标，57 个可选目标 |
 | 五级提示 | **1,105** | 每个任务固定 5 级；77 个 H5 是经新鲜模拟器逐关重放的 `verified_command`，144 个是明确不可直接粘贴的 `guided_actions` |
 | 命令图谱 | **87** | 87 nodes / 95 links，覆盖 12 个技能领域，包含风险、参数、示例与反模式 |
+| 幽灵点评 | **88** | 每条均有 English / 中文版本；按全局与当前路由分类，最近 12 条不会重复 |
 | 成就定义 | **20** | Profile 只展示 3 个可由本地证据验证的成就；其余 17 个是隐藏的规划项，不会伪装成可解锁内容 |
 
 这里刻意区分“任务定义”“调用可达”和“结果可验证”：能力报告以未知能力默认不支持的严格口径审计全部 221 关，目前所有命令检查都能归入 Shell、终端交互或语法模型，未映射项为 0；555/555 条 check 均显式绑定到目标。与此同时，目录的 555 条检查仍只由 334 条 `command_used` 和 221 条 `no_red_command_used` 构成，所以 **221/221 不能表述成 221 次任务 E2E，更不能表述成 221 关业务结果验收**。详见[当前边界](#当前边界与已知问题)。
@@ -81,6 +82,12 @@
     <td width="50%">
       <img src="./app/docs/images/profile.jpg" alt="特工档案中的真实本地进度" />
       <br /><sub><b>特工档案</b> · 从真实本地任务记录推导 XP、段位、连续训练、热力图、技能与 3 个可验证成就</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <img src="./app/docs/images/ghost-guide-3d.jpg" alt="原创 Three.js 幽灵沿页面边缘巡游并弹出中文点评" />
+      <br /><sub><b>3D 幽灵搭档</b> · 本地真实浏览器 Full 动效状态：程序化角色、动态表情、指针追眼、边缘巡游与可暂停的双语点评气泡</sub>
     </td>
   </tr>
   <tr>
@@ -176,7 +183,7 @@ npm run dev
 
 | 路由 | 页面 | 主要能力 |
 | --- | --- | --- |
-| `#/` | 首页 / Dashboard | 训练入口、继续任务、真实本地统计、故事进度、活动、快捷操作，以及按需加载的 3D 幽灵向导 |
+| `#/` | 首页 / Dashboard | 训练入口、继续任务、真实本地统计、故事进度、活动、快捷操作，以及全局可用的交互式 3D 幽灵向导 |
 | `#/missions` | 任务板 | 模式、状态、难度、技能筛选；精选与进行中任务；结果按 24 条渐进加载 |
 | `#/terminal/:missionId` | 终端驾驶舱 | 简报、目标、xterm、HUD、提示、危险命令警告、得分与完成态 |
 | `#/academy` | 幽灵学院 | 17 章训练结构、技能树、训练卡与敌人图鉴 |
@@ -211,6 +218,18 @@ Black 是预留的风险分类；当前 87 条命令和 221 个任务中尚无 B
 
 提示以方向 → 概念 → 命令 → 演示 → 解法的五级结构呈现，并按当前语言显示。首次查看任意提示会一次性失去 5 分“无提示奖励”，继续查看不会重复扣分。H5 现在有可机验的两类契约：77 个 `verified_command` 会在门禁中从全新模拟器执行、完成目标并验证报告持久化；144 个 `guided_actions` 只列出必须结合 H3/H4 补全的动作，明确不是可直接粘贴的 transcript。
 
+### 会巡游、会盯人、也会吐槽的幽灵搭档
+
+右下角向导已经不是一张贴在页面上的装饰图，而是一套有明确降级边界的交互系统：
+
+- **原创程序化 3D 形象**：Three.js 在运行时生成带手臂、波浪尾部、眼睛、瞳孔、嘴部、腮红、灵质颗粒与光晕的幽灵，不依赖外部角色模型；`idle`、`curious`、`mischievous`、`proud`、`startled` 五种情绪会改变表情和动作。指针方向按头像自身边界计算，眼球与瞳孔经过阻尼后跟随，而不是让整个角色机械地绕窗口中心转动。
+- **只沿边缘巡游**：80 px 头像沿 8 个安全路点匀速移动，桌面约 24 px/s、移动端约 18 px/s。路径根据 `visualViewport`、窗口缩放和移动端可视区域重新计算；悬停、键盘聚焦、按下指针、显示气泡、页面隐藏、模态框打开或文本输入获得焦点时会暂停，避免焦点目标逃走或遮挡正在进行的任务。
+- **88 条中英双语语录**：语料按全局、首页、任务板、学院、图谱、终端、档案、复盘、设置与未知路由分类，通过确定性的 shuffle-bag 排除最近 12 条。首句等待 45–75 秒，后续 45–110 秒；页面隐藏、模态框或文本输入期间不会触发，也不会使用会在后台追赶的 `setInterval`。
+- **不强迫用户听它说话**：点击幽灵可立即索取一句，自动吐槽可在气泡内暂停并以当前标签页的 `sessionStorage` 保存。自动吐槽使用 `aria-live="off"`，不会不断打断屏幕阅读器；只有用户主动请求的消息才以 polite live region 播报，头像本身保持可聚焦、可按键操作和 80 × 80 px 命中区。
+- **动效与失败都能安全收口**：完整动效模式会在浏览器空闲或首次交互时懒加载 Three.js；系统 Reduced Motion、应用 Reduced/None 模式继续使用有等价表情的 SVG。3D chunk、WebGL 初始化、渲染、resize 或 context 丢失时都会回退，卸载时清理帧循环、监听器、观察器、几何体、材质与 renderer，设备像素比上限为 1.5。
+
+`npm run validate:ghost-guide` 当前对 88 条中英双语语录执行 938 个对抗性检查，覆盖语料唯一性/长度/安全文本、路由分类、最近重复窗口、随机时间边界、四种视口的边缘路径、畸形输入降级、懒加载边界、动效接线、交互抑制、ARIA 语义和 WebGL 生命周期。它是纯函数与源码契约门禁，**不是幽灵在真实浏览器中的视觉回归或完整交互 E2E**。
+
 ## 它如何工作
 
 ```mermaid
@@ -233,8 +252,11 @@ flowchart LR
   W --> M["G-counter 合并 / reset tombstone"]
   M --> UI["首页 / 档案 / 导航 / 任务板"]
   A["87 条命令关系"] --> G["D3 力导向图"]
-  F["静态 SVG 幽灵"] --> H["可用的默认向导"]
-  R["按交互加载 Three.js"] --> H
+  Z["视口 / 动效 / 聚焦 / 页面状态"] --> H["GhostGuide3D 编排"]
+  Q["懒加载 ghostGuideModel：88 条双语语录"] --> H
+  F["等价表情的 SVG 回退"] --> H
+  R["空闲或交互时懒加载 Three.js 头像"] --> H
+  H --> UI
   I["i18next"] --> UI
   I --> T
 ```
@@ -245,7 +267,7 @@ flowchart LR
 - **数据驱动**：任务、目标、提示、计分配置和剧情来自关卡目录；计分只纳入当前能观察到证据的类别。
 - **即时反馈**：命令事件进入 Validator，目标面板随状态更新。
 - **渐进复杂度**：同一章节包含 Academy、Operation、Boss、Nightmare。
-- **可视化探索**：D3 展示命令关系；幽灵先以静态 SVG 可用，只在用户指针/聚焦/点击时加载 Three.js。Reduced Motion、WebGL 不可用或 chunk 失败时继续使用静态回退。
+- **可视化探索**：D3 展示命令关系；幽灵以 SVG 立即可用，并在完整动效模式的浏览器空闲期或首次交互时加载 Three.js。它沿可视区域边缘巡游、跟随指针、按路由吐槽；Reduced Motion、WebGL 不可用或 chunk 失败时继续使用静态回退。
 - **按需动画**：GSAP 只服务 Debrief，并与 Three.js、完整关卡目录分别形成动态 chunk，不进入首载依赖闭包。
 - **静态可部署**：`HashRouter` + `base: './'`，构建产物无需服务端路由重写。
 
@@ -260,11 +282,16 @@ ghost/
 │  ├─ scripts/
 │  │  ├─ validate-content.mjs      # 关卡目录与目标契约检查
 │  │  ├─ validate-engine.mjs       # VFS / Shell / Git / Validator 回归
+│  │  ├─ validate-ghost-guide.mjs  # 语料、巡游路径、无障碍与 3D 生命周期门禁
 │  │  └─ validate-*.mjs            # 资产、依赖、README 与构建预算门禁
 │  ├─ src/
 │  │  ├─ components/               # 导航、任务、学院、终端、档案与 UI 组件
 │  │  │  ├─ atlas/CommandGraph3D   # D3 力导向命令关系图
-│  │  │  └─ guide/GhostGuide3D     # 静态回退壳；交互后再加载 Three.js
+│  │  │  └─ guide/
+│  │  │     ├─ GhostGuide3D         # 巡游、气泡、抑制条件与懒加载编排
+│  │  │     ├─ GhostAvatar3D        # 程序化 Three.js 角色、追眼与资源清理
+│  │  │     ├─ GhostAvatarFallback  # Reduced Motion / WebGL 失败 SVG 回退
+│  │  │     └─ ghostGuideModel      # 88 条双语语录、路由与纯路径模型
 │  │  ├─ data/                     # 任务、命令、学院与成就数据
 │  │  ├─ engine/                   # VFS、Shell、Git、Validator、Hints、Levels
 │  │  ├─ i18n/                     # English / 中文资源与语言检测
@@ -289,6 +316,7 @@ ghost/
 | `npm run validate:engine` | 回归 VFS、Shell、Git、Validator、计分、报告证据链和危险任务契约 | 已通过，141 项回归；不是 141 次任务 E2E |
 | `npm run validate:progress` | 对抗性校验真实本地进度、成就、历史边界、多标签页合并和重置墓碑 | 已通过 |
 | `npm run validate:settings` | 对抗性校验设置 schema、非法/超大存档、写入失败、跨标签页同步和真实消费者接线 | 已通过，43 项检查 |
+| `npm run validate:ghost-guide` | 校验双语语料、去重/调度、四类视口路径、交互抑制、ARIA、懒加载与 WebGL 生命周期 | 已通过，88 条语录、938 个对抗性检查；不是浏览器视觉 E2E |
 | `npm run validate:audit-policy` | 离线回归零漏洞策略的报告一致性、严重度和完整依赖范围 | 已通过；不依赖安全数据库网络状态 |
 | `npm run report:capabilities` | 严格盘点 221 关的命令、交互与语法调用覆盖 | 221/221 调用已映射；334 条命令检查、235 种 pattern，仍不代表 mission E2E |
 | `npm run validate:assets` | 校验 README 图片、公开资产引用与体积 | 已通过 |
@@ -296,7 +324,7 @@ ghost/
 | `npm run validate:readme` | 用源码统计反向校验本文数字、版本与图片 | 已通过 |
 | `npm run validate:build` | 按 manifest 校验引用、首载闭包、动态分块、源码映射和体积预算 | 由 `build` 自动执行 |
 | `npm run typecheck` | TypeScript 项目检查 | 已通过 |
-| `npm run check` | 汇总内容、引擎、进度、设置、审计策略、资产、依赖、README 与类型检查 | 已通过 |
+| `npm run check` | 汇总内容、引擎、进度、设置、幽灵向导、审计策略、资产、依赖、README 与类型检查 | 已通过 |
 | `npm run build` | 生成 `dist/` 并校验分包和体积预算 | 已通过 |
 | `npm run verify` | `check` + ESLint + 生产构建的一站式门禁 | 已通过 |
 | `npm run audit:prod` / `npm run audit:all` | npm 生产/完整依赖安全审计 | 2026-08-13 均为 0 个漏洞记录 |
@@ -312,7 +340,7 @@ npm run release:check
 npm run preview
 ```
 
-当前生产 manifest 的首载闭包只有入口、React vendor 与 Motion vendor：**首载 3 个 JS 块，约 591 KiB raw / 186 KiB gzip；11 个动态边界，约 683 KiB total JS gzip**。Three.js、GSAP 与完整关卡目录都保持在首载闭包之外；最大的关卡块为 798.64 kB，同时低于 Vite 告警线与 800 KiB（819,200 bytes）硬预算。
+当前生产 manifest 的首载闭包只有入口、React vendor 与 Motion vendor：**首载 3 个 JS 块，约 608 KiB raw / 193 KiB gzip；12 个动态边界，约 703 KiB total JS gzip**。Three.js、GSAP、双语吐槽模型与完整关卡目录都保持在首载闭包之外；最大的关卡块为 798.64 kB，同时低于 Vite 告警线与 800 KiB（819,200 bytes）硬预算。
 
 ## 添加或修改任务
 
@@ -353,6 +381,7 @@ npm run generate:progress-catalog
 npm run validate:content
 npm run validate:engine
 npm run validate:progress
+npm run validate:ghost-guide
 npm run report:capabilities
 npm run verify
 ```
@@ -371,6 +400,8 @@ npm run verify
 | 成就证据 | UI 只返回 3 个可验证成就；7 日 lifetime milestone 在短历史淘汰或当前 streak 归零后仍保持已获得状态，17 个无证据规划项不展示 |
 | 设置边界 | 动效/CRT、终端与任务 HUD 已接入真实消费者和版本化存储；主题、Boss 特效、扩展无障碍、音效、默认提示、自动保存、点击复制与退出登录保持禁用 |
 | 设置对抗性回归 | 43 项检查覆盖非法值、超大/畸形存档、写入异常、跨标签页收敛、None 动效、终端和 HUD 接线 |
+| `npm run validate:ghost-guide` | 88 条中英双语语录、938 个对抗性检查通过；覆盖 shuffle-bag、45–75 / 45–110 秒调度、12 条重复窗口、4 种视口路径、交互抑制、ARIA、懒加载和 WebGL 生命周期，但不冒充浏览器视觉 E2E |
+| 3D 幽灵浏览器实测 | Full 分支下 Three.js canvas 真实加载，2.2 秒沿底边移动约 143 px；打开气泡后位移归零，主动消息为 polite live region；390 × 844 下头像/气泡均在视口内；任务简报打开时幽灵退出 DOM、关闭后恢复；浏览器控制台无 error。测试机启用了系统 Reduced Motion，因此用临时 QA 覆盖进入 Full 分支，验证后已恢复源码 |
 | HashRouter 跳转到正文 | 在 `#/missions` 实测激活 Skip 后 URL 保持不变、`main` 获得焦点，不再把 `#main-content` 误当路由并进入 404 |
 | 移动视口 | 390 × 844；任务简报、终端与复盘无页面级横向溢出 |
 | Unicode 输入 | 输入 emoji 后 Backspace 再执行 `whoami`，命令没有残留 UTF-16 半个代理项，目标显示 1/3 |
@@ -387,10 +418,10 @@ npm run verify
 | `npm run validate:audit-policy` | 7 个离线策略回归通过；覆盖报告版本、严重度元数据、漏洞记录和零漏洞 fail-closed 行为 |
 | `npm run report:capabilities` | 221/221 curated invocation mapping；334 条命令检查、235 种 pattern，0 个未映射项；明确标注 not mission E2E |
 | 公开资产 | 删除 `asterion-logo.png`、`neomall-logo.png` 两个孤儿资源；`public/` 当前 11.9 MiB，校验器默认拒绝无引用文件 |
-| 延迟加载 | Three.js 只在用户与幽灵交互时加载并有静态回退；GSAP 只随 Debrief 加载；两者和完整任务目录均不在首载闭包 |
-| `npm run verify` | 内容、引擎、进度、资产、依赖、README、类型、Lint 与生产构建统一纳入门禁 |
+| 延迟加载 | SVG 幽灵立即可用；Three.js 在完整动效模式的浏览器空闲期或首次交互时加载并有静态回退；语料模型单独懒加载；GSAP 只随 Debrief 加载，Three.js、GSAP 和完整任务目录均不在首载闭包 |
+| `npm run verify` | 内容、引擎、进度、设置、幽灵向导、资产、依赖、README、类型、Lint 与生产构建统一纳入门禁 |
 | `npm run audit:prod` / `audit:all` | 生产树与完整依赖树均为 0 个漏洞记录；发布策略不含临时例外 |
-| 生产构建 | 首载 3 个 JS 块，约 591 KiB raw / 186 KiB gzip；11 个动态边界，约 683 KiB total JS gzip |
+| 生产构建 | 首载 3 个 JS 块，约 608 KiB raw / 193 KiB gzip；12 个动态边界，约 703 KiB total JS gzip |
 
 ## 当前边界与已知问题
 
@@ -406,14 +437,15 @@ npm run verify
 - **设置按消费者逐项开放**：呼号、语言、导出、重置、动效强度、CRT、键盘提示、终端字号/字体/光标/回滚，以及任务计时器/得分已经接线并持久化；主题、Boss 特效、高对比度、色盲、大字体、音效、背景音乐、默认提示、自动保存和点击复制仍禁用。
 - **排行榜未实现**：首页入口当前禁用。
 - **多语言仍在完善**：内置 English / 中文切换和双语关卡字段，但部分深层任务文案仍固定显示英文。
-- **首载已缩小，总量仍需预算**：首载 3 个 JS 块，约 591 KiB raw / 186 KiB gzip；11 个动态边界，约 683 KiB total JS gzip。Three.js、GSAP 和完整任务目录已延迟加载，但总 JS 仍接近 750 KiB gzip 门限，需要持续防回归。
+- **幽灵门禁不是视觉 E2E**：88 条双语语料和 938 个对抗性检查能够证明路径数学、调度边界、源码接线和资源生命周期契约；角色在真实浏览器中的眼神方向、边缘巡游、气泡避让、WebGL 故障注入和不同刷新率表现仍需要浏览器场景与视觉回归才能形成发布级证据。
+- **首载已缩小，总量仍需预算**：首载 3 个 JS 块，约 608 KiB raw / 193 KiB gzip；12 个动态边界，约 703 KiB total JS gzip。Three.js、双语吐槽模型、GSAP 和完整任务目录已延迟加载，但总 JS 仍接近 750 KiB gzip 门限，需要持续防回归。
 - **孤儿资源已删除，素材权属仍需正式化**：`public/` 当前 11.9 MiB，两个无引用 Logo 已移除，资产门禁默认拒绝新孤儿文件；现有剧情人物图仍属于占位素材，公开发布前应完成权属确认、替换与压缩。
 
 ## 安全与隐私模型
 
 - 不执行宿主机命令，不读取本机真实文件系统。
 - 没有账号系统、后端 API 或数据库。
-- 浏览器 `localStorage` 保存任务进度、呼号、`i18nextLng`、`ghostops_settings_v1` 与教程/引导标记；`sessionStorage` 以 `ghostops_run_report:*` 保存当前标签页的任务报告。没有把这些数据发送到项目后端；报告写入被拒绝时，完成弹窗会告警、删除同任务旧报告并禁用复盘入口。
+- 浏览器 `localStorage` 保存任务进度、呼号、`i18nextLng`、`ghostops_settings_v1` 与教程/引导标记；`sessionStorage` 以 `ghostops_run_report:*` 保存当前标签页的任务报告，并以 `ghostops_guide_auto_banter_paused` 保存本标签页是否暂停自动吐槽。没有把这些数据发送到项目后端；报告写入被拒绝时，完成弹窗会告警、删除同任务旧报告并禁用复盘入口。
 - 开发服务器默认只绑定 `127.0.0.1`；不要在不可信网络上改成 `0.0.0.0`。
 - Google Fonts 是唯一运行时外部资源；请求失败时界面会降级到系统等宽/无衬线字体，训练功能仍可用。
 - 2026-08-13 的生产依赖树与完整依赖树审计均返回 0 个漏洞记录；`postcss`、`nanoid`、`brace-expansion` 和 ESLint 工具链已更新到无已知公告的锁定解析结果。
@@ -440,7 +472,7 @@ npm run build
 - [x] 记录动作时间、cwd、mode、exitCode、危险事件，并让 Debrief 读取 schema 校验后的会话报告。
 - [x] 用真实本地进度驱动首页、任务板、导航与 Profile，并实现 50 条/任务历史边界、G-counter 多标签页合并、reset tombstone 和存储失败反馈。
 - [x] 只公开 3 个证据完备的成就；隐藏无法由当前存档证明的 17 个规划定义。
-- [x] 将 Three.js、GSAP 与完整任务目录移出首载闭包，并为 3D 引导保留 Reduced Motion / WebGL / chunk 失败回退。
+- [x] 将 Three.js、GSAP 与完整任务目录移出首载闭包；把幽灵升级为原创程序化 3D 角色、边缘巡游、追眼、五种情绪与 88 条路由感知双语吐槽，并保留 Reduced Motion / WebGL / chunk 失败回退。
 - [x] 删除两个孤儿 Logo，并把“无引用公开资产”升级为默认失败的门禁。
 - [x] 为 221/221 关、555/555 条 check 补齐显式 `objectiveId`，并把 H5 分为 77 个可重放命令与 144 个诚实引导清单。
 - [ ] 为 221 关补齐文件/Git/进程/输出 fixture、结果型检查与逐关浏览器 E2E。

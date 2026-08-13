@@ -712,6 +712,10 @@
   "guide": {
     "showTip": "显示幽灵提示",
     "hideMessage": "隐藏幽灵消息",
+    "regionLabel": "可交互幽灵向导",
+    "requestQuip": "让幽灵点评一句",
+    "pauseBanter": "本次会话暂停自动吐槽",
+    "resumeBanter": "恢复自动吐槽",
     "messages": {
       "welcome": "欢迎来到终端幽灵行动！我是你的 AI 向导 Ghost。打开任务板，开始第一次行动。",
       "missions": "选择一个可开始的任务。每个任务都会还原一个实用的终端场景。",
