@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotionConfig } from 'framer-motion'
 import { BookOpen, Trophy, Clock, Target, Zap, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import ChapterCard from '@/components/academy/ChapterCard'
@@ -15,6 +15,7 @@ import { calculateTotalXP, resolveAchievements } from '@/data/achievements'
 
 export default function Academy() {
   const { t } = useTranslation()
+  const shouldReduceMotion = useReducedMotionConfig() ?? false
   const chapters = useLocalizedChapters()
   const missionProgress = useGameStore((state) => state.missionProgress)
   const progressMilestones = useGameStore((state) => state.progressMilestones)
@@ -34,8 +35,7 @@ export default function Academy() {
   const scrollTabs = (dir: 'left' | 'right') => {
     const container = document.getElementById('chapter-tabs-container')
     if (container) {
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      container.scrollBy({ left: dir === 'left' ? -200 : 200, behavior: reduceMotion ? 'auto' : 'smooth' })
+      container.scrollBy({ left: dir === 'left' ? -200 : 200, behavior: shouldReduceMotion ? 'auto' : 'smooth' })
     }
   }
 

@@ -87,13 +87,13 @@
   <tr>
     <td colspan="2">
       <img src="./app/docs/images/ghost-guide-3d.jpg" alt="原创 Three.js 幽灵沿页面边缘巡游并弹出中文点评" />
-      <br /><sub><b>3D 幽灵搭档</b> · 本地真实浏览器 Full 动效状态：程序化角色、动态表情、指针追眼、边缘巡游与可暂停的双语点评气泡</sub>
+      <br /><sub><b>3D 幽灵搭档</b> · 本地真实浏览器显式 Full 动效状态：程序化角色、动态表情、指针追眼、边缘巡游与可暂停的双语点评气泡</sub>
     </td>
   </tr>
   <tr>
     <td colspan="2">
       <img src="./app/docs/images/settings-live.jpg" alt="设置页的实时动画、终端与任务 HUD 控制" />
-      <br /><sub><b>实时设置</b> · 动效强度、CRT、终端字体/光标/回滚、键盘提示、计时器和得分即时生效；没有消费者的选项继续禁用</sub>
+      <br /><sub><b>实时设置</b> · Follow System / Full / Reduced / None 四态动效、CRT、终端字体/光标/回滚、键盘提示、计时器和得分即时生效；没有消费者的选项继续禁用</sub>
     </td>
   </tr>
 </table>
@@ -132,10 +132,10 @@
 | --- | --- |
 | 呼号 | 校验并更新全站 callsign，尝试写入本地存储；写入被拒绝时保留当前会话值并明确反馈 |
 | 中文 / English | 立即切换 i18next 语言并尝试持久化；失败时显示“仅本次会话”反馈 |
-| 动效强度 / CRT | Full 尊重系统偏好，Reduced 关闭非必要位移动效，None 通过全局 `skipAnimations` 停止 Framer Motion 并关闭 CSS/自定义动效；CRT 扫描线即时作用于终端 |
+| 动效强度 / CRT | Follow System（默认）尊重设备的 Reduced Motion 偏好；Full 是用户显式覆盖，即使系统要求减弱动效也开启完整 3D 巡游；Reduced 停止非必要空间/连续动效但保留短反馈；None 再通过全局 `skipAnimations` 与 CSS 规则停止动画、过渡和自定义动效。CRT 扫描线即时作用于终端 |
 | 终端 | 字号 11–16 px、Fira Code / JetBrains Mono、Block / Line / Bar 光标、闪烁和 1,000 / 5,000 / 10,000 行回滚即时同步到 xterm |
 | 任务 HUD | 键盘提示、计时器与得分可独立显示或隐藏 |
-| 设置持久化 | `ghostops_settings_v1` 使用版本化 schema、16,384 code-unit 上限和严格值域；支持跨标签页收敛，非法或写入失败时 fail-closed 到会话值并反馈 |
+| 设置持久化 | 当前 `ghostops_settings_v2` 使用 schema v2、16,384 code-unit 上限和严格值域；首次找不到 v2 时会读取并迁移 `ghostops_settings_v1`，其中旧版 `full` 因原本实际遵循系统偏好而迁移为 `system`。支持 v2 跨标签页收敛，非法或写入失败时 fail-closed 到会话值并反馈 |
 | 导出进度 | 下载带 schema/version、任务记录、milestone 与 reset tombstone 的 JSON 快照 |
 | 重置进度 | 先写入并复核 reset tombstone，再清理任务报告与引导标记；主重置失败、辅助清理不完整和完全成功是三种不同反馈 |
 | 退出登录 | 明确禁用，因为项目没有账号系统 |
@@ -224,11 +224,11 @@ Black 是预留的风险分类；当前 87 条命令和 221 个任务中尚无 B
 
 - **原创程序化 3D 形象**：Three.js 在运行时生成带手臂、波浪尾部、眼睛、瞳孔、嘴部、腮红、灵质颗粒与光晕的幽灵，不依赖外部角色模型；`idle`、`curious`、`mischievous`、`proud`、`startled` 五种情绪会改变表情和动作。指针方向按头像自身边界计算，眼球与瞳孔经过阻尼后跟随，而不是让整个角色机械地绕窗口中心转动。
 - **只沿边缘巡游**：80 px 头像沿 8 个安全路点匀速移动，桌面约 24 px/s、移动端约 18 px/s。路径根据 `visualViewport`、窗口缩放和移动端可视区域重新计算；悬停、键盘聚焦、按下指针、显示气泡、页面隐藏、模态框打开或文本输入获得焦点时会暂停，避免焦点目标逃走或遮挡正在进行的任务。
-- **88 条中英双语语录**：语料按全局、首页、任务板、学院、图谱、终端、档案、复盘、设置与未知路由分类，通过确定性的 shuffle-bag 排除最近 12 条。首句等待 45–75 秒，后续 45–110 秒；页面隐藏、模态框或文本输入期间不会触发，也不会使用会在后台追赶的 `setInterval`。
+- **88 条中英双语语录**：语料按全局、首页、任务板、学院、图谱、终端、档案、复盘、设置与未知路由分类，通过确定性的 shuffle-bag 排除最近 12 条。首句等待 12–20 秒，后续 45–110 秒；页面隐藏、模态框或文本输入期间不会触发，也不会使用会在后台追赶的 `setInterval`。
 - **不强迫用户听它说话**：点击幽灵可立即索取一句，自动吐槽可在气泡内暂停并以当前标签页的 `sessionStorage` 保存。自动吐槽使用 `aria-live="off"`，不会不断打断屏幕阅读器；只有用户主动请求的消息才以 polite live region 播报，头像本身保持可聚焦、可按键操作和 80 × 80 px 命中区。
-- **动效与失败都能安全收口**：完整动效模式会在浏览器空闲或首次交互时懒加载 Three.js；系统 Reduced Motion、应用 Reduced/None 模式继续使用有等价表情的 SVG。3D chunk、WebGL 初始化、渲染、resize 或 context 丢失时都会回退，卸载时清理帧循环、监听器、观察器、几何体、材质与 renderer，设备像素比上限为 1.5。
+- **动效与失败都能安全收口**：Follow System（默认）会遵循系统偏好；系统要求减弱动效时显示静态 SVG 和可见的 `SYSTEM · STATIC` CTA，用户激活 CTA 才会写入显式 Full 并加载 3D。Full 明确覆盖系统 Reduced Motion；Reduced / None 保持静态 SVG。允许完整动效时，Three.js 会在浏览器空闲或首次交互时懒加载；3D chunk、WebGL 初始化、渲染、resize 或 context 丢失时都会回退，卸载时清理帧循环、监听器、观察器、几何体、材质与 renderer，设备像素比上限为 1.5。
 
-`npm run validate:ghost-guide` 当前对 88 条中英双语语录执行 938 个对抗性检查，覆盖语料唯一性/长度/安全文本、路由分类、最近重复窗口、随机时间边界、四种视口的边缘路径、畸形输入降级、懒加载边界、动效接线、交互抑制、ARIA 语义和 WebGL 生命周期。它是纯函数与源码契约门禁，**不是幽灵在真实浏览器中的视觉回归或完整交互 E2E**。
+`npm run validate:ghost-guide` 当前对 88 条中英双语语录执行 953 个对抗性检查，覆盖语料唯一性/长度/安全文本、路由分类、最近重复窗口、随机时间边界、五种视口的边缘路径、畸形输入降级、懒加载边界、四态动效接线、静态 CTA、输入方式感知的焦点恢复、交互抑制、ARIA 语义和 WebGL 生命周期。它是纯函数与源码契约门禁，**不是幽灵在真实浏览器中的视觉回归或完整交互 E2E**。
 
 ## 它如何工作
 
@@ -267,7 +267,7 @@ flowchart LR
 - **数据驱动**：任务、目标、提示、计分配置和剧情来自关卡目录；计分只纳入当前能观察到证据的类别。
 - **即时反馈**：命令事件进入 Validator，目标面板随状态更新。
 - **渐进复杂度**：同一章节包含 Academy、Operation、Boss、Nightmare。
-- **可视化探索**：D3 展示命令关系；幽灵以 SVG 立即可用，并在完整动效模式的浏览器空闲期或首次交互时加载 Three.js。它沿可视区域边缘巡游、跟随指针、按路由吐槽；Reduced Motion、WebGL 不可用或 chunk 失败时继续使用静态回退。
+- **可视化探索**：D3 展示命令关系；幽灵以 SVG 立即可用，并在 Follow System 且系统未要求减弱动效，或用户显式选择 Full 时，于浏览器空闲期或首次交互加载 Three.js。它沿可视区域边缘巡游、跟随指针、按路由吐槽；默认 Follow System 遇到系统 Reduced Motion 会显示静态 CTA，Reduced / None、WebGL 不可用或 chunk 失败时继续使用静态回退。
 - **按需动画**：GSAP 只服务 Debrief，并与 Three.js、完整关卡目录分别形成动态 chunk，不进入首载依赖闭包。
 - **静态可部署**：`HashRouter` + `base: './'`，构建产物无需服务端路由重写。
 
@@ -315,8 +315,8 @@ ghost/
 | `npm run validate:content` | 校验关卡 ID、目标/check 数量和五级提示 | 已通过 |
 | `npm run validate:engine` | 回归 VFS、Shell、Git、Validator、计分、报告证据链和危险任务契约 | 已通过，141 项回归；不是 141 次任务 E2E |
 | `npm run validate:progress` | 对抗性校验真实本地进度、成就、历史边界、多标签页合并和重置墓碑 | 已通过 |
-| `npm run validate:settings` | 对抗性校验设置 schema、非法/超大存档、写入失败、跨标签页同步和真实消费者接线 | 已通过，43 项检查 |
-| `npm run validate:ghost-guide` | 校验双语语料、去重/调度、四类视口路径、交互抑制、ARIA、懒加载与 WebGL 生命周期 | 已通过，88 条语录、938 个对抗性检查；不是浏览器视觉 E2E |
+| `npm run validate:settings` | 对抗性校验 settings v2、v1 迁移、严格类型值域、迁移/写入失败反馈、非法/超大存档、跨标签页同步、系统偏好热切换、D3 静态布局、四态动效策略和真实消费者接线 | 已通过，103 项检查 |
+| `npm run validate:ghost-guide` | 校验双语语料、去重/调度、五类视口路径、四态动效、静态 CTA、输入方式感知的焦点恢复、交互抑制、ARIA、懒加载与 WebGL 生命周期 | 已通过，88 条语录、953 个对抗性检查；不是浏览器视觉 E2E |
 | `npm run validate:audit-policy` | 离线回归零漏洞策略的报告一致性、严重度和完整依赖范围 | 已通过；不依赖安全数据库网络状态 |
 | `npm run report:capabilities` | 严格盘点 221 关的命令、交互与语法调用覆盖 | 221/221 调用已映射；334 条命令检查、235 种 pattern，仍不代表 mission E2E |
 | `npm run validate:assets` | 校验 README 图片、公开资产引用与体积 | 已通过 |
@@ -340,7 +340,7 @@ npm run release:check
 npm run preview
 ```
 
-当前生产 manifest 的首载闭包只有入口、React vendor 与 Motion vendor：**首载 3 个 JS 块，约 608 KiB raw / 193 KiB gzip；12 个动态边界，约 703 KiB total JS gzip**。Three.js、GSAP、双语吐槽模型与完整关卡目录都保持在首载闭包之外；最大的关卡块为 798.64 kB，同时低于 Vite 告警线与 800 KiB（819,200 bytes）硬预算。
+当前生产 manifest 的首载闭包只有入口、React vendor 与 Motion vendor：**首载 3 个 JS 块，约 611 KiB raw / 194 KiB gzip；12 个动态边界，约 704 KiB total JS gzip**。Three.js、GSAP、双语吐槽模型与完整关卡目录都保持在首载闭包之外；最大的关卡块为 798.64 kB，同时低于 Vite 告警线与 800 KiB（819,200 bytes）硬预算。
 
 ## 添加或修改任务
 
@@ -398,10 +398,11 @@ npm run verify
 | 本地成长真源 | 首页、任务板、Navbar 与 Profile 共同读取任务存档；不再导入 demo mission history，XP、段位、热力图、技能和活动均从已完成任务推导 |
 | 进度对抗性回归 | 覆盖重复训练、同毫秒完成、时钟回拨、50 条/任务淘汰、未知 ID 洪泛、3 MiB 限制、G-counter 多标签页合并、reset tombstone 和冻结时钟连续重置 |
 | 成就证据 | UI 只返回 3 个可验证成就；7 日 lifetime milestone 在短历史淘汰或当前 streak 归零后仍保持已获得状态，17 个无证据规划项不展示 |
-| 设置边界 | 动效/CRT、终端与任务 HUD 已接入真实消费者和版本化存储；主题、Boss 特效、扩展无障碍、音效、默认提示、自动保存、点击复制与退出登录保持禁用 |
-| 设置对抗性回归 | 43 项检查覆盖非法值、超大/畸形存档、写入异常、跨标签页收敛、None 动效、终端和 HUD 接线 |
-| `npm run validate:ghost-guide` | 88 条中英双语语录、938 个对抗性检查通过；覆盖 shuffle-bag、45–75 / 45–110 秒调度、12 条重复窗口、4 种视口路径、交互抑制、ARIA、懒加载和 WebGL 生命周期，但不冒充浏览器视觉 E2E |
-| 3D 幽灵浏览器实测 | Full 分支下 Three.js canvas 真实加载，2.2 秒沿底边移动约 143 px；打开气泡后位移归零，主动消息为 polite live region；390 × 844 下头像/气泡均在视口内；任务简报打开时幽灵退出 DOM、关闭后恢复；浏览器控制台无 error。测试机启用了系统 Reduced Motion，因此用临时 QA 覆盖进入 Full 分支，验证后已恢复源码 |
+| 设置边界 | Follow System / Full / Reduced / None 四态动效、CRT、终端与任务 HUD 已接入真实消费者；默认 Follow System 尊重系统偏好，显式 Full 覆盖系统 Reduced Motion。设置使用 schema v2，并可从 v1 迁移；主题、Boss 特效、扩展无障碍、音效、默认提示、自动保存、点击复制与退出登录保持禁用 |
+| 设置对抗性回归 | 103 项检查覆盖 v1→v2 迁移、严格类型值域、迁移/写入失败反馈、非法值、超大/畸形存档、跨标签页收敛、系统偏好热切换接线、D3 图谱静态布局与零时长交互、四态动效策略、终端和 HUD 接线 |
+| `npm run validate:ghost-guide` | 88 条中英双语语录、953 个对抗性检查通过；覆盖 shuffle-bag、12–20 / 45–110 秒调度、12 条重复窗口、5 种视口路径、四态动效、静态 CTA、输入方式感知的焦点恢复、交互抑制、ARIA、懒加载和 WebGL 生命周期，但不冒充浏览器视觉 E2E |
+| 3D 幽灵浏览器实测 | 测试机启用系统 Reduced Motion 时，默认 Follow System 真实呈现静态 SVG 与可见的 `SYSTEM · STATIC` CTA；激活 CTA 后设置切换为显式 Full，Three.js canvas 真实加载并在 2.2 秒沿边缘移动约 71 px。CDP 热切换 no-preference → reduce 无需刷新即回退 SVG、显示 CTA 且 1.8 秒位移为 0；切回 no-preference 后恢复 canvas，并在 1.8 秒移动约 43.5 px。键盘关闭气泡后焦点归还头像且 1.8 秒位移为 0，焦点移开后移动约 56.9 px；鼠标关闭后移动约 26.4 px。新鲜重载后约 23 秒观察到首条自动吐槽（源码调度契约为模型就绪后 12–20 秒）；主动消息为 polite live region。390 × 844 和模态框行为来自上一轮同版本功能的浏览器回归 |
+| None / D3 图谱浏览器实测 | `data-motion="none"` 下图谱首节点的 transform 等待 700 ms 前后完全一致；触发 mouseenter 后半径在 80 ms 检查时已经直接从 9 变为 12，没有力导向漂移或渐变补间 |
 | HashRouter 跳转到正文 | 在 `#/missions` 实测激活 Skip 后 URL 保持不变、`main` 获得焦点，不再把 `#main-content` 误当路由并进入 404 |
 | 移动视口 | 390 × 844；任务简报、终端与复盘无页面级横向溢出 |
 | Unicode 输入 | 输入 emoji 后 Backspace 再执行 `whoami`，命令没有残留 UTF-16 半个代理项，目标显示 1/3 |
@@ -418,10 +419,10 @@ npm run verify
 | `npm run validate:audit-policy` | 7 个离线策略回归通过；覆盖报告版本、严重度元数据、漏洞记录和零漏洞 fail-closed 行为 |
 | `npm run report:capabilities` | 221/221 curated invocation mapping；334 条命令检查、235 种 pattern，0 个未映射项；明确标注 not mission E2E |
 | 公开资产 | 删除 `asterion-logo.png`、`neomall-logo.png` 两个孤儿资源；`public/` 当前 11.9 MiB，校验器默认拒绝无引用文件 |
-| 延迟加载 | SVG 幽灵立即可用；Three.js 在完整动效模式的浏览器空闲期或首次交互时加载并有静态回退；语料模型单独懒加载；GSAP 只随 Debrief 加载，Three.js、GSAP 和完整任务目录均不在首载闭包 |
+| 延迟加载 | SVG 幽灵立即可用；Three.js 在默认 Follow System 且系统允许动效，或用户显式选择 Full 时，于浏览器空闲期或首次交互加载并有静态回退；语料模型单独懒加载；GSAP 只随 Debrief 加载，Three.js、GSAP 和完整任务目录均不在首载闭包 |
 | `npm run verify` | 内容、引擎、进度、设置、幽灵向导、资产、依赖、README、类型、Lint 与生产构建统一纳入门禁 |
 | `npm run audit:prod` / `audit:all` | 生产树与完整依赖树均为 0 个漏洞记录；发布策略不含临时例外 |
-| 生产构建 | 首载 3 个 JS 块，约 608 KiB raw / 193 KiB gzip；12 个动态边界，约 703 KiB total JS gzip |
+| 生产构建 | 首载 3 个 JS 块，约 611 KiB raw / 194 KiB gzip；12 个动态边界，约 704 KiB total JS gzip |
 
 ## 当前边界与已知问题
 
@@ -434,18 +435,18 @@ npm run verify
 - **动作报告可审计但不是防篡改日志**：当前记录时间、命令/交互、exitCode、cwd、mode、每个动作由引擎实际发出的成功轨迹和每次危险回调；全局成功证据必须按顺序精确等于逐动作聚合，命令型目标与可选目标会从这些轨迹重新计算。终端与引擎统一将单条命令限制为 20,000 个 UTF-16 code unit，并让一次顶层执行共享最多 100 个执行段；静态可判定的嵌套循环洪泛会在任何副作用前拒绝，函数、脚本、xargs 与 make 的动态展开若触及运行时预算，则回滚该顶层命令对 VFS、Shell、Git 与模拟服务的全部状态变更。事务快照会复制可变容器并复用不可变字符串；VFS 限制为单文件 10 Mi code unit、全局 32 Mi code unit、10,000 个目录项、128 层目录和 40 次符号链接跳转，文件名、软链目标、批量写入或容量中途越界都会 fail-closed，容量型失败会回滚整个顶层命令。Shell、Git 与模拟服务另共享 16 Mi code unit / 20,000 条目的持久状态预算，超限同样整条回滚；系统日志使用 1 Mi code unit / 1,000 条环形缓冲。单次多行粘贴最多提交 100 条命令，且整批超限时原子拒绝；Shell 历史最多保留 1,000 条且总计不超过 1 Mi code unit。任务证据另外限制为 10,000 条成功轨迹与四个实际保留数组合计 512 KiB 的精确 UTF-8 序列化预算，任何 schema 或预算超限都会粘性停止计分并要求 Replay；所有聚合输出均受统一预算约束，截断也不会切开 Unicode 代理对。这些边界避免超长粘贴、深目录、动态展开、批量满盘、无限历史或日志洪泛破坏报告契约并拖垮页面。由于 v1 仍缺 tokens 与前后 state 快照，遇到文件/Git 状态型检查会拒绝保存，而不会信任不可重放的结果。用户仍可整体伪造一份自洽的浏览器存储，因此它不是密码学防篡改日志。保存失败会清除同任务旧报告并禁用 Debrief；直达复盘还必须匹配最新 completion 的时间和分数，不会把上一轮数据伪装成本轮结果。
 - **成长是真实本地状态，不是云存档**：Profile、首页、任务板和导航已读取同一份持久化进度；每任务只保留最近 50 条详细历史，G-counter 保留总次数，reset tombstone 阻止旧标签页复活数据。它没有账号、服务端同步、加密或防篡改能力，清理站点数据会删除进度。
 - **成就只公开可证明的 3 个**：满分、7 日最长 streak 与 50 种已验证 pattern 可由现有存档推导；其余 17 个定义保持隐藏规划项。诸如“释放 10 GB 空间”在浏览器模拟器中没有可信证据，因此当前不能解锁。
-- **设置按消费者逐项开放**：呼号、语言、导出、重置、动效强度、CRT、键盘提示、终端字号/字体/光标/回滚，以及任务计时器/得分已经接线并持久化；主题、Boss 特效、高对比度、色盲、大字体、音效、背景音乐、默认提示、自动保存和点击复制仍禁用。
+- **设置按消费者逐项开放**：呼号、语言、导出、重置、Follow System / Full / Reduced / None 四态动效、CRT、键盘提示、终端字号/字体/光标/回滚，以及任务计时器/得分已经接线；当前 settings v2 会从 v1 迁移并持久化。主题、Boss 特效、高对比度、色盲、大字体、音效、背景音乐、默认提示、自动保存和点击复制仍禁用。
 - **排行榜未实现**：首页入口当前禁用。
 - **多语言仍在完善**：内置 English / 中文切换和双语关卡字段，但部分深层任务文案仍固定显示英文。
-- **幽灵门禁不是视觉 E2E**：88 条双语语料和 938 个对抗性检查能够证明路径数学、调度边界、源码接线和资源生命周期契约；角色在真实浏览器中的眼神方向、边缘巡游、气泡避让、WebGL 故障注入和不同刷新率表现仍需要浏览器场景与视觉回归才能形成发布级证据。
-- **首载已缩小，总量仍需预算**：首载 3 个 JS 块，约 608 KiB raw / 193 KiB gzip；12 个动态边界，约 703 KiB total JS gzip。Three.js、双语吐槽模型、GSAP 和完整任务目录已延迟加载，但总 JS 仍接近 750 KiB gzip 门限，需要持续防回归。
+- **幽灵门禁不是视觉 E2E**：88 条双语语料和 953 个对抗性检查能够证明路径数学、调度边界、四态动效/静态 CTA 接线、输入方式感知的焦点恢复和资源生命周期契约；角色在真实浏览器中的眼神方向、气泡避让、WebGL 故障注入和不同刷新率表现仍需要浏览器场景与视觉回归才能形成发布级证据。
+- **首载已缩小，总量仍需预算**：首载 3 个 JS 块，约 611 KiB raw / 194 KiB gzip；12 个动态边界，约 704 KiB total JS gzip。Three.js、双语吐槽模型、GSAP 和完整任务目录已延迟加载，但总 JS 仍接近 750 KiB gzip 门限，需要持续防回归。
 - **孤儿资源已删除，素材权属仍需正式化**：`public/` 当前 11.9 MiB，两个无引用 Logo 已移除，资产门禁默认拒绝新孤儿文件；现有剧情人物图仍属于占位素材，公开发布前应完成权属确认、替换与压缩。
 
 ## 安全与隐私模型
 
 - 不执行宿主机命令，不读取本机真实文件系统。
 - 没有账号系统、后端 API 或数据库。
-- 浏览器 `localStorage` 保存任务进度、呼号、`i18nextLng`、`ghostops_settings_v1` 与教程/引导标记；`sessionStorage` 以 `ghostops_run_report:*` 保存当前标签页的任务报告，并以 `ghostops_guide_auto_banter_paused` 保存本标签页是否暂停自动吐槽。没有把这些数据发送到项目后端；报告写入被拒绝时，完成弹窗会告警、删除同任务旧报告并禁用复盘入口。
+- 浏览器 `localStorage` 保存任务进度、呼号、`i18nextLng`、当前 `ghostops_settings_v2` 与教程/引导标记；如果只有旧 `ghostops_settings_v1`，应用会将其作为迁移来源读取并写入 v2。`sessionStorage` 以 `ghostops_run_report:*` 保存当前标签页的任务报告，并以 `ghostops_guide_auto_banter_paused` 保存本标签页是否暂停自动吐槽。没有把这些数据发送到项目后端；报告写入被拒绝时，完成弹窗会告警、删除同任务旧报告并禁用复盘入口。
 - 开发服务器默认只绑定 `127.0.0.1`；不要在不可信网络上改成 `0.0.0.0`。
 - Google Fonts 是唯一运行时外部资源；请求失败时界面会降级到系统等宽/无衬线字体，训练功能仍可用。
 - 2026-08-13 的生产依赖树与完整依赖树审计均返回 0 个漏洞记录；`postcss`、`nanoid`、`brace-expansion` 和 ESLint 工具链已更新到无已知公告的锁定解析结果。
@@ -472,13 +473,13 @@ npm run build
 - [x] 记录动作时间、cwd、mode、exitCode、危险事件，并让 Debrief 读取 schema 校验后的会话报告。
 - [x] 用真实本地进度驱动首页、任务板、导航与 Profile，并实现 50 条/任务历史边界、G-counter 多标签页合并、reset tombstone 和存储失败反馈。
 - [x] 只公开 3 个证据完备的成就；隐藏无法由当前存档证明的 17 个规划定义。
-- [x] 将 Three.js、GSAP 与完整任务目录移出首载闭包；把幽灵升级为原创程序化 3D 角色、边缘巡游、追眼、五种情绪与 88 条路由感知双语吐槽，并保留 Reduced Motion / WebGL / chunk 失败回退。
+- [x] 将 Three.js、GSAP 与完整任务目录移出首载闭包；把幽灵升级为原创程序化 3D 角色、边缘巡游、追眼、五种情绪与 88 条路由感知双语吐槽，并实现 Follow System 静态 CTA、显式 Full 覆盖以及 Reduced / None / WebGL / chunk 失败回退。
 - [x] 删除两个孤儿 Logo，并把“无引用公开资产”升级为默认失败的门禁。
 - [x] 为 221/221 关、555/555 条 check 补齐显式 `objectiveId`，并把 H5 分为 77 个可重放命令与 144 个诚实引导清单。
 - [ ] 为 221 关补齐文件/Git/进程/输出 fixture、结果型检查与逐关浏览器 E2E。
 - [ ] 为动作补充 tokens 与前后 state 快照，支持确定性重放。
 - [ ] 为另外 17 个成就补充可观察证据，或删除不适用于浏览器模拟器的定义。
-- [x] 接通并验证动效强度、CRT、键盘提示、终端字体/光标/回滚、任务计时器和得分设置，并实现版本化持久化与跨标签页收敛。
+- [x] 接通并验证 Follow System / Full / Reduced / None 四态动效、CRT、键盘提示、终端字体/光标/回滚、任务计时器和得分设置，并实现 settings v2、v1 迁移与跨标签页收敛。
 - [ ] 逐项实现主题、Boss 特效、扩展无障碍、音效、默认提示、自动保存与点击复制；在有真实消费者前保持禁用。
 - [ ] 如果产品需要跨设备连续训练，再设计账号、同步冲突、隐私与数据导出/删除契约；当前不伪装成云存档。
 - [ ] 完成全站中英文案覆盖。

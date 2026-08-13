@@ -216,6 +216,12 @@
     animation: none !important;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    html[data-motion="system"] :is(.animate-spin, .animate-pulse, .animate-bounce) {
+      animation: none !important;
+    }
+  }
+
   html[data-motion="none"] *,
   html[data-motion="none"] *::before,
   html[data-motion="none"] *::after {

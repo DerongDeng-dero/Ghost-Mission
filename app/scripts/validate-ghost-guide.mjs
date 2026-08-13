@@ -55,8 +55,8 @@ for (const route of validRoutes) {
 }
 check(quips.filter((quip) => quip.route === 'global').length >= 32, 'the global shuffle bag needs enough variety')
 
-check(model.getAutoQuipDelayMs(true, 0) === 45_000, 'first auto quip must wait at least 45 seconds')
-check(model.getAutoQuipDelayMs(true, 1) === 75_000, 'first auto quip must stay within 75 seconds')
+check(model.getAutoQuipDelayMs(true, 0) === 12_000, 'first auto quip must wait at least 12 seconds')
+check(model.getAutoQuipDelayMs(true, 1) === 20_000, 'first auto quip must appear within 20 seconds')
 check(model.getAutoQuipDelayMs(false, 0) === 45_000, 'subsequent auto quips must wait at least 45 seconds')
 check(model.getAutoQuipDelayMs(false, 1) === 110_000, 'subsequent auto quips must stay within 110 seconds')
 
@@ -112,7 +112,7 @@ const fallbackSource = readFileSync(fallbackUrl, 'utf8')
 for (const token of [
   "import('./GhostAvatar3D')",
   "import('./ghostGuideModel')",
-  "const movementAllowed = animationIntensity === 'full' && !reducedByConfig",
+  'allowsContinuousMotion(animationIntensity, reducedByConfig)',
   'if (movementAllowed) setShouldLoad3D(true)',
   'const renderDeferredAvatar = shouldLoad3D && movementAllowed',
   'useReducedMotionConfig',
@@ -125,6 +125,9 @@ for (const token of [
   'aria-live={message.source === \'manual\' ? \'polite\' : \'off\'}',
   'pointer-events-none fixed inset-0',
   'pointer-events-auto relative',
+  "void setSetting('animationIntensity', 'full')",
+  'data-ghost-motion-cta',
+  "data-motion-allowed={movementAllowed ? 'true' : 'false'}",
 ]) {
   check(guideSource.includes(token), `guide runtime contract missing ${token}`)
 }
@@ -140,6 +143,45 @@ for (const token of [
 ]) {
   check(guideSource.includes(token), `guide recovery or cleanup contract missing ${token}`)
 }
+const hideMessageStart = guideSource.indexOf('const hideMessage = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {')
+const showMessageStart = guideSource.indexOf('const showMessage = useCallback(', hideMessageStart)
+const hideMessageSource = guideSource.slice(hideMessageStart, showMessageStart)
+check(hideMessageStart >= 0 && showMessageStart > hideMessageStart, 'message dismissal handler must remain inspectable')
+check(
+  hideMessageSource.includes('const restoreAvatarFocus = event.detail === 0'),
+  'message dismissal must distinguish keyboard activation from pointer activation',
+)
+check(
+  hideMessageSource.includes('if (restoreAvatarFocus) avatarButtonRef.current?.focus({ preventScroll: true })'),
+  'keyboard message dismissal must restore focus before removing the focused controls',
+)
+check(
+  hideMessageSource.includes('if (!restoreAvatarFocus) setIsFocusWithin(false)'),
+  'pointer message dismissal must release the patrol pause',
+)
+for (const token of ['setIsHovered(false)', 'setIsFocusWithin(false)', 'setIsPointerDown(false)']) {
+  check(
+    hideMessageSource.includes(token),
+    `message dismissal must clear stale interaction state: ${token}`,
+  )
+}
+const enableFullMotionStart = guideSource.indexOf('const enableFullMotion = (event: ReactMouseEvent<HTMLButtonElement>) => {')
+const handleBlurStart = guideSource.indexOf('const handleBlurWithin =', enableFullMotionStart)
+const enableFullMotionSource = guideSource.slice(enableFullMotionStart, handleBlurStart)
+check(enableFullMotionStart >= 0 && handleBlurStart > enableFullMotionStart, 'Full-motion CTA handler must remain inspectable')
+check(
+  enableFullMotionSource.includes('const restoreAvatarFocus = event.detail === 0'),
+  'Full-motion CTA must distinguish keyboard activation from pointer activation',
+)
+check(
+  enableFullMotionSource.includes('if (restoreAvatarFocus) avatarButtonRef.current?.focus({ preventScroll: true })'),
+  'keyboard Full-motion CTA activation must restore focus before removing itself',
+)
+check(
+  enableFullMotionSource.includes('if (!restoreAvatarFocus) setIsFocusWithin(false)'),
+  'pointer Full-motion CTA activation must release the patrol pause',
+)
+check(guideSource.includes('ref={avatarButtonRef}'), 'ghost avatar must expose a stable focus target')
 const patrolTransformIndex = guideSource.indexOf('style={{ x, y }}')
 const hoverTransformIndex = guideSource.indexOf('whileHover={movementAllowed')
 check(

@@ -8,9 +8,14 @@ import {
   type AppSettings,
 } from './settingsContract'
 
-export const SETTINGS_STORAGE_KEY = 'ghostops_settings_v1'
+export const SETTINGS_STORAGE_KEY = 'ghostops_settings_v2'
+export const LEGACY_SETTINGS_STORAGE_KEY = 'ghostops_settings_v1'
 
 export type SettingsPersistenceStatus = 'ready' | 'saved' | 'error'
+interface LoadedSettings {
+  settings: AppSettings
+  persistenceStatus: SettingsPersistenceStatus
+}
 
 interface SettingsStore extends AppSettings {
   persistenceStatus: SettingsPersistenceStatus
@@ -18,13 +23,33 @@ interface SettingsStore extends AppSettings {
   resetSettings: () => boolean
 }
 
-function loadSettings(): AppSettings {
+function loadSettings(): LoadedSettings {
   try {
-    if (typeof window === 'undefined') return { ...DEFAULT_APP_SETTINGS }
+    if (typeof window === 'undefined') {
+      return { settings: { ...DEFAULT_APP_SETTINGS }, persistenceStatus: 'ready' }
+    }
     const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
-    return raw === null ? { ...DEFAULT_APP_SETTINGS } : parseSettingsEnvelope(raw) ?? { ...DEFAULT_APP_SETTINGS }
+    if (raw !== null) {
+      const parsed = parseSettingsEnvelope(raw)
+      return parsed === null
+        ? { settings: { ...DEFAULT_APP_SETTINGS }, persistenceStatus: 'error' }
+        : { settings: parsed, persistenceStatus: 'ready' }
+    }
+
+    const legacyRaw = window.localStorage.getItem(LEGACY_SETTINGS_STORAGE_KEY)
+    if (legacyRaw === null) {
+      return { settings: { ...DEFAULT_APP_SETTINGS }, persistenceStatus: 'ready' }
+    }
+    const migrated = parseSettingsEnvelope(legacyRaw)
+    if (migrated === null) {
+      return { settings: { ...DEFAULT_APP_SETTINGS }, persistenceStatus: 'error' }
+    }
+    return {
+      settings: migrated,
+      persistenceStatus: persistSettings(migrated) ? 'ready' : 'error',
+    }
   } catch {
-    return { ...DEFAULT_APP_SETTINGS }
+    return { settings: { ...DEFAULT_APP_SETTINGS }, persistenceStatus: 'error' }
   }
 }
 
@@ -55,11 +80,11 @@ function settingsFromStore(state: SettingsStore): AppSettings {
   }
 }
 
-const initialSettings = loadSettings()
+const initialLoad = loadSettings()
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
-  ...initialSettings,
-  persistenceStatus: 'ready',
+  ...initialLoad.settings,
+  persistenceStatus: initialLoad.persistenceStatus,
   setSetting: (key, value) => {
     const candidate = normalizeAppSettings({
       ...settingsFromStore(get()),

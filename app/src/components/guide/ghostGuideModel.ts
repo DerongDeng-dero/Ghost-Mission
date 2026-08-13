@@ -33,8 +33,8 @@ export interface PerimeterPoint {
 
 export const AUTO_QUIP_MIN_DELAY_MS = 45_000
 export const AUTO_QUIP_MAX_DELAY_MS = 110_000
-export const FIRST_AUTO_QUIP_MIN_DELAY_MS = 45_000
-export const FIRST_AUTO_QUIP_MAX_DELAY_MS = 75_000
+export const FIRST_AUTO_QUIP_MIN_DELAY_MS = 12_000
+export const FIRST_AUTO_QUIP_MAX_DELAY_MS = 20_000
 export const RECENT_QUIP_WINDOW = 12
 
 type QuipTone = 'cheeky' | 'curious' | 'excited' | 'smug' | 'sleepy'

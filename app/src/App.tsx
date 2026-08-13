@@ -1,4 +1,13 @@
-import { lazy, Suspense, Component, useLayoutEffect, type ComponentType, type ReactNode } from 'react'
+import {
+  lazy,
+  Suspense,
+  Component,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from 'react'
 import { MotionConfig } from 'framer-motion'
 import { Link, Routes, Route } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -6,6 +15,25 @@ import Layout from './components/Layout'
 import Home from './pages/Home'
 import GhostGuide3D from './components/guide/GhostGuide3D'
 import { useSettingsStore } from './store/settingsStore'
+import { getAppMotionPolicy } from './store/settingsContract'
+
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
+
+function useSystemReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia(REDUCED_MOTION_QUERY).matches
+  ))
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(REDUCED_MOTION_QUERY)
+    const update = () => setReduced(mediaQuery.matches)
+    update()
+    mediaQuery.addEventListener('change', update)
+    return () => mediaQuery.removeEventListener('change', update)
+  }, [])
+
+  return reduced
+}
 
 // Global runtime error logging
 if (typeof window !== 'undefined') {
@@ -161,6 +189,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 
 export default function App() {
   const animationIntensity = useSettingsStore(state => state.animationIntensity)
+  const systemReducedMotion = useSystemReducedMotion()
+  const motionPolicy = getAppMotionPolicy(animationIntensity, systemReducedMotion)
 
   useLayoutEffect(() => {
     const root = document.documentElement
@@ -174,8 +204,8 @@ export default function App() {
 
   return (
     <MotionConfig
-      reducedMotion={animationIntensity === 'full' ? 'user' : 'always'}
-      skipAnimations={animationIntensity === 'none'}
+      reducedMotion={motionPolicy.reducedMotion}
+      skipAnimations={motionPolicy.skipAnimations}
     >
       <ErrorBoundary>
         <Layout>

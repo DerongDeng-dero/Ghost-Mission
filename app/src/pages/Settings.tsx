@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, useId } from 'react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotionConfig } from 'framer-motion'
 import {
   Palette,
   Accessibility,
@@ -114,7 +114,7 @@ const DEFAULT_SETTINGS: SettingsState = {
   theme: 'dark',
   crtScanlines: false,
   bossModeEffects: true,
-  animationIntensity: 'full',
+  animationIntensity: 'system',
 
   fontSize: 13,
   fontFamily: 'Fira Code',
@@ -148,7 +148,7 @@ function isValidSettingValue(key: keyof SettingsState, value: unknown): boolean 
     case 'theme':
       return value === 'dark' || value === 'high-contrast' || value === 'warm'
     case 'animationIntensity':
-      return value === 'full' || value === 'reduced' || value === 'none'
+      return value === 'system' || value === 'full' || value === 'reduced' || value === 'none'
     case 'fontSize':
       return Number.isInteger(value) && Number(value) >= 11 && Number(value) <= 16
     case 'fontFamily':
@@ -384,6 +384,8 @@ function ResetModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: 
 
 export default function Settings() {
   const { t, i18n } = useTranslation()
+  const shouldReduceMotion = useReducedMotionConfig() ?? false
+  const animationIntensityLabelId = useId()
   const resetMissionProgress = useGameStore(state => state.resetMissionProgress)
   const missionProgress = useGameStore(state => state.missionProgress)
   const progressMilestones = useGameStore(state => state.progressMilestones)
@@ -495,8 +497,7 @@ export default function Settings() {
     setActiveSection(id)
     const el = document.getElementById(`settings-${id}`)
     if (el) {
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
+      el.scrollIntoView({ behavior: shouldReduceMotion ? 'auto' : 'smooth', block: 'start' })
     }
   }
 
@@ -616,9 +617,14 @@ export default function Settings() {
               description={t('settings.appearanceLiveDescription')}
             >
               <div>
-                <h4 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.animationIntensity')}</h4>
-                <div className="flex flex-col gap-space-3 sm:flex-row">
+                <h4 id={animationIntensityLabelId} className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.animationIntensity')}</h4>
+                <div
+                  className="flex flex-col gap-space-3 sm:flex-row"
+                  role="group"
+                  aria-labelledby={animationIntensityLabelId}
+                >
                   {([
+                    { v: 'system' as const, label: t('settings.animation.system') },
                     { v: 'full' as const, label: t('settings.animation.full') },
                     { v: 'reduced' as const, label: t('settings.animation.reduced') },
                     { v: 'none' as const, label: t('settings.animation.none') },

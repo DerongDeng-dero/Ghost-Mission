@@ -10,6 +10,7 @@ import {
   type ComponentType,
   type CSSProperties,
   type FocusEvent as ReactFocusEvent,
+  type MouseEvent as ReactMouseEvent,
 } from 'react'
 import {
   animate,
@@ -21,6 +22,7 @@ import {
 import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useSettingsStore } from '../../store/settingsStore'
+import { allowsContinuousMotion } from '../../store/settingsContract'
 import GhostAvatarFallback from './GhostAvatarFallback'
 import type { GhostMood, GhostQuip, PerimeterPoint } from './ghostGuideModel'
 
@@ -211,8 +213,10 @@ export default function GhostGuide3D() {
   const { t, i18n } = useTranslation()
   const location = useLocation()
   const animationIntensity = useSettingsStore((state) => state.animationIntensity)
+  const setSetting = useSettingsStore((state) => state.setSetting)
   const reducedByConfig = useReducedMotionConfig() ?? false
-  const movementAllowed = animationIntensity === 'full' && !reducedByConfig
+  const systemMotionPaused = animationIntensity === 'system' && reducedByConfig
+  const movementAllowed = allowsContinuousMotion(animationIntensity, reducedByConfig)
   const messageId = useId()
   const [initialDock] = useState(() => getFallbackDock(readViewport()))
   const x = useMotionValue(initialDock.x)
@@ -240,6 +244,7 @@ export default function GhostGuide3D() {
     }
   })
 
+  const avatarButtonRef = useRef<HTMLButtonElement>(null)
   const mountedRef = useRef(true)
   const positionInitializedRef = useRef(false)
   const currentEdgeRef = useRef<PerimeterPoint['edge']>('bottom')
@@ -269,12 +274,20 @@ export default function GhostGuide3D() {
     return modelPromiseRef.current
   }, [])
 
-  const hideMessage = useCallback(() => {
+  const hideMessage = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
+    const restoreAvatarFocus = event.detail === 0
+    if (restoreAvatarFocus) avatarButtonRef.current?.focus({ preventScroll: true })
     if (messageTimerRef.current) {
       clearTimeout(messageTimerRef.current)
       messageTimerRef.current = null
     }
     setMessage(null)
+    // Removing a focused close button does not reliably emit blur. Keyboard
+    // activation hands focus to the avatar and keeps it still; pointer
+    // activation releases the transient state so patrol can resume.
+    setIsHovered(false)
+    if (!restoreAvatarFocus) setIsFocusWithin(false)
+    setIsPointerDown(false)
   }, [])
 
   const showMessage = useCallback((quip: GhostQuip, source: MessageSource) => {
@@ -564,6 +577,20 @@ export default function GhostGuide3D() {
     })
   }
 
+  const enableFullMotion = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    const restoreAvatarFocus = event.detail === 0
+    // The app setting remains the source of truth. Even when persistence is
+    // denied, setSetting keeps the explicit choice active for this session.
+    void setSetting('animationIntensity', 'full')
+    setIsHovered(false)
+    if (!restoreAvatarFocus) setIsFocusWithin(false)
+    setIsPointerDown(false)
+    setShouldLoad3D(true)
+    setInteractionPulse((current) => current + 1)
+    if (restoreAvatarFocus) avatarButtonRef.current?.focus({ preventScroll: true })
+    void requestModel()
+  }
+
   const handleBlurWithin = (event: ReactFocusEvent<HTMLDivElement>) => {
     const nextTarget = event.relatedTarget
     if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
@@ -600,7 +627,25 @@ export default function GhostGuide3D() {
         }}
         onBlurCapture={handleBlurWithin}
       >
+        {systemMotionPaused && !message && (
+          <button
+            type="button"
+            onClick={enableFullMotion}
+            className="pointer-events-auto absolute bottom-[calc(100%+10px)] right-0 flex min-h-11 w-max max-w-[min(240px,calc(100vw-24px))] items-center gap-2 rounded-full border border-[#00E5FF]/35 bg-[#0A0E14]/95 px-3 py-2 text-left font-jetbrains shadow-[0_8px_28px_rgba(0,229,255,0.14)] backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
+            aria-label={`${t('guide.systemMotionPaused')}. ${t('guide.enableFullMotion')}`}
+            data-ghost-motion-cta
+          >
+            <span className="shrink-0 text-[9px] font-bold tracking-[0.14em] text-[#FFD166]" aria-hidden="true">
+              SYSTEM · STATIC
+            </span>
+            <span className="text-[11px] text-[#E8EDF2]">
+              {t('guide.enableFullMotion')}
+            </span>
+          </button>
+        )}
+
         <motion.button
+          ref={avatarButtonRef}
           type="button"
           onClick={() => void handleAvatarClick()}
           aria-label={t('guide.requestQuip')}
@@ -617,6 +662,7 @@ export default function GhostGuide3D() {
           }}
           data-ghost-mood={mood}
           data-auto-banter={autoBanterPaused ? 'paused' : 'active'}
+          data-motion-allowed={movementAllowed ? 'true' : 'false'}
           data-ghost-avatar
         >
           {renderDeferredAvatar ? (

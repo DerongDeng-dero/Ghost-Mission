@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useReducedMotionConfig } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import type { Terminal as XTermType } from '@xterm/xterm'
 import type { FitAddon as FitAddonType } from '@xterm/addon-fit'
@@ -262,6 +263,7 @@ export default function TerminalEmulator({
   initialJobScenario = 'none',
 }: TerminalEmulatorProps) {
   const { t } = useTranslation()
+  const shouldReduceMotion = useReducedMotionConfig() ?? false
   const fontSize = useSettingsStore(state => state.fontSize)
   const fontFamily = useSettingsStore(state => state.fontFamily)
   const cursorStyle = useSettingsStore(state => state.cursorStyle)
@@ -1781,7 +1783,10 @@ export default function TerminalEmulator({
           role="status"
           aria-live="polite"
         >
-          <div className="w-6 h-6 border-2 border-[#00E5FF] border-t-transparent rounded-full animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          <div
+            className={`w-6 h-6 border-2 border-[#00E5FF] border-t-transparent rounded-full ${shouldReduceMotion ? '' : 'animate-spin'}`}
+            aria-hidden="true"
+          />
           <span className="font-jetbrains text-body-sm text-[#788DA1]">{t('terminal.initializing')}</span>
         </div>
       ) : null}

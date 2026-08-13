@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import * as d3 from 'd3'
 import { X, Maximize2 } from 'lucide-react'
+import { useReducedMotionConfig } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { commands } from '@/data/commands'
 
@@ -59,6 +60,7 @@ const RISK_COLORS: Record<string, string> = {
 
 export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps) {
   const { t } = useTranslation()
+  const shouldReduceMotion = useReducedMotionConfig() ?? false
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [selectedNode, setSelectedNode] = useState<CommandNode | null>(null)
@@ -182,18 +184,33 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
       .attr('tabindex', (_d, index) => index === 0 ? 0 : -1)
       .attr('aria-label', d => `${d.name}: ${d.summary}`)
 
+    const renderPositions = () => {
+      link
+        .attr('x1', d => getNodeCoordinate(d.source, 'x'))
+        .attr('y1', d => getNodeCoordinate(d.source, 'y'))
+        .attr('x2', d => getNodeCoordinate(d.target, 'x'))
+        .attr('y2', d => getNodeCoordinate(d.target, 'y'))
+
+      node.attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`)
+    }
+
     const dragBehavior = d3.drag<SVGGElement, CommandNode>()
       .on('start', (event, d) => {
-        if (!event.active) simulation.alphaTarget(0.3).restart()
+        if (!shouldReduceMotion && !event.active) simulation.alphaTarget(0.3).restart()
         d.fx = d.x
         d.fy = d.y
       })
       .on('drag', (event, d) => {
         d.fx = event.x
         d.fy = event.y
+        if (shouldReduceMotion) {
+          d.x = event.x
+          d.y = event.y
+          renderPositions()
+        }
       })
       .on('end', (event, d) => {
-        if (!event.active) simulation.alphaTarget(0)
+        if (!shouldReduceMotion && !event.active) simulation.alphaTarget(0)
         d.fx = null
         d.fy = null
       })
@@ -233,14 +250,17 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
       .attr('pointer-events', 'none')
       .style('text-shadow', '0 1px 3px #0A0E14')
 
+    const highlightDuration = shouldReduceMotion ? 0 : 150
+    const resetDuration = shouldReduceMotion ? 0 : 300
+
     const highlightNode = (element: SVGGElement, d: CommandNode) => {
       const connected = getConnectedNodes(d.id)
       const hoveredGroup = d3.select<SVGGElement, CommandNode>(element)
 
-      node.transition().duration(150)
+      node.transition().duration(highlightDuration)
         .style('opacity', n => connected.has(n.id) ? 1 : 0.6)
 
-      link.transition().duration(150)
+      link.transition().duration(highlightDuration)
         .attr('stroke-opacity', l => {
           const sourceId = getNodeId(l.source)
           const targetId = getNodeId(l.target)
@@ -258,11 +278,11 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
         })
 
       hoveredGroup.select<SVGCircleElement>('.main-circle')
-        .transition().duration(150)
+        .transition().duration(highlightDuration)
         .attr('r', nodeDatum => nodeDatum.name.length > 8 ? 14 : 12)
 
       hoveredGroup.select<SVGCircleElement>('.glow')
-        .transition().duration(150)
+        .transition().duration(highlightDuration)
         .attr('opacity', 0.4)
         .attr('r', nodeDatum => nodeDatum.name.length > 8 ? 20 : 17)
     }
@@ -270,20 +290,20 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
     const resetHighlight = (element: SVGGElement) => {
       const hoveredGroup = d3.select<SVGGElement, CommandNode>(element)
 
-      node.transition().duration(300)
+      node.transition().duration(resetDuration)
         .style('opacity', 1)
 
-      link.transition().duration(300)
+      link.transition().duration(resetDuration)
         .attr('stroke-opacity', 0.5)
         .attr('stroke', '#1E2D3D')
         .attr('stroke-width', 1)
 
       hoveredGroup.select<SVGCircleElement>('.main-circle')
-        .transition().duration(300)
+        .transition().duration(resetDuration)
         .attr('r', nodeDatum => nodeDatum.name.length > 8 ? 11 : 9)
 
       hoveredGroup.select<SVGCircleElement>('.glow')
-        .transition().duration(300)
+        .transition().duration(resetDuration)
         .attr('opacity', 0.15)
         .attr('r', nodeDatum => nodeDatum.name.length > 8 ? 16 : 13)
     }
@@ -347,16 +367,18 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
       setSelectedNode(null)
     })
 
-    // Update positions on tick
-    simulation.on('tick', () => {
-      link
-        .attr('x1', d => getNodeCoordinate(d.source, 'x'))
-        .attr('y1', d => getNodeCoordinate(d.source, 'y'))
-        .attr('x2', d => getNodeCoordinate(d.target, 'x'))
-        .attr('y2', d => getNodeCoordinate(d.target, 'y'))
-
-      node.attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`)
-    })
+    if (shouldReduceMotion) {
+      // Manual ticks are synchronous and do not dispatch simulation events.
+      // Settle once so reduced motion gets a useful graph without a timer.
+      simulation.stop()
+      const stabilizationTicks = Math.ceil(
+        Math.log(simulation.alphaMin()) / Math.log(1 - simulation.alphaDecay()),
+      )
+      simulation.tick(stabilizationTicks)
+      renderPositions()
+    } else {
+      simulation.on('tick', renderPositions)
+    }
 
     return () => {
       simulation.on('tick', null)
@@ -365,7 +387,7 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
       svg.on('click', null)
       svg.selectAll('*').interrupt()
     }
-  }, [nodes, links, dimensions, getConnectedNodes, t])
+  }, [nodes, links, dimensions, getConnectedNodes, shouldReduceMotion, t])
 
   // Get related commands for selected node
   const relatedCommands = useMemo(() => {
@@ -395,7 +417,7 @@ export default function CommandGraph3D({ onCommandSelect }: CommandGraph3DProps)
         height: isExpanded ? '85vh' : 520,
         backgroundColor: '#0A0E14',
         borderColor: '#1E2D3D',
-        transition: 'height 0.3s ease',
+        transition: shouldReduceMotion ? 'none' : 'height 0.3s ease',
       }}
     >
       {/* Header */}

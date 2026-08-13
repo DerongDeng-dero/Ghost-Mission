@@ -494,7 +494,10 @@ export default function Home() {
               <span className="text-[#00FF88]">Operative</span>
             )}
             {!typewriterDone && (
-              <span aria-hidden="true" className="inline-block w-[2px] h-[1.2em] bg-[#00E5FF] ml-1 animate-pulse motion-reduce:animate-none align-middle" />
+              <span
+                aria-hidden="true"
+                className={`inline-block w-[2px] h-[1.2em] bg-[#00E5FF] ml-1 align-middle ${reduceMotion ? '' : 'animate-pulse'}`}
+              />
             )}
           </motion.h1>
 

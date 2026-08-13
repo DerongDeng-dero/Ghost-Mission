@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotionConfig } from 'framer-motion'
 import { AlertTriangle, Settings, Terminal, Menu, X, UserRound } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { LanguageSwitcher } from '@/i18n/LanguageSwitcher'
@@ -15,6 +15,7 @@ import {
 
 export default function Navbar() {
   const location = useLocation()
+  const shouldReduceMotion = useReducedMotionConfig() ?? false
   const missionProgress = useGameStore((state) => state.missionProgress)
   const progressMilestones = useGameStore((state) => state.progressMilestones)
   const progressPersistenceStatus = useGameStore((state) => state.progressPersistenceStatus)
@@ -114,15 +115,16 @@ export default function Navbar() {
           <circle cx="12.5" cy="13" r="0.8" fill="currentColor" />
           <circle cx="15.5" cy="13" r="0.8" fill="currentColor" />
           {/* Prompt cursor */}
-          <path
-            d="M6 21L8 21"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            className="motion-reduce:hidden"
-          >
-            <animate attributeName="opacity" values="1;0;1" dur="1.2s" repeatCount="indefinite" />
-          </path>
+          {!shouldReduceMotion && (
+            <path
+              d="M6 21L8 21"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
+              <animate attributeName="opacity" values="1;0;1" dur="1.2s" repeatCount="indefinite" />
+            </path>
+          )}
           <circle cx="12" cy="11" r="1" fill="currentColor" />
         </svg>
         <span

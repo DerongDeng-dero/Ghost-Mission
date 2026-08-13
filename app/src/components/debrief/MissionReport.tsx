@@ -88,7 +88,7 @@ export default function MissionReport({ report, metadata }: MissionReportProps) 
         >
           {displayedText}
           <span
-            className={`inline-block w-[2px] h-[1.1em] ml-[2px] align-middle motion-reduce:animate-none ${showCursor ? 'animate-pulse' : ''}`}
+            className={`inline-block w-[2px] h-[1.1em] ml-[2px] align-middle ${showCursor && !shouldReduceMotion ? 'animate-pulse' : ''}`}
             style={{
               backgroundColor: '#00E5FF',
               opacity: showCursor ? 1 : 0,
