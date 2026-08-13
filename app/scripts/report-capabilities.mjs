@@ -74,16 +74,22 @@ function getRuntimeCommandRows(catalog) {
     const objectives = (raw.o ?? raw.objectives ?? []).map(objective => ({
       id: objective.i ?? objective.id ?? 'obj',
       label: objective.l ?? objective.label_en ?? objective.label ?? '',
+      required: objective.r ?? objective.required ?? true,
     }))
-    const legacyObjectives = objectives.filter(objective => /^obj-\d+$/.test(objective.id))
+    const legacyObjectives = objectives.filter(
+      objective => objective.required && /^obj-\d+$/.test(objective.id),
+    )
     let progressCheckIndex = 0
 
     for (const rawCheck of raw.c ?? raw.checks ?? []) {
       const type = rawCheck.t ?? rawCheck.type ?? 'command_used'
       let pattern = rawCheck.p ?? rawCheck.pattern ?? ''
+      const explicitObjectiveId = rawCheck.o ?? rawCheck.objectiveId
       const objective = type === 'no_red_command_used'
         ? undefined
-        : legacyObjectives[progressCheckIndex++]
+        : explicitObjectiveId
+          ? objectives.find(candidate => candidate.id === explicitObjectiveId)
+          : legacyObjectives[progressCheckIndex++]
 
       if (type === 'command_used' && objective) {
         const expected = objective.label.match(/^Master the use of (.+)$/i)?.[1]?.trim()
@@ -102,12 +108,12 @@ function getRuntimeCommandRows(catalog) {
   return rows
 }
 
-function classify(row) {
-  const contextual = CONTEXT_CATEGORIES.get(`${row.levelId}\u0000${row.pattern}`)
+export function classifyInvocation(levelId, pattern) {
+  const contextual = CONTEXT_CATEGORIES.get(`${levelId}\u0000${pattern}`)
   if (contextual) return contextual
-  if (SHELL_PATTERNS.has(row.pattern)) return 'shell'
-  if (TERMINAL_PATTERNS.has(row.pattern)) return 'terminal'
-  if (SYNTAX_PATTERNS.has(row.pattern)) return 'syntax'
+  if (SHELL_PATTERNS.has(pattern)) return 'shell'
+  if (TERMINAL_PATTERNS.has(pattern)) return 'terminal'
+  if (SYNTAX_PATTERNS.has(pattern)) return 'syntax'
   return 'unsupported'
 }
 
@@ -117,7 +123,10 @@ function compareText(left, right) {
 
 const catalogPath = fileURLToPath(new URL('../src/data/all_levels.json', import.meta.url))
 const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'))
-const rows = getRuntimeCommandRows(catalog).map(row => ({ ...row, category: classify(row) }))
+const rows = getRuntimeCommandRows(catalog).map(row => ({
+  ...row,
+  category: classifyInvocation(row.levelId, row.pattern),
+}))
 const levelIds = catalog.map(level => level.id)
 const blockedByLevel = new Map(levelIds.map(levelId => [levelId, []]))
 

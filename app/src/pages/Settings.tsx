@@ -22,6 +22,12 @@ import type { Theme } from '@/components/settings/ThemeSelector'
 import ToggleOption from '@/components/settings/ToggleOption'
 import AccessibilityPanel from '@/components/settings/AccessibilityPanel'
 import { sanitizeCallsignInput, useGameStore } from '@/store/gameStore'
+import { useSettingsStore } from '@/store/settingsStore'
+import type {
+  AnimationIntensity,
+  TerminalCursorStyle as CursorStyle,
+  TerminalFontFamily,
+} from '@/store/settingsContract'
 
 // ─── localStorage Helpers ───────────────────────────────────────────
 
@@ -64,9 +70,6 @@ function persistedResetAcknowledges(
 }
 
 // ─── Types ──────────────────────────────────────────────────────────
-
-type CursorStyle = 'block' | 'line' | 'bar'
-type AnimationIntensity = 'full' | 'reduced' | 'none'
 
 interface SettingsState {
   // Appearance
@@ -117,7 +120,7 @@ const DEFAULT_SETTINGS: SettingsState = {
   fontFamily: 'Fira Code',
   cursorStyle: 'block',
   blinkCursor: true,
-  scrollbackLines: 10000,
+  scrollbackLines: 5000,
   clickToCopy: true,
 
   highContrast: false,
@@ -149,7 +152,7 @@ function isValidSettingValue(key: keyof SettingsState, value: unknown): boolean 
     case 'fontSize':
       return Number.isInteger(value) && Number(value) >= 11 && Number(value) <= 16
     case 'fontFamily':
-      return value === 'Fira Code' || value === 'JetBrains Mono' || value === 'Cascadia Code'
+      return value === 'Fira Code' || value === 'JetBrains Mono'
     case 'cursorStyle':
       return value === 'block' || value === 'line' || value === 'bar'
     case 'scrollbackLines':
@@ -388,6 +391,18 @@ export default function Settings() {
   const progressResetSerial = useGameStore(state => state.progressResetSerial)
   const callsign = useGameStore(state => state.callsign)
   const setCallsign = useGameStore(state => state.setCallsign)
+  const animationIntensity = useSettingsStore(state => state.animationIntensity)
+  const crtScanlines = useSettingsStore(state => state.crtScanlines)
+  const keyboardHints = useSettingsStore(state => state.keyboardHints)
+  const fontSize = useSettingsStore(state => state.fontSize)
+  const fontFamily = useSettingsStore(state => state.fontFamily)
+  const cursorStyle = useSettingsStore(state => state.cursorStyle)
+  const blinkCursor = useSettingsStore(state => state.blinkCursor)
+  const scrollbackLines = useSettingsStore(state => state.scrollbackLines)
+  const timerDisplay = useSettingsStore(state => state.timerDisplay)
+  const scoreDisplay = useSettingsStore(state => state.scoreDisplay)
+  const settingsPersistenceStatus = useSettingsStore(state => state.persistenceStatus)
+  const setSetting = useSettingsStore(state => state.setSetting)
   const [activeSection, setActiveSection] = useState('appearance')
   const [showResetModal, setShowResetModal] = useState(false)
   const [exportStatus, setExportStatus] = useState<'idle' | 'success' | 'error'>('idle')
@@ -575,23 +590,34 @@ export default function Settings() {
 
         {/* Settings Panel */}
         <div className="flex-1 max-w-[720px] py-space-4 md:py-space-6 space-y-space-8">
+          <div
+            className="rounded-radius-md border border-[#1E2D3D] bg-[#0F1419] px-space-4 py-space-3"
+            role="status"
+            aria-live="polite"
+          >
+            <p className="font-inter text-body-sm text-[#A8B8C8]">{t('settings.liveSettings')}</p>
+            {settingsPersistenceStatus !== 'ready' && (
+              <p
+                className="mt-1 font-inter text-body-sm"
+                style={{ color: settingsPersistenceStatus === 'error' ? '#FF7B86' : '#00FF88' }}
+              >
+                {settingsPersistenceStatus === 'error'
+                  ? t('settings.settingsSessionOnly')
+                  : t('settings.settingsSaved')}
+              </p>
+            )}
+          </div>
+
           {/* ── Appearance ── */}
           <div id="settings-appearance">
             <SettingSection
               icon={Palette}
               title={t('settings.appearance')}
-              description={t('settings.theme')}
+              description={t('settings.appearanceLiveDescription')}
             >
-              <fieldset disabled className="space-y-space-4 opacity-60">
-              <p className="font-inter text-body-sm text-[#FFD166]">{t('settings.previewUnavailable')}</p>
               <div>
-                <h4 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.theme')}</h4>
-                <ThemeSelector value={s.theme} onChange={(t) => update('theme', t)} />
-              </div>
-
-              <div className="mt-space-6">
                 <h4 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.animationIntensity')}</h4>
-                <div className="flex gap-space-3">
+                <div className="flex flex-col gap-space-3 sm:flex-row">
                   {([
                     { v: 'full' as const, label: t('settings.animation.full') },
                     { v: 'reduced' as const, label: t('settings.animation.reduced') },
@@ -600,35 +626,46 @@ export default function Settings() {
                     <button
                       type="button"
                       key={opt.v}
-                      onClick={() => update('animationIntensity', opt.v)}
-                      aria-pressed={s.animationIntensity === opt.v}
+                      onClick={() => setSetting('animationIntensity', opt.v)}
+                      aria-pressed={animationIntensity === opt.v}
                       className="min-h-11 flex-1 rounded-radius-md border px-space-4 py-space-3 text-center font-jetbrains text-body transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
                       style={{
-                        borderColor: s.animationIntensity === opt.v ? '#00E5FF' : '#1E2D3D',
-                        backgroundColor: s.animationIntensity === opt.v ? 'rgba(0,229,255,0.08)' : '#0F1419',
-                        color: s.animationIntensity === opt.v ? '#00E5FF' : '#8B9EB0',
+                        borderColor: animationIntensity === opt.v ? '#00E5FF' : '#1E2D3D',
+                        backgroundColor: animationIntensity === opt.v ? 'rgba(0,229,255,0.08)' : '#0F1419',
+                        color: animationIntensity === opt.v ? '#00E5FF' : '#8B9EB0',
                       }}
                     >
                       {opt.label}
                     </button>
                   ))}
                 </div>
+                <p className="mt-space-2 font-inter text-body-sm text-[#8B9EB0]">
+                  {t('settings.systemMotionNote')}
+                </p>
               </div>
 
-              <div className="mt-space-4 space-y-space-3">
+              <div className="space-y-space-3">
                 <ToggleOption
                   label={t('settings.crtScanlines')}
                   description={t('settings.crtScanlinesDesc')}
-                  enabled={s.crtScanlines}
-                  onChange={(v) => update('crtScanlines', v)}
+                  enabled={crtScanlines}
+                  onChange={(v) => setSetting('crtScanlines', v)}
                 />
+              </div>
+
+              <fieldset disabled className="space-y-space-4 opacity-60">
+                <legend className="sr-only">{t('settings.previewUnavailable')}</legend>
+                <p className="font-inter text-body-sm text-[#FFD166]">{t('settings.previewUnavailable')}</p>
+                <div>
+                  <h4 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.theme')}</h4>
+                  <ThemeSelector value={s.theme} onChange={(theme) => update('theme', theme)} />
+                </div>
                 <ToggleOption
                   label={t('settings.bossModeEffects')}
                   description={t('settings.bossModeEffectsDesc')}
                   enabled={s.bossModeEffects}
                   onChange={(v) => update('bossModeEffects', v)}
                 />
-              </div>
               </fieldset>
             </SettingSection>
           </div>
@@ -646,53 +683,51 @@ export default function Settings() {
               >
                 {t('settings.builtInAccessibility')}
               </div>
-              <fieldset disabled className="space-y-space-4 opacity-60">
-              <p className="font-inter text-body-sm text-[#FFD166]">{t('settings.previewUnavailable')}</p>
-              <AccessibilityPanel
-                features={[
-                  {
-                    id: 'high-contrast',
-                    label: t('settings.highContrast'),
-                    description: t('settings.highContrastDesc'),
-                    icon: Palette,
-                    enabled: s.highContrast,
-                    onChange: (v) => update('highContrast', v),
-                  },
-                  {
-                    id: 'color-blind',
-                    label: t('settings.colorBlind'),
-                    description: t('settings.colorBlindDesc'),
-                    icon: Palette,
-                    enabled: s.colorBlindMode,
-                    onChange: (v) => update('colorBlindMode', v),
-                  },
-                  {
-                    id: 'large-text',
-                    label: t('settings.largeText'),
-                    description: t('settings.largeTextDesc'),
-                    icon: Info,
-                    enabled: s.largeText,
-                    onChange: (v) => update('largeText', v),
-                  },
-                  {
-                    id: 'keyboard-hints',
-                    label: t('settings.keyboardHints'),
-                    description: t('settings.keyboardHintsDesc'),
-                    icon: Info,
-                    enabled: s.keyboardHints,
-                    onChange: (v) => update('keyboardHints', v),
-                  },
-                  {
-                    id: 'sound-to-visual',
-                    label: t('settings.soundToVisual'),
-                    description: t('settings.soundToVisualDesc'),
-                    icon: Info,
-                    enabled: s.soundToVisual,
-                    onChange: (v) => update('soundToVisual', v),
-                  },
-                ]}
+              <ToggleOption
+                label={t('settings.keyboardHints')}
+                description={t('settings.keyboardHintsDesc')}
+                enabled={keyboardHints}
+                onChange={(v) => setSetting('keyboardHints', v)}
               />
-
+              <fieldset disabled className="space-y-space-4 opacity-60">
+                <legend className="sr-only">{t('settings.previewUnavailable')}</legend>
+                <p className="font-inter text-body-sm text-[#FFD166]">{t('settings.previewUnavailable')}</p>
+                <AccessibilityPanel
+                  features={[
+                    {
+                      id: 'high-contrast',
+                      label: t('settings.highContrast'),
+                      description: t('settings.highContrastDesc'),
+                      icon: Palette,
+                      enabled: s.highContrast,
+                      onChange: (v) => update('highContrast', v),
+                    },
+                    {
+                      id: 'color-blind',
+                      label: t('settings.colorBlind'),
+                      description: t('settings.colorBlindDesc'),
+                      icon: Palette,
+                      enabled: s.colorBlindMode,
+                      onChange: (v) => update('colorBlindMode', v),
+                    },
+                    {
+                      id: 'large-text',
+                      label: t('settings.largeText'),
+                      description: t('settings.largeTextDesc'),
+                      icon: Info,
+                      enabled: s.largeText,
+                      onChange: (v) => update('largeText', v),
+                    },
+                    {
+                      id: 'sound-to-visual',
+                      label: t('settings.soundToVisual'),
+                      description: t('settings.soundToVisualDesc'),
+                      icon: Info,
+                      enabled: s.soundToVisual,
+                      onChange: (v) => update('soundToVisual', v),
+                    },
+                  ]}
+                />
               </fieldset>
             </SettingSection>
           </div>
@@ -702,10 +737,8 @@ export default function Settings() {
             <SettingSection
               icon={Terminal}
               title={t('settings.terminal')}
-              description=""
+              description={t('settings.terminalLiveDescription')}
             >
-              <fieldset disabled className="space-y-space-4 opacity-60">
-              <p className="font-inter text-body-sm text-[#FFD166]">{t('settings.previewUnavailable')}</p>
               {/* Font Size */}
               <div>
                 <div className="flex items-center justify-between mb-space-3">
@@ -713,10 +746,10 @@ export default function Settings() {
                 </div>
                 <NeonSlider
                   label={t('settings.fontSize')}
-                  value={s.fontSize}
+                  value={fontSize}
                   min={11}
                   max={16}
-                  onChange={(v) => update('fontSize', v)}
+                  onChange={(v) => setSetting('fontSize', v)}
                   unit="px"
                 />
                 {/* Preview */}
@@ -725,8 +758,8 @@ export default function Settings() {
                   style={{
                     backgroundColor: '#0C1117',
                     borderColor: '#1E2D3D',
-                    fontFamily: s.fontFamily,
-                    fontSize: `${s.fontSize}px`,
+                    fontFamily,
+                    fontSize: `${fontSize}px`,
                   }}
                 >
                   <span className="text-[#00FF88]">$ </span>
@@ -739,13 +772,12 @@ export default function Settings() {
                 <h4 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.fontFamily')}</h4>
                 <NeonSelect
                   label={t('settings.fontFamily')}
-                  value={s.fontFamily}
+                  value={fontFamily}
                   options={[
                     { label: 'Fira Code', value: 'Fira Code' },
                     { label: 'JetBrains Mono', value: 'JetBrains Mono' },
-                    { label: 'Cascadia Code', value: 'Cascadia Code' },
                   ]}
-                  onChange={(v) => update('fontFamily', String(v))}
+                  onChange={(v) => setSetting('fontFamily', String(v) as TerminalFontFamily)}
                 />
               </div>
 
@@ -761,13 +793,13 @@ export default function Settings() {
                     <button
                       type="button"
                       key={opt.v}
-                      onClick={() => update('cursorStyle', opt.v)}
-                      aria-pressed={s.cursorStyle === opt.v}
+                      onClick={() => setSetting('cursorStyle', opt.v)}
+                      aria-pressed={cursorStyle === opt.v}
                       className="min-h-11 flex-1 rounded-radius-md border px-space-4 py-space-3 text-center font-jetbrains text-body transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00E5FF]"
                       style={{
-                        borderColor: s.cursorStyle === opt.v ? '#00E5FF' : '#1E2D3D',
-                        backgroundColor: s.cursorStyle === opt.v ? 'rgba(0,229,255,0.08)' : '#0F1419',
-                        color: s.cursorStyle === opt.v ? '#00E5FF' : '#8B9EB0',
+                        borderColor: cursorStyle === opt.v ? '#00E5FF' : '#1E2D3D',
+                        backgroundColor: cursorStyle === opt.v ? 'rgba(0,229,255,0.08)' : '#0F1419',
+                        color: cursorStyle === opt.v ? '#00E5FF' : '#8B9EB0',
                       }}
                     >
                       {opt.label}
@@ -781,13 +813,13 @@ export default function Settings() {
                 <h4 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.scrollbackLines')}</h4>
                 <NeonSelect
                   label={t('settings.scrollbackLines')}
-                  value={s.scrollbackLines}
+                  value={scrollbackLines}
                   options={[
                     { label: '1,000 lines', value: 1000 },
                     { label: '5,000 lines', value: 5000 },
                     { label: '10,000 lines', value: 10000 },
                   ]}
-                  onChange={(v) => update('scrollbackLines', Number(v))}
+                  onChange={(v) => setSetting('scrollbackLines', Number(v) as 1000 | 5000 | 10000)}
                 />
               </div>
 
@@ -795,16 +827,20 @@ export default function Settings() {
                 <ToggleOption
                   label={t('settings.blinkCursor')}
                   description={t('settings.blinkCursorDesc')}
-                  enabled={s.blinkCursor}
-                  onChange={(v) => update('blinkCursor', v)}
+                  enabled={blinkCursor}
+                  onChange={(v) => setSetting('blinkCursor', v)}
                 />
+              </div>
+
+              <fieldset disabled className="space-y-space-4 opacity-60">
+                <legend className="sr-only">{t('settings.previewUnavailable')}</legend>
+                <p className="font-inter text-body-sm text-[#FFD166]">{t('settings.previewUnavailable')}</p>
                 <ToggleOption
                   label={t('settings.clickToCopy')}
                   description={t('settings.clickToCopyDesc')}
                   enabled={s.clickToCopy}
                   onChange={(v) => update('clickToCopy', v)}
                 />
-              </div>
               </fieldset>
             </SettingSection>
           </div>
@@ -814,47 +850,49 @@ export default function Settings() {
             <SettingSection
               icon={Gamepad2}
               title={t('settings.gameplay')}
-              description=""
+              description={t('settings.gameplayLiveDescription')}
             >
-              <fieldset disabled className="space-y-space-4 opacity-60">
-              <p className="font-inter text-body-sm text-[#FFD166]">{t('settings.previewUnavailable')}</p>
-              {/* Default Hint Level */}
-              <div>
-                <h4 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.defaultHintLevel')}</h4>
-                <div className="flex items-center gap-space-4">
-                  <NeonSlider
-                    label={t('settings.defaultHintLevel')}
-                    value={s.defaultHintLevel}
-                    min={0}
-                    max={5}
-                    onChange={(v) => update('defaultHintLevel', v)}
-                  />
-                </div>
-                <p className="font-jetbrains text-body-sm text-[#788DA1] mt-space-2">
-                  {hintDescriptions[s.defaultHintLevel]}
-                </p>
-              </div>
-
-              <div className="mt-space-4 space-y-space-3">
+              <div className="space-y-space-3">
                 <ToggleOption
                   label={t('settings.timerDisplay')}
                   description={t('settings.timerDisplayDesc')}
-                  enabled={s.timerDisplay}
-                  onChange={(v) => update('timerDisplay', v)}
+                  enabled={timerDisplay}
+                  onChange={(v) => setSetting('timerDisplay', v)}
                 />
                 <ToggleOption
                   label={t('settings.scoreDisplay')}
                   description={t('settings.scoreDisplayDesc')}
-                  enabled={s.scoreDisplay}
-                  onChange={(v) => update('scoreDisplay', v)}
+                  enabled={scoreDisplay}
+                  onChange={(v) => setSetting('scoreDisplay', v)}
                 />
+              </div>
+
+              <fieldset disabled className="space-y-space-4 opacity-60">
+                <legend className="sr-only">{t('settings.previewUnavailable')}</legend>
+                <p className="font-inter text-body-sm text-[#FFD166]">{t('settings.previewUnavailable')}</p>
+                {/* Default Hint Level */}
+                <div>
+                  <h4 className="font-jetbrains text-h4 text-[#E8EDF2] mb-space-3">{t('settings.defaultHintLevel')}</h4>
+                  <div className="flex items-center gap-space-4">
+                    <NeonSlider
+                      label={t('settings.defaultHintLevel')}
+                      value={s.defaultHintLevel}
+                      min={0}
+                      max={5}
+                      onChange={(v) => update('defaultHintLevel', v)}
+                    />
+                  </div>
+                  <p className="font-jetbrains text-body-sm text-[#788DA1] mt-space-2">
+                    {hintDescriptions[s.defaultHintLevel]}
+                  </p>
+                </div>
+
                 <ToggleOption
                   label={t('settings.autoSave')}
                   description={t('settings.autoSaveDesc')}
                   enabled={s.autoSave}
                   onChange={(v) => update('autoSave', v)}
                 />
-              </div>
               </fieldset>
 
               {/* Reset Progress */}

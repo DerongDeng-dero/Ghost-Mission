@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import { MotionConfig } from 'framer-motion'
 import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Navbar from './Navbar'
@@ -24,14 +23,19 @@ export default function Layout({ children }: LayoutProps) {
   }, [location.pathname])
 
   return (
-    <MotionConfig reducedMotion="user">
-      <div className="min-h-[100dvh] flex flex-col" style={{ backgroundColor: '#0A0E14' }}>
-        <a
-          href="#main-content"
+    <div className="min-h-[100dvh] flex flex-col" style={{ backgroundColor: '#0A0E14' }}>
+        <button
+          type="button"
+          onClick={() => {
+            const main = mainRef.current
+            if (!main) return
+            main.scrollIntoView({ block: 'start' })
+            main.focus({ preventScroll: true })
+          }}
           className="fixed left-4 top-2 z-[100] -translate-y-20 rounded-radius-sm bg-[#00E5FF] px-4 py-3 font-jetbrains text-sm font-bold text-[#0A0E14] transition-transform focus:translate-y-0"
         >
           {t('common.skipToContent')}
-        </a>
+        </button>
 
         <Navbar />
 
@@ -40,7 +44,6 @@ export default function Layout({ children }: LayoutProps) {
         </main>
 
         <Footer />
-      </div>
-    </MotionConfig>
+    </div>
   )
 }

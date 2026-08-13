@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { motion, useInView, useReducedMotion } from 'framer-motion'
+import { motion, useInView, useReducedMotionConfig } from 'framer-motion'
 import {
   Terminal, Target, BookOpen, Search, User, Settings,
   Trophy, Clock, Calendar, ChevronRight, Crosshair,
@@ -254,7 +254,7 @@ function Section({
 /* ------------------------------------------------------------------ */
 export default function Home() {
   const { t, i18n } = useTranslation()
-  const reduceMotion = useReducedMotion() ?? false
+  const reduceMotion = useReducedMotionConfig() ?? false
   const callsign = useGameStore((state) => state.callsign)
   const missionProgress = useGameStore((state) => state.missionProgress)
   const progressMilestones = useGameStore((state) => state.progressMilestones)

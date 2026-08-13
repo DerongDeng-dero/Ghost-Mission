@@ -1,5 +1,5 @@
 import { useId, useRef, useState, useEffect } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion, useReducedMotionConfig } from 'framer-motion'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { ChevronDown, AlertTriangle, Clock } from 'lucide-react'
@@ -69,7 +69,7 @@ function TimelineItem({ entry, isEven }: TimelineItemProps) {
   const itemRef = useRef<HTMLDivElement>(null)
   const detailsId = useId()
   const [expanded, setExpanded] = useState(false)
-  const shouldReduceMotion = useReducedMotion()
+  const shouldReduceMotion = useReducedMotionConfig() ?? false
   const riskColor = riskColorMap[entry.risk] || '#00FF88'
 
   useEffect(() => {

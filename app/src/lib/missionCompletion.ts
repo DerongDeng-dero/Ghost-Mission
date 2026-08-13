@@ -7,6 +7,38 @@ export function isMissionDebriefAvailable(
   return runReportPersisted === true && progressRecorded === true
 }
 
+interface CompletionBoundRunReport {
+  completedAt: string
+  scoreResult: { total: number }
+}
+
+interface CompletionBoundProgress {
+  status: 'in-progress' | 'completed'
+  completedAt?: string
+  latestScore?: number
+  completionHistory?: Array<{ completedAt: string; score: number }>
+}
+
+/**
+ * A session report is derived data for one exact completion, not merely for a
+ * mission id. Bind it to the latest canonical completion so a failed replay
+ * cannot expose an older report through a direct debrief URL.
+ */
+export function isRunReportForLatestCompletion(
+  report: CompletionBoundRunReport | null,
+  progress: CompletionBoundProgress | undefined,
+): boolean {
+  if (!report || progress?.status !== 'completed') return false
+  const latestAttempt = progress.completionHistory?.at(-1)
+  return Boolean(
+    latestAttempt
+    && progress.completedAt === latestAttempt.completedAt
+    && progress.latestScore === latestAttempt.score
+    && report.completedAt === latestAttempt.completedAt
+    && report.scoreResult.total === latestAttempt.score,
+  )
+}
+
 export interface MissionCompletionPersistence {
   progressRecorded: boolean
   runReportPersisted: boolean

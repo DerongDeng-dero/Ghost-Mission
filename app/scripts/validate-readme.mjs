@@ -30,12 +30,21 @@ const auditPolicyValidationSource = await readFile(
   'utf8',
 )
 const auditPolicyRegressionChecks = auditPolicyValidationSource.match(/^test\(/gm)?.length ?? 0
-const genericH5Levels = levels.filter(level =>
-  level.hints?.some(hint => hint.level === 5 && /^Full solution:\s*Use '/i.test(hint.text_en ?? '')),
+const verifiedH5Levels = levels.filter(level =>
+  level.hints?.some(hint => hint.level === 5 && hint.solution_type === 'verified_command'),
+).length
+const guidedH5Levels = levels.filter(level =>
+  level.hints?.some(hint => hint.level === 5 && hint.solution_type === 'guided_actions'),
 ).length
 const fullyBoundLevels = levels.filter(level =>
   level.checks?.every(check => typeof check.objectiveId === 'string' && check.objectiveId.length > 0),
 ).length
+const fullyBoundChecks = levels.reduce(
+  (count, level) => count + level.checks.filter(
+    check => typeof check.objectiveId === 'string' && check.objectiveId.length > 0,
+  ).length,
+  0,
+)
 
 if (commands.unresolvedRelated !== 0) {
   failures.push(`command graph: ${commands.unresolvedRelated} related references do not resolve`)
@@ -136,12 +145,20 @@ expectIncludes(
   `${content.checks} 条检查全部由 ${capabilityMetrics.commandChecks} 条 \`command_used\` 与 ` +
     `${content.checks - capabilityMetrics.commandChecks} 条 \`no_red_command_used\``,
 )
-expectIncludes('generic H5 debt', `${genericH5Levels}/${content.levels} 关的第五级提示仍是通用模板`)
-expectIncludes('explicit objective binding debt', `只有 ${fullyBoundLevels}/${content.levels} 关的所有 check 显式绑定`)
+expectIncludes('verified H5 boundary', `${verifiedH5Levels} 个 \`verified_command\``)
+expectIncludes('guided H5 boundary', `${guidedH5Levels} 个 \`guided_actions\``)
+expectIncludes(
+  'explicit objective binding levels',
+  `${fullyBoundLevels}/${content.levels} 关均为显式目标绑定`,
+)
+expectIncludes(
+  'explicit objective binding checks',
+  `${fullyBoundChecks}/${content.checks} 条 check`,
+)
 
 for (const script of [
   'dev', 'generate:progress-catalog', 'validate:content', 'validate:engine',
-  'validate:progress', 'validate:audit-policy', 'report:capabilities',
+  'validate:progress', 'validate:settings', 'validate:audit-policy', 'report:capabilities',
   'validate:assets', 'validate:dependencies', 'validate:readme', 'validate:build',
   'check', 'lint', 'build', 'verify', 'preview', 'audit:prod', 'audit:all',
   'audit:policy', 'release:check',
@@ -155,18 +172,22 @@ for (const script of [
 if (!packageJson.scripts.check?.includes('npm run validate:audit-policy')) {
   failures.push('package scripts: check must include the offline audit-policy regression')
 }
+if (!packageJson.scripts.check?.includes('npm run validate:settings')) {
+  failures.push('package scripts: check must include the settings contract regression')
+}
 if (packageJson.scripts['release:check'] !== 'npm run verify && npm run audit:policy') {
   failures.push('package scripts: release:check must run verify before the live audit policy')
 }
-expectIncludes('audit advisory URL', AUDIT_POLICY.advisoryUrl)
-expectIncludes('audit exception expiry', AUDIT_POLICY.expiresAt.slice(0, 10))
 expectIncludes('audit registry', AUDIT_POLICY.registry)
 expectIncludes('audit dependency scope', '全部生产、开发、可选与 peer 依赖')
+expectIncludes('zero-vulnerability policy', '零漏洞、无 allowlist')
+expectIncludes('current audit result', '0 个漏洞记录')
 
 for (const staleClaim of [
   '201/221', '201 / 221', '551 个必做目标', '59 个可选目标',
   '96 项回归', '均为 0 vulnerabilities', 'npm audit 清零',
-  '24 个未支持 pattern', '余下 20 关',
+  '24 个未支持 pattern', '余下 20 关', '188/221', '2/221',
+  '2026-09-30', '临时 allowlist',
 ]) {
   expectAbsent('stale README metric', staleClaim)
 }

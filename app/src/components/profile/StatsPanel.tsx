@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion, useReducedMotionConfig } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { Crosshair, Terminal, Flame } from 'lucide-react';
 
@@ -13,7 +13,7 @@ interface StatsPanelProps {
 }
 
 function AnimatedNumber({ value, duration = 800 }: { value: number; duration?: number }) {
-  const reduceMotion = useReducedMotion() ?? false;
+  const reduceMotion = useReducedMotionConfig() ?? false;
   const [display, setDisplay] = useState(0);
   const displayRef = useRef(0);
   const ref = useRef<HTMLSpanElement>(null);

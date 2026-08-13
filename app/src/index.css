@@ -209,4 +209,19 @@
     outline: 2px solid var(--neon-cyan);
     outline-offset: 2px;
   }
+
+  /* "Reduced" removes spatial motion through MotionConfig while keeping
+     short opacity/color feedback. "None" also disables CSS motion. */
+  html[data-motion="reduced"] :is(.animate-spin, .animate-pulse, .animate-bounce) {
+    animation: none !important;
+  }
+
+  html[data-motion="none"] *,
+  html[data-motion="none"] *::before,
+  html[data-motion="none"] *::after {
+    animation: none !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
 }

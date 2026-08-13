@@ -11,6 +11,7 @@ import {
   MAX_MISSION_RUN_ACTIONS,
   createMissionRunEvidence,
   isMissionDebriefAvailable,
+  isRunReportForLatestCompletion,
   persistMissionCompletion,
   scheduleCoalescedTask,
   tryRecordMissionAction,
@@ -153,6 +154,30 @@ for (const [reportPersisted, progressRecorded] of [
     'debrief access requires both the canonical progress and run report',
   )
 }
+
+const latestCompletion = {
+  status: 'completed',
+  completedAt: '2026-08-13T00:00:01.000Z',
+  latestScore: 91,
+  completionHistory: [{ completedAt: '2026-08-13T00:00:01.000Z', score: 91 }],
+}
+const latestReport = {
+  completedAt: '2026-08-13T00:00:01.000Z',
+  scoreResult: { total: 91 },
+}
+assert.equal(isRunReportForLatestCompletion(latestReport, latestCompletion), true)
+assert.equal(
+  isRunReportForLatestCompletion(
+    { completedAt: '2026-08-12T00:00:01.000Z', scoreResult: { total: 88 } },
+    latestCompletion,
+  ),
+  false,
+  'a stale report from an earlier completion must fail closed even when the mission is completed',
+)
+assert.equal(
+  isRunReportForLatestCompletion(latestReport, { ...latestCompletion, status: 'in-progress' }),
+  false,
+)
 
 const createTrackedAction = (id, command, successfulCommands = [command]) => ({
   id: String(id),

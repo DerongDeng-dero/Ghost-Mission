@@ -1,5 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { capabilityMetrics } from './report-capabilities.mjs'
+import { getEffectiveActionRows, renderGuidedSolution } from './content-contracts.mjs'
 import {
   buildProgressCatalog,
   serializeKnownMissionIds,
@@ -129,6 +130,8 @@ let objectiveCount = 0
 let requiredObjectiveCount = 0
 let checkCount = 0
 let hintCount = 0
+let verifiedCommandSolutionCount = 0
+let guidedActionSolutionCount = 0
 
 for (const [language, locale] of [['en', englishLocale], ['zh', chineseLocale]]) {
   for (const [key, value] of locale) {
@@ -265,30 +268,15 @@ if (!Array.isArray(levels) || levels.length === 0) {
       }
     }
 
-    if (explicitlyBoundChecks > 0 && explicitlyBoundChecks !== checks.length) {
-      failures.push(`${context}: checks must be either all explicitly bound or all use the legacy ordinal contract`)
-    } else if (explicitlyBoundChecks === checks.length && checks.length > 0) {
+    if (explicitlyBoundChecks !== checks.length) {
+      failures.push(
+        `${context}: every check requires an explicit objectiveId; legacy ordinal binding is forbidden`,
+      )
+    } else if (checks.length > 0) {
       for (const objective of requiredObjectives) {
         if (!checks.some(check => check.objectiveId === objective.id)) {
           failures.push(`${context}: required objective ${objective.id} has no explicitly bound check`)
         }
-      }
-    } else {
-      const progressChecks = checks.filter(check => check.type !== 'no_red_command_used')
-      const requiredSkillObjectives = requiredObjectives.filter(objective => /^obj-\d+$/.test(objective.id))
-      const aggregateObjectives = requiredObjectives.filter(objective => !/^obj-\d+$/.test(objective.id))
-      if (requiredObjectives.length !== checks.length) {
-        failures.push(`${context}: ${requiredObjectives.length} required objectives but ${checks.length} checks`)
-      }
-      if (requiredSkillObjectives.length !== progressChecks.length) {
-        failures.push(`${context}: ${requiredSkillObjectives.length} required skill objectives but ${progressChecks.length} progress checks`)
-      }
-      if (aggregateObjectives.length !== 1) {
-        failures.push(`${context}: legacy levels require exactly one aggregate required objective`)
-      }
-      const safetyChecks = checks.filter(check => check.type === 'no_red_command_used')
-      if (safetyChecks.length !== 1 || checks[checks.length - 1]?.type !== 'no_red_command_used') {
-        failures.push(`${context}: legacy levels require one trailing no_red_command_used safety check`)
       }
     }
 
@@ -321,10 +309,42 @@ if (!Array.isArray(levels) || levels.length === 0) {
       if (!isNonEmptyString(hint.text_en) || !isNonEmptyString(hint.text_zh)) {
         failures.push(`${context}: hint level ${String(hint.level)} requires English and Chinese text`)
       }
+      if (hint.level !== 5 && hint.solution_type !== undefined) {
+        failures.push(`${context}: only the H5 hint may declare solution_type`)
+      }
     }
     hintLevels.sort((a, b) => a - b)
     if (hintLevels.join(',') !== '1,2,3,4,5') {
       failures.push(`${context}: expected hint levels 1-5, received ${hintLevels.join(',')}`)
+    }
+
+    const h5 = hints.find(hint => hint.level === 5)
+    if (h5?.solution_type === 'verified_command') {
+      verifiedCommandSolutionCount += 1
+      if (!/^Full solution:\s*\S/i.test(h5.text_en)) {
+        failures.push(`${context}: verified_command H5 requires a non-empty English transcript`)
+      }
+      if (!/^完整解答[：:]\s*\S/u.test(h5.text_zh)) {
+        failures.push(`${context}: verified_command H5 requires a non-empty Chinese transcript`)
+      }
+      if (/^Full solution:\s*Use '/i.test(h5.text_en)) {
+        failures.push(`${context}: verified_command H5 cannot use the legacy generic template`)
+      }
+    } else if (h5?.solution_type === 'guided_actions') {
+      guidedActionSolutionCount += 1
+      try {
+        const expected = renderGuidedSolution(level, getEffectiveActionRows(level, checks))
+        if (h5.text_en !== expected.text_en || h5.text_zh !== expected.text_zh) {
+          failures.push(`${context}: guided_actions H5 has drifted from its objective/check contract`)
+        }
+      } catch (error) {
+        failures.push(
+          `${context}: guided_actions H5 cannot be derived: ` +
+            `${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
+    } else {
+      failures.push(`${context}: H5 solution_type must be verified_command or guided_actions`)
     }
 
     if (!isRecord(level.scoring)) {
@@ -401,6 +421,8 @@ if (failures.length > 0) {
   console.log(
     `Content OK: ${levels.length} levels, ${chapterContracts.size} chapters, ` +
       `${objectiveCount} objectives (${requiredObjectiveCount} required), ` +
-      `${checkCount} checks, ${hintCount} hints.`,
+      `${checkCount} explicitly bound checks, ${hintCount} hints ` +
+      `(${verifiedCommandSolutionCount} verified commands, ` +
+      `${guidedActionSolutionCount} guided action checklists).`,
   )
 }

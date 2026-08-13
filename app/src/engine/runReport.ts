@@ -423,13 +423,24 @@ function isMissionRunReport(value: unknown, missionId: string): value is Mission
 }
 
 export function saveMissionRunReport(report: MissionRunReport): boolean {
+  const key = storageKey(report.missionId)
+  const discardStaleReport = () => {
+    try { sessionStorage.removeItem(key) } catch { /* Storage is unavailable; fail closed below. */ }
+  }
   try {
-    if (!isMissionRunReport(report, report.missionId)) return false
+    if (!isMissionRunReport(report, report.missionId)) {
+      discardStaleReport()
+      return false
+    }
     const serialized = JSON.stringify(report)
-    if (!isWithinReportStorageBudget(serialized)) return false
-    sessionStorage.setItem(storageKey(report.missionId), serialized)
+    if (!isWithinReportStorageBudget(serialized)) {
+      discardStaleReport()
+      return false
+    }
+    sessionStorage.setItem(key, serialized)
     return true
   } catch {
+    discardStaleReport()
     return false
   }
 }

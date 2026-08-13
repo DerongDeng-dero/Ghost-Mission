@@ -13,6 +13,8 @@ import {
   planTerminalInputChunk,
   truncateTextToUtf16Limit,
 } from '@/lib/textSegmentation'
+import { useSettingsStore } from '@/store/settingsStore'
+import type { TerminalCursorStyle, TerminalFontFamily } from '@/store/settingsContract'
 
 export interface TerminalAction {
   command: string
@@ -244,6 +246,14 @@ function dropLastCodePoint(value: string): string {
   return codePoints.join('')
 }
 
+function terminalFontStack(fontFamily: TerminalFontFamily): string {
+  return `"${fontFamily}", "Fira Code", "JetBrains Mono", monospace`
+}
+
+function xtermCursorStyle(cursorStyle: TerminalCursorStyle): 'block' | 'underline' | 'bar' {
+  return cursorStyle === 'line' ? 'underline' : cursorStyle
+}
+
 export default function TerminalEmulator({
   shell,
   onModeChange,
@@ -252,6 +262,12 @@ export default function TerminalEmulator({
   initialJobScenario = 'none',
 }: TerminalEmulatorProps) {
   const { t } = useTranslation()
+  const fontSize = useSettingsStore(state => state.fontSize)
+  const fontFamily = useSettingsStore(state => state.fontFamily)
+  const cursorStyle = useSettingsStore(state => state.cursorStyle)
+  const blinkCursor = useSettingsStore(state => state.blinkCursor)
+  const scrollbackLines = useSettingsStore(state => state.scrollbackLines)
+  const crtScanlines = useSettingsStore(state => state.crtScanlines)
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<XTermType | null>(null)
   const fitRef = useRef<FitAddonType | null>(null)
@@ -260,6 +276,8 @@ export default function TerminalEmulator({
   const tmuxPrefixRef = useRef(false)
   const screenPrefixRef = useRef(false)
   const shellRef = useRef(shell)
+
+  const terminalSettingsRef = useRef({ fontSize, fontFamily, cursorStyle, blinkCursor, scrollbackLines })
 
   // Callback refs keep the xterm instance stable while still using fresh props.
   const onModeChangeRef = useRef(onModeChange)
@@ -289,6 +307,10 @@ export default function TerminalEmulator({
   const loadFailed = terminalLoadFailure?.shell === shell
     && terminalLoadFailure.scenario === initialJobScenario
     && terminalLoadFailure.attempt === loadAttempt
+
+  useEffect(() => {
+    terminalSettingsRef.current = { fontSize, fontFamily, cursorStyle, blinkCursor, scrollbackLines }
+  }, [blinkCursor, cursorStyle, fontFamily, fontSize, scrollbackLines])
 
   useEffect(() => {
     shellRef.current = shell
@@ -373,10 +395,11 @@ export default function TerminalEmulator({
 
       if (disposed || !containerRef.current) return
       const container = containerRef.current
+      const terminalSettings = terminalSettingsRef.current
 
       const term = new Terminal({
-        fontFamily: '"Fira Code", monospace',
-        fontSize: 13,
+        fontFamily: terminalFontStack(terminalSettings.fontFamily),
+        fontSize: terminalSettings.fontSize,
         lineHeight: 1.5,
         theme: {
           background: '#0C1117',
@@ -400,9 +423,9 @@ export default function TerminalEmulator({
           brightCyan: '#57EDFF',
           brightWhite: '#FFFFFF',
         },
-        cursorBlink: true,
-        cursorStyle: 'block',
-        scrollback: 5000,
+        cursorBlink: terminalSettings.blinkCursor,
+        cursorStyle: xtermCursorStyle(terminalSettings.cursorStyle),
+        scrollback: terminalSettings.scrollbackLines,
         convertEol: true,
       })
       cleanupTasks.push(() => container.replaceChildren())
@@ -1705,6 +1728,17 @@ export default function TerminalEmulator({
   }, [initialJobScenario, loadAttempt, shell, writePrompt])
 
   useEffect(() => {
+    const term = termRef.current
+    if (!term) return
+    term.options.fontFamily = terminalFontStack(fontFamily)
+    term.options.fontSize = fontSize
+    term.options.cursorStyle = xtermCursorStyle(cursorStyle)
+    term.options.cursorBlink = blinkCursor
+    term.options.scrollback = scrollbackLines
+    try { fitRef.current?.fit() } catch { /* Ignore a settings update during disposal. */ }
+  }, [blinkCursor, cursorStyle, fontFamily, fontSize, scrollbackLines])
+
+  useEffect(() => {
     if (!successPulse || !containerRef.current) return
     containerRef.current.style.boxShadow = 'inset 0 0 0 2px rgba(0, 255, 136, 0.4)'
     const timer = setTimeout(() => {
@@ -1764,6 +1798,15 @@ export default function TerminalEmulator({
         aria-label={t('terminal.inputOutputLabel')}
         aria-hidden={loading}
       />
+      {crtScanlines && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-[5]"
+          style={{
+            backgroundImage: 'repeating-linear-gradient(to bottom, transparent 0, transparent 3px, rgba(0, 0, 0, 0.2) 3px, rgba(0, 0, 0, 0.2) 4px)',
+          }}
+        />
+      )}
     </div>
   )
 }

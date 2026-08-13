@@ -8,7 +8,7 @@ import {
   useState,
   type ComponentType,
 } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotionConfig } from 'framer-motion'
 import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import GhostAvatarFallback from './GhostAvatarFallback'
@@ -68,7 +68,7 @@ const randomTips: Message[] = [
 export default function GhostGuide3D() {
   const { t } = useTranslation()
   const location = useLocation()
-  const reduceMotion = useReducedMotion() ?? false
+  const reduceMotion = useReducedMotionConfig() ?? false
   const tipIndexRef = useRef(0)
   const messageId = useId()
   const [message, setMessage] = useState<Message | null>(null)

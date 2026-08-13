@@ -2588,6 +2588,24 @@ test('Run report: corrupted session data fails closed while a complete report ro
   assert.equal(saveMissionRunReport(report), true)
   assert.deepEqual(loadMissionRunReport(report.missionId), report)
 
+  // A replay supersedes the previous session report. If its replacement
+  // cannot be persisted, the old report must not remain reachable by URL.
+  const originalSessionStorage = globalThis.sessionStorage
+  let staleRemoved = false
+  globalThis.sessionStorage = {
+    ...originalSessionStorage,
+    getItem: key => values.get(key) ?? null,
+    setItem: () => { throw new Error('quota exceeded') },
+    removeItem: key => {
+      staleRemoved = values.delete(key)
+    },
+  }
+  assert.equal(saveMissionRunReport(report), false)
+  assert.equal(staleRemoved, true, 'a failed replay report write must evict the stale report')
+  assert.equal(loadMissionRunReport(report.missionId), null)
+  globalThis.sessionStorage = originalSessionStorage
+  assert.equal(saveMissionRunReport(report), true)
+
   const generatedLevel = catalogMission('pipe-first')
   const generatedShell = new ShellEngine(new VFS())
   const generatedResult = generatedShell.execute('echo report-source | cat')
@@ -2791,7 +2809,7 @@ test('Run report: corrupted session data fails closed while a complete report ro
   )
 })
 
-test('Run report: all 29 executable H5 solutions persist exact engine traces', () => {
+test('Catalog contract: every verified H5 replays and persists exact engine traces', () => {
   const values = new Map()
   globalThis.sessionStorage = {
     getItem: key => values.get(key) ?? null,
@@ -2807,8 +2825,15 @@ test('Run report: all 29 executable H5 solutions persist exact engine traces', (
   for (const rawLevel of catalog) {
     const level = getLevelById(rawLevel.id)
     assert.ok(level, `${rawLevel.id}: level missing`)
-    const solution = level.hints.find(hint => hint.level === 5)?.text_en.replace(/^Full solution:\s*/i, '')
-    if (!solution) continue
+    assert.ok(
+      rawLevel.checks.every(check => typeof check.objectiveId === 'string' && check.objectiveId.length > 0),
+      `${rawLevel.id}: legacy ordinal check binding reached the runtime catalog`,
+    )
+    const h5 = level.hints.find(hint => hint.level === 5)
+    assert.ok(h5, `${rawLevel.id}: missing H5`)
+    if (h5.solutionType !== 'verified_command') continue
+    const solution = h5.text_en.replace(/^Full solution:\s*/i, '')
+    assert.notEqual(solution, h5.text_en, `${rawLevel.id}: verified H5 is not a command transcript`)
 
     const vfs = new VFS()
     const emittedRedCommands = []
@@ -2836,8 +2861,13 @@ test('Run report: all 29 executable H5 solutions persist exact engine traces', (
       gitState: shell.gitState,
       redCommandsUsed,
     })
+    assert.equal(execution.exitCode, 0, `${level.id}: H5 failed: ${execution.stderr}`)
     const validationResults = validateMission(level, state)
-    if (!isMissionComplete(level, validationResults)) continue
+    assert.equal(
+      isMissionComplete(level, validationResults),
+      true,
+      `${level.id}: verified H5 did not satisfy its required objectives`,
+    )
     completedSolutions += 1
 
     const runReport = {
@@ -2868,7 +2898,7 @@ test('Run report: all 29 executable H5 solutions persist exact engine traces', (
     }
   }
 
-  assert.equal(completedSolutions, 29, 'the known executable H5 coverage set changed')
+  assert.equal(completedSolutions, 77, 'the reviewed executable H5 coverage set changed')
   assert.deepEqual(rejectedReports, [])
 })
 

@@ -1,10 +1,11 @@
-import { lazy, Suspense, Component, type ComponentType, type ReactNode } from 'react'
+import { lazy, Suspense, Component, useLayoutEffect, type ComponentType, type ReactNode } from 'react'
 import { MotionConfig } from 'framer-motion'
 import { Link, Routes, Route } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Layout from './components/Layout'
 import Home from './pages/Home'
 import GhostGuide3D from './components/guide/GhostGuide3D'
+import { useSettingsStore } from './store/settingsStore'
 
 // Global runtime error logging
 if (typeof window !== 'undefined') {
@@ -159,8 +160,23 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 }
 
 export default function App() {
+  const animationIntensity = useSettingsStore(state => state.animationIntensity)
+
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    const previousMotion = root.dataset.motion
+    root.dataset.motion = animationIntensity
+    return () => {
+      if (previousMotion === undefined) delete root.dataset.motion
+      else root.dataset.motion = previousMotion
+    }
+  }, [animationIntensity])
+
   return (
-    <MotionConfig reducedMotion="user">
+    <MotionConfig
+      reducedMotion={animationIntensity === 'full' ? 'user' : 'always'}
+      skipAnimations={animationIntensity === 'none'}
+    >
       <ErrorBoundary>
         <Layout>
           <Suspense fallback={<PageSkeleton />}>

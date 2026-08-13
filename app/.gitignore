@@ -11,6 +11,7 @@ coverage/
 .vite/
 
 # Local-only configuration
+.env
 .env.local
 .env.*.local
 

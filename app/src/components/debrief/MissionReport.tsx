@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
-import { motion, useInView, useReducedMotion } from 'framer-motion'
+import { motion, useInView, useReducedMotionConfig } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 
 interface MissionReportProps {
@@ -16,7 +16,7 @@ export default function MissionReport({ report, metadata }: MissionReportProps) 
   const { t } = useTranslation()
   const ref = useRef<HTMLDivElement>(null)
   const isInView = useInView(ref, { once: true, margin: '-60px' })
-  const shouldReduceMotion = useReducedMotion()
+  const shouldReduceMotion = useReducedMotionConfig() ?? false
   const [typewriter, setTypewriter] = useState({
     source: '',
     text: '',

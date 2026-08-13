@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { motion, useInView, useReducedMotion } from 'framer-motion'
+import { motion, useInView, useReducedMotionConfig } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import {
   Check,
@@ -26,6 +26,7 @@ import type { MissionRunAction } from '@/engine/runReport'
 import { getObjectiveChecks, matchesMissionCommand } from '@/engine/validator'
 import { useGameStore } from '@/store/gameStore'
 import { allocateIntegerPoints } from '@/lib/scoreAllocation'
+import { isRunReportForLatestCompletion } from '@/lib/missionCompletion'
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -90,7 +91,7 @@ function ScoreRing({
   size?: number
   strokeWidth?: number
 }) {
-  const shouldReduceMotion = useReducedMotion() ?? false
+  const shouldReduceMotion = useReducedMotionConfig() ?? false
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
   const progress = (score / 100) * circumference
@@ -134,7 +135,7 @@ function AnimatedScore({ value, color }: { value: number; color: string }) {
   const [display, setDisplay] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
   const isInView = useInView(ref, { once: true })
-  const shouldReduceMotion = useReducedMotion() ?? false
+  const shouldReduceMotion = useReducedMotionConfig() ?? false
 
   useEffect(() => {
     if (!isInView || shouldReduceMotion) return
@@ -450,11 +451,13 @@ export default function Debrief() {
   const [shareStatus, setShareStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const headerRef = useRef<HTMLDivElement>(null)
   const headerInView = useInView(headerRef, { once: true })
-  const currentMissionStatus = useGameStore((state) => (
-    missionId ? state.missionProgress[missionId]?.status : undefined
+  const currentMissionProgress = useGameStore((state) => (
+    missionId ? state.missionProgress[missionId] : undefined
   ))
   const sessionReport = useMemo(() => missionId ? loadMissionRunReport(missionId) : null, [missionId])
-  const report = currentMissionStatus === 'completed' ? sessionReport : null
+  const report = isRunReportForLatestCompletion(sessionReport, currentMissionProgress)
+    ? sessionReport
+    : null
   const level = missionId ? getLevelById(missionId) : undefined
   const language = i18n.resolvedLanguage?.startsWith('zh') ? 'zh' : 'en'
   const scoreCategoryLabel = (category: string) => t(

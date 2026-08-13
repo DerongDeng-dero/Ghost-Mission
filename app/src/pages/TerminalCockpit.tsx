@@ -11,10 +11,12 @@ import { validateMission, calculateScore, isMissionComplete, type ValidationResu
 import { createHintState, revealHint, getTotalPenalty } from '@/engine/hints'
 import { saveMissionRunReport, type MissionRunAction } from '@/engine/runReport'
 import { useGameStore } from '@/store/gameStore'
+import { useSettingsStore } from '@/store/settingsStore'
 import {
   MAX_MISSION_ACTION_RED_COMMANDS,
   createMissionRunEvidence,
   isMissionDebriefAvailable,
+  isRunReportForLatestCompletion,
   persistMissionCompletion,
   scheduleCoalescedTask,
   tryRecordMissionAction,
@@ -113,6 +115,9 @@ export default function TerminalCockpit() {
   const { missionId } = useParams<{ missionId: string }>()
   const navigate = useNavigate()
   const { i18n } = useTranslation()
+  const keyboardHints = useSettingsStore(state => state.keyboardHints)
+  const timerDisplay = useSettingsStore(state => state.timerDisplay)
+  const scoreDisplay = useSettingsStore(state => state.scoreDisplay)
   const language: 'en' | 'zh' = i18n.resolvedLanguage?.startsWith('zh') ? 'zh' : 'en'
   const labels = language === 'zh'
     ? {
@@ -421,19 +426,30 @@ export default function TerminalCockpit() {
             // report when that precondition fails.
             const { progressRecorded, runReportPersisted } = persistMissionCompletion(
               () => completeMissionProgress(level.id, scoreResult.total),
-              () => saveMissionRunReport({
-                version: 1,
-                missionId: level.id,
-                completed: true,
-                completedAt: new Date().toISOString(),
-                elapsedSeconds: currentTimerSeconds,
-                hintsUsed: missionState.hintsUsed,
-                redCommandsUsed: [...currentEvidence.redCommandsUsed],
-                attemptedActions: [...currentEvidence.attemptedActions],
-                successfulActions: [...currentEvidence.successfulCommands],
-                validationResults: results,
-                scoreResult,
-              }),
+              () => {
+                const completion = useGameStore.getState().missionProgress[level.id]
+                const latestAttempt = completion?.status === 'completed'
+                  ? completion.completionHistory.at(-1)
+                  : undefined
+                const report = latestAttempt
+                  ? {
+                      version: 1 as const,
+                      missionId: level.id,
+                      completed: true as const,
+                      completedAt: latestAttempt.completedAt,
+                      elapsedSeconds: currentTimerSeconds,
+                      hintsUsed: missionState.hintsUsed,
+                      redCommandsUsed: [...currentEvidence.redCommandsUsed],
+                      attemptedActions: [...currentEvidence.attemptedActions],
+                      successfulActions: [...currentEvidence.successfulCommands],
+                      validationResults: results,
+                      scoreResult,
+                    }
+                  : null
+                return report !== null
+                  && isRunReportForLatestCompletion(report, completion)
+                  && saveMissionRunReport(report)
+              },
             )
             setState(current => ({
               ...current,
@@ -622,20 +638,24 @@ export default function TerminalCockpit() {
         <div className="flex-1" />
 
         {/* Timer */}
-        <div className="flex items-center gap-1.5">
-          <Timer size={14} style={{ color: 'var(--text-secondary)' }} />
-          <span className="font-jetbrains text-code-sm tabular-nums" style={{ color: 'var(--text-secondary)' }}>
-            {formatTime(state.timerSeconds)}
-          </span>
-        </div>
+        {timerDisplay && (
+          <div className="flex items-center gap-1.5">
+            <Timer size={14} style={{ color: 'var(--text-secondary)' }} aria-hidden="true" />
+            <span className="font-jetbrains text-code-sm tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+              {formatTime(state.timerSeconds)}
+            </span>
+          </div>
+        )}
 
         {/* Score */}
-        <div className="flex items-center gap-1.5">
-          <Trophy size={14} style={{ color: 'var(--neon-green)' }} />
-          <span className="font-jetbrains text-code-sm tabular-nums" style={{ color: 'var(--neon-green)' }}>
-            {state.score}
-          </span>
-        </div>
+        {scoreDisplay && (
+          <div className="flex items-center gap-1.5">
+            <Trophy size={14} style={{ color: 'var(--neon-green)' }} aria-hidden="true" />
+            <span className="font-jetbrains text-code-sm tabular-nums" style={{ color: 'var(--neon-green)' }}>
+              {state.score}
+            </span>
+          </div>
+        )}
 
         {/* Mode indicator */}
         <motion.div
@@ -791,7 +811,7 @@ export default function TerminalCockpit() {
       />
 
       {/* Terminal Help Tip - shown until first command */}
-      <TerminalHelpTip visible={state.showTerminalHelp && state.phase === 'active'} />
+      <TerminalHelpTip visible={keyboardHints && state.showTerminalHelp && state.phase === 'active'} />
 
       {/* Mission Complete Overlay */}
       <AnimatePresence>

@@ -11,6 +11,7 @@ app/.vite/
 *.log
 
 # Local-only configuration
+app/.env
 app/.env.local
 app/.env.*.local
 

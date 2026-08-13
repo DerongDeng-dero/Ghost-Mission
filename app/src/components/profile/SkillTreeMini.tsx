@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion, useReducedMotionConfig } from 'framer-motion';
 import type { ProgressChapter } from '@/data/progressCatalog';
 
 interface Department {
@@ -22,7 +22,7 @@ function ProgressRing({
   const [animatedProgress, setAnimatedProgress] = useState(0);
   const animatedProgressRef = useRef(0);
   const ref = useRef<SVGSVGElement>(null);
-  const reduceMotion = useReducedMotion() ?? false;
+  const reduceMotion = useReducedMotionConfig() ?? false;
 
   useEffect(() => {
     let frameId = 0;
